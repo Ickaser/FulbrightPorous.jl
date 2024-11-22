@@ -9,7 +9,7 @@ println("Starting tests")
 ti = time()
 
 @testset "FulbrightPores tests" begin
-    @test 1 == 1
+	include("test_pikal_microcollapse.jl")
 end
 
 ti = time() - ti
