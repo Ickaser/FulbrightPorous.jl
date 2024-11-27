@@ -31,12 +31,13 @@ dat1raw = CSV.read(datadir("exp_raw", "Simtra_Rp", "Suc_Cycle1.csv"), Table)
 dat1 = map(simtra_rename, dat1raw)
 # dat1 = dat1[dat1.T2 .< 250u"K"]
 
-fitdat1 = PrimaryDryFit(collect(dat1.t), 
-    (collect(filter(!isnan, dat1.T1)),
+fitdat1 = PrimaryDryFit(collect(dat1.t), (
+    collect(filter(!isnan, dat1.T1)),
     collect(filter(!isnan, dat1.T2[dat1.t .< 60u"hr"])),
-    collect(filter(!isnan, dat1.T3)),))
+    # collect(filter(!isnan, dat1.T3)),
+))
 
-# plot(fitdat1)
+plot(fitdat1)
 pch1 = RampedVariable(100u"mTorr")
 @df dat1 plot(:t, :pch_cm, ylim=(0, 200))
 plot!(pch1)
@@ -83,7 +84,7 @@ function gen_sol_Rp(a123, po, u0, tspan)
 end
 obj_Rp1 = x->obj_expT(gen_sol_Rp(x, po_pikal, u0_pikal, tspan)[1], fitdat1)
 
-opt_Rp1 = optimize(obj_Rp1, [0.8, 14, 1])
+opt_Rp1 = optimize(obj_Rp1, [0.8, 14, 1], Optim.Options(g_tol=1e-3))
 
 sol_Rp1, Rp1_params = gen_sol_Rp(Optim.minimizer(opt_Rp1), po_pikal, u0_pikal, tspan);
 plot(u"hr", u"°C", xlim=(0, 60), ylim=(-40, -30))
@@ -139,7 +140,6 @@ function gen_sol_constNS(fitprm, po, u0, tspan)
 end
 
 tsol, tparams = gen_sol_constNS(fitguess, po_mc, u0_mc, tspan); 
-1
 modconvtplot(tsol)
 plot!(fitdat1)
 plot!(Tsh1, tmax=tsol.t[end]*u"hr")
@@ -148,7 +148,7 @@ plot!(Tsh1, tmax=tsol.t[end]*u"hr")
 obj_MC1 = x->(obj_expT(gen_sol_constNS(x, po_mc, u0_mc, tspan)[1], fitdat1))
 @time obj_MC1(fitguess)
 
-opt_MC1 = optimize(obj_MC1, fitguess, Optim.Options(time_limit=5, show_trace=true))
+opt_MC1 = optimize(obj_MC1, fitguess, Optim.Options(g_tol=1e-2))
 
 Optim.minimizer(opt_MC1)
 
@@ -175,10 +175,11 @@ filter!(x->x.t .> 0u"hr", dat2)
 @df dat2 exptfplot!(:t, :T1, :T2, :T3, c=:red)
 plot!(ylim=(-40, -30))
 
-fitdat2 = PrimaryDryFit(collect(dat2.t), 
-    (collect(filter(!isnan, dat2.T1)),
+fitdat2 = PrimaryDryFit(collect(dat2.t), (
+    # collect(filter(!isnan, dat2.T1)),
     collect(filter(!isnan, dat2.T2[dat2.t .< 85u"hr"])),
     collect(filter(!isnan, dat2.T3)),))
+plot(fitdat2)
 
 pch2 = RampedVariable(100u"mTorr")
 @df dat2 plot(:t, :pch_cm, ylim=(0, 200))
@@ -213,7 +214,7 @@ modconvtplot!(sol2mc, sol2p, labels=["MC" "Pikal"],marker=:circle)
 
 # GitHub Copilot guessed the next few lines with very few corrections!
 obj2p = x->obj_expT(gen_sol_Rp(x, pop2, u0_pikal, tspan)[1], fitdat2)
-opt2p = optimize(obj2p, Optim.minimizer(opt_Rp1), Optim.Options(time_limit=5))
+opt2p = optimize(obj2p, Optim.minimizer(opt_Rp1), Optim.Options(g_tol = 1e-3, time_limit=5))
 obj2mc = x->obj_expT(gen_sol_constNS(x, pomc2, u0_mc, tspan)[1], fitdat2)
 opt2mc = optimize(obj2mc, Optim.minimizer(opt_MC1), Optim.Options(g_tol = 1e-3, time_limit=10))
 
@@ -237,6 +238,17 @@ end
 
 # --------------- Fit to Cycle 1 and 2 simultaneously
 
+function gen2sol_Rp(fitprm, po1, po2, u0, tspan)
+    sol1, prm1 = gen_sol_Rp(fitprm, po1, u0, tspan)
+    sol2, prm2 = gen_sol_Rp(fitprm, po2, u0, tspan)
+    return sol1, sol2, prm1, prm2
+end
+function obj12p(fitrpm)
+    sol1, sol2, prm1, prm2 = gen2sol_Rp(fitrpm, po_pikal, pop2, u0_pikal, tspan)
+    obj1 = obj_expT(sol1, fitdat1)
+    obj2 = obj_expT(sol2, fitdat2)
+    return obj1 + obj2
+end
 function gen2sol_constNS(fitprm, po1, po2, u0, tspan)
     sol1, prm1 = gen_sol_constNS(fitprm, po1, u0, tspan)
     sol2, prm2 = gen_sol_constNS(fitprm, po2, u0, tspan)
@@ -251,15 +263,19 @@ end
 g12mc = sqrt.(abs.((Optim.minimizer(opt2mc) .* Optim.minimizer(opt_MC1))))
 opt12mc = optimize(obj12mc, g12mc, Optim.Options(g_tol = 1e-2, time_limit=10))
 
+g12p = sqrt.(abs.((Optim.minimizer(opt2p) .* Optim.minimizer(opt_Rp1))))
+opt12p = optimize(obj12p, g12p, Optim.Options(g_tol = 1e-2, time_limit=10))
+
 
 sol2_MC1, sol2_MC2, MC1_params2, MC2_params2 = gen2sol_constNS(Optim.minimizer(opt12mc), po_mc, pomc2, u0_mc, tspan);
+sol2_Rp1, sol2_Rp2, Rp1_params2, Rp2_params2 = gen2sol_Rp(Optim.minimizer(opt12p), po_pikal, pop2, u0_pikal, tspan);
 
 begin
 plot(u"hr", u"°C", xlim=(0, 120), ylim=(-36, -31), legend=:bottomright)
 @df dat1 exptfplot!(:t, :T1, :T2, :T3, markershape=:circle)
 @df dat2 exptfplot!(:t, :T1, :T2, :T3, markershape=:square)
-modconvtplot!(sol2_MC1, labels="MC", markershape=:circle)
-modconvtplot!(sol2_MC2, labels="MC", markershape=:square)
+modconvtplot!(sol2_MC1, sol2_Rp1, labels=["MC" "Pikal"], markershape=:circle)
+modconvtplot!(sol2_MC2, sol2_Rp2, labels=["MC" "Pikal"], markershape=:square)
 end
 savefig(plotsdir("suc12_T.svg"))
 
@@ -277,8 +293,8 @@ plot(u"cm", u"cm^2*Torr*hr/g", ylims=(0, 20), xlabel=L"h_d", ylabel=L"R_p", unit
 plot!(l, Rp_mc2, label="PBE model")
 plot!(l, Rp_p2, label="3-parameter Pikal")
 plot!(ld, dat2.Rp, label="TDLAS")
-savefig(plotsdir("suc2_Rp.svg"))
 end
+savefig(plotsdir("suc2_Rp.svg"))
 
 
 fits = Optim.minimizer.([opt_MC1, opt2mc, opt12mc]) 
