@@ -2,6 +2,7 @@ module FulbrightPores
 using Reexport
 
 @reexport using LyoPronto
+import LyoPronto: ODEProblem
 @reexport using DrWatson
 @reexport using Unitful
 @reexport using Plots

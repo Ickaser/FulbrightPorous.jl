@@ -21,7 +21,6 @@
 	lyo_mc_dae!(du, u, param_obj, t)
 	@test !any(isnan.(du))
 
-	# Test ODEFunction creation
 	prob = ODEProblem(lyo_mc_dae_f, u, (0.0, 1.0), param_obj)
 	sol = solve(prob, Tsit5())
 	@test sol.retcode == :Success
