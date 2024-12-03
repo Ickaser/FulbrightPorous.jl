@@ -12,10 +12,12 @@ import LyoPronto: ODEProblem
 @reexport using TypedTables
 @reexport using Optim
 @reexport using Accessors
+@reexport using DataInterpolations
 
 
 
-include(srcdir("pikal_microcollapse.jl"))
-include(srcdir("simtra_rename.jl"))
+include("pikal_microcollapse.jl")
+include("simtra_rename.jl")
+include("recipes.jl")
 
 end

@@ -1,5 +1,6 @@
 using DrWatson
 @quickactivate :FulbrightPores
+using DataInterpolations
 using UnitfulLatexify, Latexify
 using PrettyTables
 
@@ -46,6 +47,33 @@ Tsh1 = RampedVariable(uconvert.(u"K", [-40, -40, -25]u"°C"), [1u"K/minute", 0.5
 @df dat1 plot(:t, :Tsh, xlim=(0, 2))
 plot!(Tsh1)
 
+# ------------------------------
+# Cycle 2
+
+dat2raw = CSV.read(datadir("exp_raw", "Simtra_Rp", "Suc_Cycle2.csv"), Table)
+dat2 = map(simtra_rename, dat2raw)
+filter!(x->x.t .> 0u"hr", dat2)
+
+begin
+@df dat1 exptfplot(:t, :T1, :T2, :T3)
+@df dat2 exptfplot!(:t, :T1, :T2, :T3, c=:red)
+plot!(ylim=(-40, -30))
+end
+
+fitdat2 = PrimaryDryFit(collect(dat2.t), (
+    # collect(filter(!isnan, dat2.T1)),
+    collect(filter(!isnan, dat2.T2[dat2.t .< 85u"hr"])),
+    collect(filter(!isnan, dat2.T3)),))
+plot(fitdat2)
+
+pch2 = RampedVariable(100u"mTorr")
+@df dat2 plot(:t, :pch_cm, ylim=(0, 200))
+plot!(pch2)
+Tsh2 = Tsh1 - 5u"K"
+@df dat2 plot(:t, :Tsh, xlim=(0, 2))
+plot!(Tsh2)
+
+
 rad_i = 1.1u"cm"
 rad_o = 1.2u"cm"
 A_p = π*rad_i^2
@@ -64,17 +92,10 @@ pb_pikal = Vector{Any}([
     (pch1, Tsh1),
 ])
 
-
-po_pikal = ParamObjPikal(pb_pikal)
-# u0_pikal = ustrip.([u"cm", u"K"], [hf0, Tsh1(0u"s")])
-# tspan = (0.0, 200.0)
-# prob = ODEProblem(lyo_1d_dae_f, u0_pikal, tspan, po_pikal; callback=end_drying_callback)
-prob = ODEProblem(po_pikal)
-tsol = solve(prob, Rodas3(autodiff=false))
-
-plot(u"hr", u"°C", xlim=(0, 60), ylim=(-40, -30))
-modconvtplot!(tsol)
-@df dat1 exptfplot!(:t, :T1, :T2, :T3)
+pop1 = ParamObjPikal(pb_pikal)
+pop2 = deepcopy(pop1)
+@reset pop2.pch = pch2
+@reset pop2.Tsh = Tsh2
 
 function gen_sol_Rp(a123, po)
     Rp_un = [u"cm^2*Torr*hr/g", u"cm*Torr*hr/g", u"1/cm"]
@@ -83,14 +104,14 @@ function gen_sol_Rp(a123, po)
     sol = solve(prob, Rodas3(autodiff=false))
     return sol, new_params
 end
-obj_Rp1 = x->obj_expT(gen_sol_Rp(x, po_pikal)[1], fitdat1)
+obj_Rp1 = x->obj_expT(gen_sol_Rp(x, pop1)[1], fitdat1)
 @time obj_Rp1([0.8, 14, 1])
 
 opt_Rp1 = optimize(obj_Rp1, [0.8, 14, 1], Optim.Options(g_tol=1e-3))
 
-sol_Rp1, Rp1_params = gen_sol_Rp(Optim.minimizer(opt_Rp1), po_pikal);
+sol1_Rp1, Rp1_params = gen_sol_Rp(Optim.minimizer(opt_Rp1), pop1);
 plot(u"hr", u"°C", xlim=(0, 60), ylim=(-40, -30))
-modconvtplot!(sol_Rp1)
+modconvtplot!(sol1_Rp1)
 @df dat1 exptfplot!(:t, :T1, :T2, :T3)
 
 # -------------- Provide guess values for new parameters
@@ -117,134 +138,100 @@ R0 = 0.05u"cm^2*Torr*hr/g"
 
 k0 = 1e-11u"1/s"
 E = u"R"*Tsh1(0u"s")
+kf = T->k0*exp(-E/(R*T))
 
 pb_mc = (
     (Rp_g, hf0, c_solid, ρ_solution),
     (K_shf, A_v, A_p),
     (pch1, Tsh1),
-    (k0, E, C, N, S, R0)
+    (kf, C, N, S, R0)
 )
-po_mc = ParamObjMC(pb_mc)
+pomc1 = ParamObjMC(pb_mc)
+pomc2 = deepcopy(pomc1)
+@reset pomc2.pch = pch2
+@reset pomc2.Tsh = Tsh2
 
-tprob = ODEProblem(po_mc)
+tprob = ODEProblem(pomc1)
 tsol = solve(tprob, Rodas3(autodiff=true))
 poreevolplot(tsol)
 end
 
-fit_un = [u"cm^-1", u"cm^5", u"s^-1", u"J/mol", u"m", u"m/s"]
-fitguess = ustrip.(fit_un, [N(0), S(0), k0, E, C, R0])
-fitguesslog = log.(ustrip.(fit_un, [N(0), S(0), k0, E, C, R0]))
-
-
-function gen_sol_constNS(fitprmlog, po; verbose=false)
+fit_un_arr = [u"cm^-1", u"cm^5", u"s^-1", u"J/mol", u"m", u"m/s"]
+fitguess = ustrip.(fit_un_arr, [N(0), S(0), k0, E, C, R0])
+fitguesslog = log.(fitguess)
+function gen_sol_constNS_arr(fitprmlog, po; verbose=false)
     new_params = deepcopy(po)
     fitprm = exp.(fitprmlog) # Constrain all to be positive by taking exp
     verbose && @info "fitprm" fitprm
-    @reset new_params.N = RampedVariable(fitprm[1]*fit_un[1])
-    @reset new_params.S = RampedVariable(fitprm[2]*fit_un[2])
-    @reset new_params.k0 = fitprm[3]*fit_un[3] 
-    @reset new_params.E  = fitprm[4]*fit_un[4]
-    @reset new_params.C  = fitprm[5]*fit_un[5]
-    @reset new_params.R0 = fitprm[6]*fit_un[6]
+    @reset new_params.N = RampedVariable(fitprm[1]*fit_un_arr[1])
+    @reset new_params.S = RampedVariable(fitprm[2]*fit_un_arr[2])
+    # Arrhenius fit
+    k0 = fitprm[3]*fit_un_arr[3]
+    E = fitprm[4]*fit_un_arr[4]
+    @reset new_params.k_f = T->k0*exp(-E/(R*T))
+    @reset new_params.C  = fitprm[5]*fit_un_arr[5]
+    @reset new_params.R0 = fitprm[6]*fit_un_arr[6]
     prob = ODEProblem(new_params)
     sol = solve(prob, Rodas3(autodiff=true))
     return sol, new_params
 end
 
-tsol, tparams = gen_sol_constNS(fitguesslog, po_mc); 
+fit_un_arb = [u"cm^-1", u"cm^5", fill(u"s^-1", 4)..., u"m", u"m/s"]
+fitguess = ustrip.(fit_un_arb, [N(0), S(0), k0/10, k0/5, k0/2, k0, C, R0])
+fitguesslog = log.(fitguess)
+Tstops = [-45, -37, -34.5, -30]u"°C" .|> u"K"
+function gen_sol_constNS_arb(fitprmlog, po; verbose=false)
+    new_params = deepcopy(po)
+    fitprm = exp.(fitprmlog) # Constrain all to be positive by taking exp
+    verbose && @info "fitprm" fitprm
+    @reset new_params.N = RampedVariable(fitprm[1]*fit_un_arb[1])
+    @reset new_params.S = RampedVariable(fitprm[2]*fit_un_arb[2])
+    # Interpolant
+    # kstops = fitprm[3:6]*fit_un_arb[3]
+    # kf = LinearInterpolation(kstops, Tstops, extrapolate=true)
+    # spl = PCHIPInterpolation(fitprm[3:6], ustrip.(u"K", Tstops), extrapolate = true)
+    # kf = T->spl(ustrip(u"K", T))*fit_un_arb[3]
+    spl = PCHIPInterpolation(fitprm[3:6]*fit_un_arb[3], Tstops, extrapolate = true)
+    @reset new_params.k_f = spl
+    @reset new_params.C  = fitprm[7]*fit_un_arb[7]
+    @reset new_params.R0 = fitprm[8]*fit_un_arb[8]
+    prob = ODEProblem(new_params)
+    sol = solve(prob, Rodas3(autodiff=true))
+    return sol, new_params
+end
+
+tsol, tparams = gen_sol_constNS_arb(fitguesslog, pomc1); 
 modconvtplot(tsol)
 plot!(fitdat1)
 
-obj_MC1 = x->(obj_expT(gen_sol_constNS(x, po_mc; verbose=true)[1], fitdat1))
+obj_MC1 = x->(issorted(x[3:6]) ? (obj_expT(gen_sol_constNS_arb(x, pomc1)[1], fitdat1)) : NaN)
 @time obj_MC1(fitguesslog)
 
 opt_MC1 = optimize(obj_MC1, fitguesslog, NelderMead(), Optim.Options(g_tol=1e-2))
 # opt_MC1 = optimize(obj_MC1, fitguesslog, LBFGS(), Optim.Options(g_tol = 1e-2))
 
-exp.(Optim.minimizer(opt_MC1)) .*fit_un
+exp.(Optim.minimizer(opt_MC1)) .*fit_un_arb
 
-sol_MC1, MC1_params = gen_sol_constNS(Optim.minimizer(opt_MC1), po_mc);
-begin
-plot(u"hr", u"°C", xlim=(0, 60), ylim=(-40, -30), legend=:bottomright)
-@df dat1 exptfplot!(:t, :T1, :T2, :T3)
-modconvtplot!(sol_MC1, sol_Rp1, labels=["MC" "Pikal"])
-end
-
-poreevolplot(sol_MC1)
-
-
-# -------------
-# Everything from here on out needs to be reviewd
-# Especially make sure simulations are all getting right parameters
-
-# --------------------------
-# Introduce Cycle 2
-# Labeled as case 6 in table 8
-
-
-dat2raw = CSV.read(datadir("exp_raw", "Simtra_Rp", "Suc_Cycle2.csv"), Table)
-dat2 = map(simtra_rename, dat2raw)
-filter!(x->x.t .> 0u"hr", dat2)
-
-begin
-@df dat1 exptfplot(:t, :T1, :T2, :T3)
-@df dat2 exptfplot!(:t, :T1, :T2, :T3, c=:red)
-plot!(ylim=(-40, -30))
-end
-
-fitdat2 = PrimaryDryFit(collect(dat2.t), (
-    # collect(filter(!isnan, dat2.T1)),
-    collect(filter(!isnan, dat2.T2[dat2.t .< 85u"hr"])),
-    collect(filter(!isnan, dat2.T3)),))
-plot(fitdat2)
-
-pch2 = RampedVariable(100u"mTorr")
-@df dat2 plot(:t, :pch_cm, ylim=(0, 200))
-plot!(pch2)
-Tsh2 = Tsh1 - 5u"K"
-@df dat2 plot(:t, :Tsh, xlim=(0, 2))
-plot!(Tsh2)
-pop2 = deepcopy(Rp1_params)
-@reset pop2.pch = pch2
-@reset pop2.Tsh = Tsh2
-pomc2 = deepcopy(MC1_params)
-@reset pomc2.pch = pch2
-@reset pomc2.Tsh = Tsh2
+sol1_MC1, MC1_params = gen_sol_constNS_arb(Optim.minimizer(opt_MC1), pomc1);
 
 # ------ Compare existing fit to Cycle 2 data
 
-prob2p = ODEProblem(pop2)
-sol2p = solve(prob2p, Rodas3(autodiff=false))
-
-prob2mc = ODEProblem(pomc2)
-sol2mc = solve(prob2mc, Rodas3(autodiff=false))
-
-
-begin
-plot(u"hr", u"°C", xlim=(0, 150), ylim=(-36, -31), legend=:bottomright)
-@df dat1 exptfplot!(:t, :T1, :T2, :T3, marker=:square)
-@df dat2 exptfplot!(:t, :T1, :T2, :T3, marker=:circle)
-modconvtplot!(sol_MC1, sol_Rp1, labels=["MC" "Pikal"],marker=:square)
-modconvtplot!(sol2mc, sol2p, labels=["MC" "Pikal"],marker=:circle)
-end
-
-
 # ------ Fit to Cycle 2 data separately
 
-# GitHub Copilot guessed the next few lines with very few corrections!
 obj2p = x->obj_expT(gen_sol_Rp(x, pop2)[1], fitdat2)
 opt2p = optimize(obj2p, Optim.minimizer(opt_Rp1), NelderMead(), Optim.Options(g_tol = 1e-3, time_limit=15))
-obj2mc = x->obj_expT(gen_sol_constNS(x, pomc2)[1], fitdat2)
-opt2mc = optimize(obj2mc, Optim.minimizer(opt_MC1), NelderMead(), Optim.Options(g_tol = 1e-3, time_limit=10))
+# Enforce monontonic k in objective
+obj2mc = x->(issorted(x[3:6]) ? obj_expT(gen_sol_constNS_arb(x, pomc2)[1], fitdat2) : NaN)
+opt_MC2 = optimize(obj2mc, Optim.minimizer(opt_MC1), NelderMead(), Optim.Options(g_tol = 1e-3, time_limit=10))
 
-sol_Rp2, Rp2_params = gen_sol_Rp(Optim.minimizer(opt2p), pop2);
-sol_MC2, MC2_params = gen_sol_constNS(Optim.minimizer(opt2mc), pomc2);
+sol2_Rp2, Rp2_params = gen_sol_Rp(Optim.minimizer(opt2p), pop2);
+sol2_MC2, MC2_params = gen_sol_constNS_arb(Optim.minimizer(opt_MC2), pomc2);
 
 # ----------- Plot separately
 begin
 plot(u"hr", u"°C", xlim=(0, 70), ylim=(-36, -31), legend=:bottomright)
 @df dat1 exptfplot!(:t, :T1, :T2, :T3, marker=:square)
-modconvtplot!(sol_MC1, sol_Rp1, labels=["MC" "Pikal"],marker=:square)
+modconvtplot!(sol1_MC1, sol_Rp1, labels=["MC" "Pikal"],marker=:square)
 end
 savefig(plotsdir("suc1_T.svg"))
 
@@ -255,6 +242,10 @@ modconvtplot!(sol_MC2, sol_Rp2, labels=["MC" "Pikal"],marker=:circle)
 end
 savefig(plotsdir("suc2_T.svg"))
 
+# Cross-check fits
+sol1_MC2 = gen_sol_constNS_arb(Optim.minimizer(opt_MC2), pomc1)[1]
+sol2_MC1 = gen_sol_constNS_arb(Optim.minimizer(opt_MC1), pomc2)[1]
+
 # --------------- Fit to Cycle 1 and 2 simultaneously
 
 function gen2sol_Rp(fitprm, po1, po2)
@@ -263,35 +254,37 @@ function gen2sol_Rp(fitprm, po1, po2)
     return sol1, sol2, prm1, prm2
 end
 function obj12p(fitrpm)
-    sol1, sol2, prm1, prm2 = gen2sol_Rp(fitrpm, po_pikal, pop2)
+    sol1, sol2, prm1, prm2 = gen2sol_Rp(fitrpm, pop1, pop2)
     obj1 = obj_expT(sol1, fitdat1)
     obj2 = obj_expT(sol2, fitdat2)
     return obj1 + obj2
 end
 function gen2sol_constNS(fitprm, po1, po2)
-    sol1, prm1 = gen_sol_constNS(fitprm, po1)
-    sol2, prm2 = gen_sol_constNS(fitprm, po2)
+    sol1, prm1 = gen_sol_constNS_arb(fitprm, po1)
+    sol2, prm2 = gen_sol_constNS_arb(fitprm, po2)
     return sol1, sol2, prm1, prm2
 end
 function obj12mc(fitprm; verbose=false)
-    sol1, sol2, prm1, prm2 = gen2sol_constNS(fitprm, po_mc, pomc2)
+    if !issorted(fitprm[3:6])
+        return NaN
+    end
+    sol1, sol2, prm1, prm2 = gen2sol_constNS(fitprm, pomc1, pomc2)
     obj1 = obj_expT(sol1, fitdat1)
     obj2 = obj_expT(sol2, fitdat2)
     verbose && @info "fit" exp.(fitprm) obj1 obj2
     return obj1 + obj2
 end
 
-# g12mc = sqrt.(abs.((Optim.minimizer(opt2mc) .* Optim.minimizer(opt_MC1))))
-# g12mc = (Optim.minimizer(opt2mc) .+ Optim.minimizer(opt_MC1))/2
-g12mc = Optim.minimizer(opt2mc)
+g12mc = (Optim.minimizer(opt_MC2) .+ Optim.minimizer(opt_MC1))/2
+# g12mc = Optim.minimizer(opt_MC2)
 opt12mc = optimize(obj12mc, g12mc, NelderMead(), Optim.Options(g_tol = 1e-3))
 
 g12p = sqrt.(abs.((Optim.minimizer(opt2p) .* Optim.minimizer(opt_Rp1))))
 opt12p = optimize(obj12p, g12p, Optim.Options(g_tol = 1e-2, time_limit=10))
 
 
-sol2_MC1, sol2_MC2, MC1_params2, MC2_params2 = gen2sol_constNS(Optim.minimizer(opt12mc), po_mc, pomc2);
-sol2_Rp1, sol2_Rp2, Rp1_params2, Rp2_params2 = gen2sol_Rp(Optim.minimizer(opt12p), po_pikal, pop2);
+sol1_MC12, sol2_MC12, MC1_params2, MC2_params2 = gen2sol_constNS(Optim.minimizer(opt12mc), pomc1, pomc2);
+sol1_Rp12, sol2_Rp12, Rp1_params2, Rp2_params2 = gen2sol_Rp(Optim.minimizer(opt12p), pop1, pop2);
 
 begin
 pl1 = plot(u"hr", u"°C", xlim=(0, 120), ylim=(-36, -31), legend=:bottomright)
@@ -299,10 +292,25 @@ pl1 = plot(u"hr", u"°C", xlim=(0, 120), ylim=(-36, -31), legend=:bottomright)
 # @df dat2 exptfplot!(:t, :T1, :T2, :T3, markershape=:square)
 plot!(fitdat1)
 plot!(fitdat2)
-modconvtplot!(sol2_MC1, sol2_Rp1, labels=["MC1" "Pikal"], markershape=:circle)
-modconvtplot!(sol2_MC2, sol2_Rp2, labels=["MC2" "Pikal"], markershape=:square)
+modconvtplot!(sol1_MC12, sol1_Rp12, labels=["MC" "Pikal"], markershape=:circle)
+modconvtplot!(sol2_MC12, sol2_Rp12, labels=["MC" "Pikal"], markershape=:square)
 end
 savefig(plotsdir("suc12_T.svg"))
+
+Tcheck = range(extrema(Tstops)..., length=50)
+begin
+plot(u"°C", u"s^-1", legend=:bottomright)
+kineticplot!(MC1_params, T=Tcheck, c=:red)
+kineticplot!(MC2_params, T=Tcheck, c=:blue)
+kineticplot!(MC1_params2, T=Tcheck, c=:purple)
+plot!(Tcheck, @. k0*exp(-E/R/Tcheck))
+end
+savefig(plotsdir("kinetic.svg"))
+
+# Willams Landel Ferry temparature dependence:...
+function k_wlf(T, k0, Tref, C1, C2)
+    return k0*exp(C1*(T-Tref)/(T-Tref-C2))
+end
 
 l = range(0u"cm", hf0, length=50)
 Rp1 = Rp1_params.Rp.(l)
@@ -310,13 +318,14 @@ Rp2 = Rp2_params.Rp.(l)
 Rp12 = Rp2_params2.Rp.(l)
 
 begin
-colors = [:blue :red :purple :brown]
+colors = [:red :blue :purple :brown]
 rpattr = (marker=:utriangle, seriestype=:samplemarkers, linestyle=:dash)
-pl2 = poreevolplot(sol_MC1, label="Fit 1, Cycle 1", c=colors[1], marker=:circle)
-poreevolplot!(sol2mc, label="Fit 1, Cycle 2", c=colors[1], marker=:square)
-poreevolplot!(sol_MC2, label="Fit 2, Cycle 2", c=colors[2], marker=:square)
-poreevolplot!(sol2_MC1, label="Fit both, Cycle 1", c=colors[3], marker=:circle)
-poreevolplot!(sol2_MC2, label="Fit both, Cycle 2", c=colors[3], marker=:square)
+pl2 = poreevolplot(sol1_MC1, label="Fit 1, Cycle 1", c=colors[1], marker=:circle)
+# poreevolplot!(sol2_MC1, label="Fit 1, Cycle 2", c=colors[1], marker=:square)
+# poreevolplot!(sol1_MC2, label="Fit 2, Cycle 1", c=colors[2], marker=:circle)
+poreevolplot!(sol2_MC2, label="Fit 2, Cycle 2", c=colors[2], marker=:square)
+poreevolplot!(sol1_MC12, label="Fit both, Cycle 1", c=colors[3], marker=:circle)
+poreevolplot!(sol2_MC12, label="Fit both, Cycle 2", c=colors[3], marker=:square)
 plot!(pl2, l, Rp1, subplot=4, label="Fit 1, 3-parameter Pikal"; c=colors[1], rpattr...)
 plot!(pl2, l, Rp2, subplot=4, label="Fit 2, 3-parameter Pikal"; c=colors[2], rpattr...)
 plot!(pl2, l, Rp12, subplot=4, label="Fit both, 3-parameter Pikal"; c=colors[3], rpattr...)
@@ -330,7 +339,7 @@ plot(pl1, pl2, size=(1000, 400))
 minteg = cumsum(dat2.mfr[1:end-1].*(dat2.t[2:end]-dat2.t[1:end-1]))
 insert!(minteg, 1, 0u"g")
 errfac = minteg[end] / (fillvol*(ρ_solution-c_solid))
-ld2 = @. errfac*minteg/(A_p*(ρ_solution-c_solid)) |> u"cm"
+ld = @. errfac*minteg/(A_p*(ρ_solution-c_solid)) |> u"cm"
 
 l2 = hf0 .- sol_MC2[1,:]*u"cm"
 Rp_p2 = Rp2_params.Rp.(l)
@@ -338,25 +347,25 @@ Rp_mc2 = [FulbrightPores.lyo_mc_dae!(fill(0.0, 4), u, MC2_params, t) for (u,t) i
 Rp_p2 = Rp2_params.Rp.(l)
 begin
 plot(u"cm", u"cm^2*Torr*hr/g", ylims=(0, 20), xlabel=L"h_d", ylabel=L"R_p", unitformat=(x,y)->"$x [$(latexify(y))]")
-plot!(l, Rp_mc2, label="PBE model")
-plot!(pl2, l, Rp_p2, subplot=4, label="3-parameter Pikal")
+plot!(l2, Rp_mc2, label="PBE model")
+plot!(l2, Rp_p2, label="3-parameter Pikal")
 plot!(ld, dat2.Rp, label="TDLAS")
 end
 savefig(plotsdir("suc2_Rp.svg"))
 
 
-fits = Optim.minimizer.([opt_MC1, opt2mc, opt12mc]) 
-function namefitparam(fitlog, label)
+fits = Optim.minimizer.([opt_MC1, opt_MC2, opt12mc]) 
+function namefitparam_arr(fitlog, label)
     fit = exp.(fitlog)
     nt = (label = label,
-        N = fit[1]*fit_un[1],
-        S = fit[2]*fit_un[2],
-        k0 = fit[3]*fit_un[3],
-        E = fit[4]*fit_un[4],
-        C = fit[5]*fit_un[5],
-        R0 = fit[6]*fit_un[6])
+        N = fit[1]*fit_un_arr[1],
+        S = fit[2]*fit_un_arr[2],
+        k0 = fit[3]*fit_un_arr[3],
+        E = fit[4]*fit_un_arr[4],
+        C = fit[5]*fit_un_arr[5],
+        R0 = fit[6]*fit_un_arr[6])
 end
-report = Table(map(namefitparam, fits, ["Cycle 1", "Cycle 2", "Both"]))
+report = Table(map(namefitparam_arr, fits, ["Cycle 1", "Cycle 2", "Both"]))
 
 safesave(datadir("exp_pro", "fit12.html"), pretty_table(HTML, report, header = ["Fit", "N", "S", "k0", "E", "C", "R0"]))
 pretty_table(report, header = ["Fit", "N", "S", "k0", "E", "C", "R0"])

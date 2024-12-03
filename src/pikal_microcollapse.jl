@@ -16,7 +16,7 @@ function lyo_mc_dae!(du, u, params, t)
     _, hf0, c_solid, ρ_solution = params[1]
     Kshf, Av, Ap, = params[2]
     pch, Tsh = params[3] 
-    k0, E, C, N, S, R0 = params[4] 
+    k_f, C, N, S, R0 = params[4] 
     
     td = t*u"hr" # Dimensional time
     hf = u[1]*u"cm"
@@ -27,7 +27,7 @@ function lyo_mc_dae!(du, u, params, t)
         return [NaN, NaN, NaN]
     end
 
-    k = k0*exp(-E/R/Tf)
+    k = k_f(Tf)
     hd = hf0 - hf
     ϕ = (ρ_solution - c_solid)/ρ_solution
     μ1 = hd*ϕ*Ap
@@ -35,7 +35,7 @@ function lyo_mc_dae!(du, u, params, t)
     Qshf = Av*Kshf(pchl)*(Tsh(td) - Tf)
     Tsub = Tf - Qshf/k_ice/Ap*hf
 
-    if μ1 <= 0u"cm^3" || μ0 <= 0.0
+    if μ1 <= 0u"cm^3" || μ0 <= 0.0 || μ2 <= 0u"cm^6"
         Rp = R0
     else
         μ32 = μ0^(-1//8)*μ1^(3//4)*μ2^(3//8)
@@ -105,8 +105,7 @@ struct ParamObjMC
     Ap
     pch
     Tsh
-    k0
-    E
+    k_f
     C
     N
     S
@@ -125,7 +124,7 @@ function Base.getindex(po::ParamObjMC, i)
     elseif i == 3
         return (po.pch, po.Tsh)
     elseif i == 4
-        return (po.k0, po.E, po.C, po.N, po.S, po.R0)
+        return (po.k_f, po.C, po.N, po.S, po.R0)
     else
         error(BoundsError, "Attempt to access LyoPronto.ParamsObjRF at index $i. Only indices 1 to 4 allowed")
     end
@@ -136,73 +135,4 @@ function ODEProblem(po::ParamObjMC)
     ustrip.([u"cm", u"K", u"cm^6", NoUnits], 
     [po.hf0, po.Tsh(0u"s"), 0.0u"cm^6", 0.0]),
     (0.0, 300.0), po; callback=end_drying_callback)
-end
-
-# ------------------------
-# Visualize the pore size evolution
-
-@userplot PoreEvolPlot
-@recipe function f(pep::PoreEvolPlot)
-    sol = pep.args[1]
-    t = sol.t*u"hr"
-    hf = sol[1,:]*u"cm"
-    μ0 = sol[3,:]
-    μ2 = sol[4,:]*u"cm^6" .|> u"mm^6"
-    po = sol.prob.p
-    hd = (po.hf0 .- hf) .|> u"cm"
-    ϕ = (po.ρ_solution - po.c_solid)/po.ρ_solution
-    μ1 = hd*ϕ*po.Ap .|> u"mm^3"
-    Rp = map(sol.t, sol.u) do t,u
-        lyo_mc_dae!(fill(0.0, 4), u, sol.prob.p, t) |> u"cm^2*Torr*hr/g"
-    end
-    
-
-    seriestype --> :samplemarkers
-    layout --> @layout [[a ; b; c;] d]
-    @series begin
-        subplot --> 1
-        ylabel --> "μ0" #*", number of pores"
-        xlabel --> ""
-        legend --> :none
-        xformatter -->  _->""
-        return t, μ0
-    end
-    @series begin
-        subplot --> 2
-        ylabel --> "μ1" #*", total pore volume"
-        xlabel --> ""
-        legend --> :none
-        xformatter -->  _->""
-        return t, μ1
-    end
-    @series begin
-        subplot --> 3
-        ylabel --> "μ2" #*", pore size second moment"
-        xlabel --> "Time"
-        legend --> :none
-        return t, μ2
-    end
-    @series begin
-        subplot --> 4
-        ylabel --> "Rp"
-        xlabel --> "Dry layer thickness"
-        legend --> :bottomright
-        # return MCRpPlot((sol,))
-        return hd, Rp
-    end
-end
-
-@userplot MCRpPlot
-@recipe function f(mrp::MCRpPlot)
-    sol = mrp.args[1]
-    t = sol.t*u"hr"
-
-    Rp = map(sol.t, sol.u) do ti,ui
-        lyo_mc_dae!(fill(0.0, 4), ui, sol.prob.p, ti) |> u"m/s"
-    end
-    @series begin
-        ylabel --> "Rp"
-        label --> "\$R_p\$"
-        t, Rp
-    end
 end
