@@ -151,9 +151,9 @@ pomc2 = deepcopy(pomc1)
 @reset pomc2.pch = pch2
 @reset pomc2.Tsh = Tsh2
 
-tprob = ODEProblem(pomc1)
-tsol = solve(tprob, Rodas3(autodiff=true))
-poreevolplot(tsol)
+# tprob = ODEProblem(pomc1)
+# tsol = solve(tprob, Rodas3(autodiff=true))
+# poreevolplot(tsol)
 end
 
 fit_un_arr = [u"cm^-1", u"cm^5", u"s^-1", u"J/mol", u"m", u"m/s"]
@@ -179,19 +179,22 @@ end
 fit_un_arb = [u"cm^-1", u"cm^5", fill(u"s^-1", 4)..., u"m", u"m/s"]
 fitguess = ustrip.(fit_un_arb, [N(0), S(0), k0/10, k0/5, k0/2, k0, C, R0])
 fitguesslog = log.(fitguess)
-Tstops = [-45, -37, -34.5, -30]u"°C" .|> u"K"
+Tstops = [-45.0, -37, -33, -30]u"°C" .|> u"K"
 function gen_sol_constNS_arb(fitprmlog, po; verbose=false)
     new_params = deepcopy(po)
     fitprm = exp.(fitprmlog) # Constrain all to be positive by taking exp
     verbose && @info "fitprm" fitprm
     @reset new_params.N = RampedVariable(fitprm[1]*fit_un_arb[1])
     @reset new_params.S = RampedVariable(fitprm[2]*fit_un_arb[2])
-    # Interpolant
+    # Linear interpolant
     # kstops = fitprm[3:6]*fit_un_arb[3]
-    # kf = LinearInterpolation(kstops, Tstops, extrapolate=true)
-    # spl = PCHIPInterpolation(fitprm[3:6], ustrip.(u"K", Tstops), extrapolate = true)
-    # kf = T->spl(ustrip(u"K", T))*fit_un_arb[3]
-    spl = PCHIPInterpolation(fitprm[3:6]*fit_un_arb[3], Tstops, extrapolate = true)
+    # spl = LinearInterpolation(kstops, Tstops, extrapolate=true)
+    # Lin interp in log space
+    klogs = fitprmlog[3:6]
+    spll = LinearInterpolation(klogs, Tstops, extrapolate=true)
+    spl = T->exp(spll(T))*fit_un_arb[3]
+    # PCHIP interp
+    # spl = PCHIPInterpolation(fitprm[3:6]*fit_un_arb[3], Tstops, extrapolate = true)
     @reset new_params.k_f = spl
     @reset new_params.C  = fitprm[7]*fit_un_arb[7]
     @reset new_params.R0 = fitprm[8]*fit_un_arb[8]
@@ -200,9 +203,9 @@ function gen_sol_constNS_arb(fitprmlog, po; verbose=false)
     return sol, new_params
 end
 
-tsol, tparams = gen_sol_constNS_arb(fitguesslog, pomc1); 
-modconvtplot(tsol)
-plot!(fitdat1)
+# tsol, tparams = gen_sol_constNS_arb(fitguesslog, pomc1); 
+# modconvtplot(tsol)
+# plot!(fitdat1)
 
 obj_MC1 = x->(issorted(x[3:6]) ? (obj_expT(gen_sol_constNS_arb(x, pomc1)[1], fitdat1)) : NaN)
 @time obj_MC1(fitguesslog)
@@ -231,14 +234,14 @@ sol2_MC2, MC2_params = gen_sol_constNS_arb(Optim.minimizer(opt_MC2), pomc2);
 begin
 plot(u"hr", u"°C", xlim=(0, 70), ylim=(-36, -31), legend=:bottomright)
 @df dat1 exptfplot!(:t, :T1, :T2, :T3, marker=:square)
-modconvtplot!(sol1_MC1, sol_Rp1, labels=["MC" "Pikal"],marker=:square)
+modconvtplot!(sol1_MC1, sol1_Rp1, labels=["MC" "Pikal"],marker=:square)
 end
 savefig(plotsdir("suc1_T.svg"))
 
 begin
 plot(u"hr", u"°C", xlim=(0, 125), ylim=(-36, -32), legend=:bottomright)
 @df dat2 exptfplot!(:t, :T1, :T2, :T3, marker=:circle)
-modconvtplot!(sol_MC2, sol_Rp2, labels=["MC" "Pikal"],marker=:circle)
+modconvtplot!(sol2_MC2, sol2_Rp2, labels=["MC" "Pikal"],marker=:circle)
 end
 savefig(plotsdir("suc2_T.svg"))
 
@@ -288,29 +291,154 @@ sol1_Rp12, sol2_Rp12, Rp1_params2, Rp2_params2 = gen2sol_Rp(Optim.minimizer(opt1
 
 begin
 pl1 = plot(u"hr", u"°C", xlim=(0, 120), ylim=(-36, -31), legend=:bottomright)
-# @df dat1 exptfplot!(:t, :T1, :T2, :T3, markershape=:circle)
-# @df dat2 exptfplot!(:t, :T1, :T2, :T3, markershape=:square)
-plot!(fitdat1)
-plot!(fitdat2)
+@df dat1 exptfplot!(:t, :T1, :T2, :T3, markershape=:circle)
+@df dat2 exptfplot!(:t, :T1, :T2, :T3, markershape=:square)
+# plot!(fitdat1)
+# plot!(fitdat2)
 modconvtplot!(sol1_MC12, sol1_Rp12, labels=["MC" "Pikal"], markershape=:circle)
 modconvtplot!(sol2_MC12, sol2_Rp12, labels=["MC" "Pikal"], markershape=:square)
 end
 savefig(plotsdir("suc12_T.svg"))
 
+klogs = Optim.minimizer(opt12mc)[3:6]
+kstops = exp.(klogs)*fit_un_arb[3]
+
+# Willams Landel Ferry temparature dependence:...
+function k_wlf(T, p)
+    k0, Tref, C1, C2 = p
+    return k0*exp(C1*(T-Tref)/(T-Tref-C2))
+end
+wlf_un = [u"s^-1", u"K", NoUnits, u"K"]
+function obj_wlf(p)
+    @info "check" p
+    if p[1] < 0   
+        return NaN
+    end
+    ks = k_wlf.(Tstops, [p.*wlf_un])
+    logks = log.(ustrip.(u"s^-1", ks))
+    sum(abs2.(logks .- klogs))
+end
+p0_wlf = [1e-16, 273-85, 9, 10]
+obj_wlf(p0_wlf)
+opt_wlf = optimize(obj_wlf, p0_wlf, NelderMead(), Optim.Options(show_trace=true))
+plot(Tcheck,  k_wlf.(Tcheck, [Optim.minimizer(opt_wlf).*wlf_un]))
+plot!(Tstops,  kstops, yscale=:log10)
+
+# MYEGA temparature dependence of viscosity
+function k_myega(T, p)
+    k0, K, C = p
+    # @info "check" K/T C/T K/T*exp(C/T)
+    return k0*exp((K/T)*exp(C/T))
+end
+myega_un = [u"s^-1", u"K", u"K"]
+function obj_myega(p)
+    if p[1] < 0 #|| p[2] < 100 || p[3] < 100 
+        return NaN
+    end
+    ks = k_myega.(Tstops, [p.*myega_un])
+    # @info "checkobj" ks p
+    sum(abs2.(log.(ustrip.(u"s^-1", ks)) - klogs))
+end
+p0_myega = [1e-10, -243, 2]
+obj_myega(p0_myega)
+opt_myega = optimize(obj_myega, p0_myega, NelderMead(), Optim.Options(show_trace=true))
+plot(Tcheck,  k_myega.(Tcheck, [Optim.minimizer(opt_myega).*myega_un]))
+plot!(Tstops,  kstops, yscale=:log10)
+
+# playground temparature dependence of viscosity
+function k_play(T, p)
+    k0, K, C = p
+    # x = ustrip(u"K", T-K)
+    # x = ustrip(u"K", T-K)
+    x = (T-K)/C
+    sig = (tanh(x)+1)/2
+    return k0*exp(sig*(T-K)/C)
+end
+play_un = [u"s^-1", u"K", u"K"]
+p0_play = [1e-16, 237, 0.2]
+scatter(Tcheck,  k_play.(Tcheck, [p0_play .* play_un]), yscale=:log10)
+plot!(Tstops,  kstops, yscale=:log10)
+function obj_play(p)
+    if p[1] < 0 #|| p[2] < 100 || p[3] < 100 
+        return NaN
+    end
+    ks = k_play.(Tstops, [p.*play_un])
+    sum(abs2.(log.(ustrip.(u"s^-1", ks)) - klogs))
+end
+obj_play(p0_play)
+opt_play = optimize(obj_play, p0_play, NelderMead(), Optim.Options(show_trace=true))
+plot(Tcheck,  k_play.(Tcheck, [Optim.minimizer(opt_play).*play_un]))
+plot!(Tstops,  kstops, yscale=:log10)
+play_params1 = @set MC1_params2.k_f = T->k_play(T, Optim.minimizer(opt_play).*play_un)
+play_params2 = @set MC2_params2.k_f = T->k_play(T, Optim.minimizer(opt_play).*play_un)
+sol1_play = solve(ODEProblem(MC1_params2), Rodas3(autodiff=true))
+sol2_play = solve(ODEProblem(MC2_params2), Rodas3(autodiff=true))
+poreevolplot(sol1_play)
+poreevolplot!(sol2_play)
+
+fit_un_play = [u"cm^-1", u"cm^5", u"s^-1", u"K", u"K", u"m", u"m/s"]
+function gen_sol_constNS_play(fitprmlog, po; verbose=false)
+    new_params = deepcopy(po)
+    fitprm = exp.(fitprmlog) # Constrain all to be positive by taking exp
+    verbose && @info "fitprm" fitprm
+    @reset new_params.N = RampedVariable(fitprm[1]*fit_un_play[1])
+    @reset new_params.S = RampedVariable(fitprm[2]*fit_un_play[2])
+    @reset new_params.k_f = T->k_play(T, fitprm[3:5].*fit_un_play[3:5])
+    @reset new_params.C  = fitprm[6]*fit_un_play[6]
+    @reset new_params.R0 = fitprm[7]*fit_un_play[7]
+    prob = ODEProblem(new_params)
+    sol = solve(prob, Rodas3(autodiff=true))
+    return sol, new_params
+end
+function gen2sol_constNS_play(fitprm, po1, po2)
+    sol1, prm1 = gen_sol_constNS_play(fitprm, po1)
+    sol2, prm2 = gen_sol_constNS_play(fitprm, po2)
+    return sol1, sol2, prm1, prm2
+end
+function obj12play(fitprm; verbose=true)
+    sol1, sol2, prm1, prm2 = gen2sol_constNS_play(fitprm, MC1_params2, MC2_params2)
+    obj1 = obj_expT(sol1, fitdat1)
+    obj2 = obj_expT(sol2, fitdat2)
+    verbose && @info "fit" exp.(fitprm) obj1 obj2
+    return obj1 + obj2
+end
+p0_playfit = [6.4e7, 1.1e-6, 3e-16, 237, 0.3, 0.02, 2.5e4]
+p0_playfitlog = log.(p0_playfit)
+
+opt12play = optimize(obj12play, p0_playfitlog, NelderMead(), Optim.Options(g_tol = 1e-2, time_limit=10))
+sol1_play, sol2_play, play1_params, play2_params = gen2sol_constNS_play(Optim.minimizer(opt12play), MC1_params2, MC2_params2);
+poreevolplot(sol1_play)
+poreevolplot!(sol2_play)
+
+begin
+pl1 = plot(u"hr", u"°C", xlim=(0, 120), ylim=(-36, -31), legend=:bottomright)
+@df dat1 exptfplot!(:t, :T1, :T2, :T3, markershape=:circle)
+@df dat2 exptfplot!(:t, :T1, :T2, :T3, markershape=:square)
+# plot!(fitdat1)
+# plot!(fitdat2)
+modconvtplot!(sol1_play, sol1_Rp12, labels=["MC" "Pikal"], markershape=:circle)
+modconvtplot!(sol2_play, sol2_Rp12, labels=["MC" "Pikal"], markershape=:square)
+modconvtplot!(sol1_MC12)
+modconvtplot!(sol1_MC12)
+end
+savefig(plotsdir("suc12_T.svg"))
+
+modconvtplot(sol1_play)
+modconvtplot!(sol2_play)
+modconvtplot!(sol1_MC12)
+modconvtplot!(sol1_MC12)
+
 Tcheck = range(extrema(Tstops)..., length=50)
 begin
-plot(u"°C", u"s^-1", legend=:bottomright)
-kineticplot!(MC1_params, T=Tcheck, c=:red)
-kineticplot!(MC2_params, T=Tcheck, c=:blue)
-kineticplot!(MC1_params2, T=Tcheck, c=:purple)
-plot!(Tcheck, @. k0*exp(-E/R/Tcheck))
+plot(u"°C", u"s^-1", legend=:bottomright, unitformat=:square)
+kineticplot!(MC1_params, T=Tcheck, c=:red, label="Fit to case 1")
+kineticplot!(MC2_params, T=Tcheck, c=:blue, label="Fit to case 2")
+kineticplot!(MC1_params2, T=Tcheck, c=:purple, label="Fit to both")
+kineticplot!(play1_params, T=Tcheck, label="2-param sigmoid+exp")
 end
 savefig(plotsdir("kinetic.svg"))
 
-# Willams Landel Ferry temparature dependence:...
-function k_wlf(T, k0, Tref, C1, C2)
-    return k0*exp(C1*(T-Tref)/(T-Tref-C2))
-end
+
 
 l = range(0u"cm", hf0, length=50)
 Rp1 = Rp1_params.Rp.(l)
@@ -324,8 +452,10 @@ pl2 = poreevolplot(sol1_MC1, label="Fit 1, Cycle 1", c=colors[1], marker=:circle
 # poreevolplot!(sol2_MC1, label="Fit 1, Cycle 2", c=colors[1], marker=:square)
 # poreevolplot!(sol1_MC2, label="Fit 2, Cycle 1", c=colors[2], marker=:circle)
 poreevolplot!(sol2_MC2, label="Fit 2, Cycle 2", c=colors[2], marker=:square)
-poreevolplot!(sol1_MC12, label="Fit both, Cycle 1", c=colors[3], marker=:circle)
-poreevolplot!(sol2_MC12, label="Fit both, Cycle 2", c=colors[3], marker=:square)
+# poreevolplot!(sol1_MC12, label="Fit both, Cycle 1", c=colors[3], marker=:circle)
+# poreevolplot!(sol2_MC12, label="Fit both, Cycle 2", c=colors[3], marker=:square)
+poreevolplot!(sol1_play, label="Fit both (se), Cycle 1", c=colors[3], marker=:circle)
+poreevolplot!(sol2_play, label="Fit both (se), Cycle 2", c=colors[3], marker=:square)
 plot!(pl2, l, Rp1, subplot=4, label="Fit 1, 3-parameter Pikal"; c=colors[1], rpattr...)
 plot!(pl2, l, Rp2, subplot=4, label="Fit 2, 3-parameter Pikal"; c=colors[2], rpattr...)
 plot!(pl2, l, Rp12, subplot=4, label="Fit both, 3-parameter Pikal"; c=colors[3], rpattr...)
