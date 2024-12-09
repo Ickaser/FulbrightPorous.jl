@@ -3,10 +3,8 @@ export ParamObjMC
 
 
 const R = Unitful.R
-const ΔHsub = LyoPronto.ΔHsub
-const Mw = LyoPronto.Mw
-const k_ice = LyoPronto.k_ice
-const η = LyoPronto.μ # Water vapor viscosity
+import LyoPronto: Mw, k_ice, ΔHsub
+const η = LyoPronto.μ_vap # Water vapor viscosity
 export R, ΔHsub, Mw, η
 
 @doc raw"""
