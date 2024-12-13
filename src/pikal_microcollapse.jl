@@ -37,9 +37,8 @@ function lyo_mc_dae!(du, u, params, t)
         Rp = R0
     else
         μ32 = μ0^(-1//8)*μ1^(3//4)*μ2^(3//8)
-        Rp = R0 + sqrt(C) * sqrt(R*Tf/Mw) * μ1*hd/μ32/ϕ # Knudsen, fudged
-        # Rp = R0 + C*sqrt(R*Tf/Mw) * μ1*sqrt(hd)/μ32/ϕ # Knudsen, analytical
-        # Rp = R0 + C*η*R*Tf/Mw/((calc_psub(Tsub)+pch(td))/2) * μ1*hd/μ2/ϕ
+        Rp = R0 + sqrt(C) * sqrt(R*Tf/Mw) * μ1*hd/μ32/ϕ # Knudsen
+        # Rp = R0 + C*η*R*Tf/Mw/((calc_psub(Tsub)+pch(td))/2) * μ1*hd/μ2/ϕ # Viscous
     end
     dmdt = - Ap*(calc_psub(Tsub)-pch(td))/Rp
     Qsub = uconvert(u"W", dmdt*ΔHsub)
