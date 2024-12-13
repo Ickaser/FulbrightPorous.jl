@@ -73,6 +73,8 @@ Tsh2 = Tsh1 - 5u"K"
 @df dat2 plot(:t, :Tsh, xlim=(0, 2))
 plot!(Tsh2)
 
+# -------------
+# Model setup
 
 rad_i = 1.1u"cm"
 rad_o = 1.2u"cm"
@@ -116,13 +118,12 @@ modconvtplot!(sol1_Rp1)
 
 # -------------- Provide guess values for new parameters
 
-# C = 2e9u"m"
 # typical diameter: 50 μm
 d_typical = 50u"μm"
 # typical total volume: 
 V_typical = 4/3*π*d_typical^3
 N_typical = fillvol/V_typical
- 
+
 begin
 # Good guesses for Knudsen
 N = RampedVariable(N_typical / hf0)
@@ -302,6 +303,7 @@ savefig(plotsdir("suc12_T.svg"))
 
 klogs = Optim.minimizer(opt12mc)[3:6]
 kstops = exp.(klogs)*fit_un_arb[3]
+Tcheck = range(extrema(Tstops)..., length=50)
 
 # Willams Landel Ferry temparature dependence:...
 function k_wlf(T, p)
@@ -321,7 +323,7 @@ end
 p0_wlf = [1e-16, 273-85, 9, 10]
 obj_wlf(p0_wlf)
 opt_wlf = optimize(obj_wlf, p0_wlf, NelderMead(), Optim.Options(show_trace=true))
-plot(Tcheck,  k_wlf.(Tcheck, [Optim.minimizer(opt_wlf).*wlf_un]))
+plot(Tstops,  k_wlf.(Tcheck, [Optim.minimizer(opt_wlf).*wlf_un]))
 plot!(Tstops,  kstops, yscale=:log10)
 
 # MYEGA temparature dependence of viscosity
@@ -351,11 +353,12 @@ function k_play(T, p)
     # x = ustrip(u"K", T-K)
     # x = ustrip(u"K", T-K)
     x = (T-K)/C
-    sig = (tanh(x)+1)/2
-    return k0*exp(sig*(T-K)/C)
+    # sig = (tanh(x)+1)/2
+    # return k0/(tanh(-x)+1) # This has the right behavior...
+    return k0*(exp(x) + exp(-x))/exp(-x) # but this way it can avoid numerical issues
 end
 play_un = [u"s^-1", u"K", u"K"]
-p0_play = [1e-16, 237, 0.2]
+p0_play = [1e-16, 236, 0.7]
 scatter(Tcheck,  k_play.(Tcheck, [p0_play .* play_un]), yscale=:log10)
 plot!(Tstops,  kstops, yscale=:log10)
 function obj_play(p)
@@ -363,6 +366,7 @@ function obj_play(p)
         return NaN
     end
     ks = k_play.(Tstops, [p.*play_un])
+    @info "check" ks kstops
     sum(abs2.(log.(ustrip.(u"s^-1", ks)) - klogs))
 end
 obj_play(p0_play)
@@ -371,8 +375,8 @@ plot(Tcheck,  k_play.(Tcheck, [Optim.minimizer(opt_play).*play_un]))
 plot!(Tstops,  kstops, yscale=:log10)
 play_params1 = @set MC1_params2.k_f = T->k_play(T, Optim.minimizer(opt_play).*play_un)
 play_params2 = @set MC2_params2.k_f = T->k_play(T, Optim.minimizer(opt_play).*play_un)
-sol1_play = solve(ODEProblem(MC1_params2), Rodas3(autodiff=true))
-sol2_play = solve(ODEProblem(MC2_params2), Rodas3(autodiff=true))
+sol1_play = solve(ODEProblem(play_params1), Rodas3(autodiff=true))
+sol2_play = solve(ODEProblem(play_params2), Rodas3(autodiff=true))
 poreevolplot(sol1_play)
 poreevolplot!(sol2_play)
 
@@ -390,51 +394,56 @@ function gen_sol_constNS_play(fitprmlog, po; verbose=false)
     sol = solve(prob, Rodas3(autodiff=true))
     return sol, new_params
 end
-function gen2sol_constNS_play(fitprm, po1, po2)
-    sol1, prm1 = gen_sol_constNS_play(fitprm, po1)
-    sol2, prm2 = gen_sol_constNS_play(fitprm, po2)
+function gen2sol_constNS_play(fitprmlog, po1, po2)
+    sol1, prm1 = gen_sol_constNS_play(fitprmlog, po1)
+    sol2, prm2 = gen_sol_constNS_play(fitprmlog, po2)
     return sol1, sol2, prm1, prm2
 end
-function obj12play(fitprm; verbose=true)
-    sol1, sol2, prm1, prm2 = gen2sol_constNS_play(fitprm, MC1_params2, MC2_params2)
+function obj12play(fitprmlog; verbose=true)
+    verbose && @info "fitprm" exp.(fitprmlog)
+    if exp(fitprmlog[4]) < 220 || exp(fitprmlog[4]) > 270
+        verbose && @info "temperature unreasonable" exp(fitprmlog[4])
+        return NaN 
+    end
+    sol1, sol2, prm1, prm2 = gen2sol_constNS_play(fitprmlog, MC1_params2, MC2_params2)
+    if sol1.retcode != ReturnCode.Terminated || sol2.retcode != ReturnCode.Terminated
+        verbose && @info "unfinished drying" sol1.retcode sol2.retcode
+        return NaN
+    end
     obj1 = obj_expT(sol1, fitdat1)
     obj2 = obj_expT(sol2, fitdat2)
-    verbose && @info "fit" exp.(fitprm) obj1 obj2
+    verbose && @info "obj" obj1 obj2
     return obj1 + obj2
 end
-p0_playfit = [6.4e7, 1.1e-6, 3e-16, 237, 0.3, 0.02, 2.5e4]
+p0_playfit = [6.4e7, 1.1e-6, Optim.minimizer(opt_play)..., 0.02, 2.5e4]
 p0_playfitlog = log.(p0_playfit)
+obj12play(p0_playfitlog)
 
 opt12play = optimize(obj12play, p0_playfitlog, NelderMead(), Optim.Options(g_tol = 1e-2, time_limit=10))
+exp.(Optim.minimizer(opt12play))
 sol1_play, sol2_play, play1_params, play2_params = gen2sol_constNS_play(Optim.minimizer(opt12play), MC1_params2, MC2_params2);
 poreevolplot(sol1_play)
 poreevolplot!(sol2_play)
 
 begin
 pl1 = plot(u"hr", u"°C", xlim=(0, 120), ylim=(-36, -31), legend=:bottomright)
-@df dat1 exptfplot!(:t, :T1, :T2, :T3, markershape=:circle)
-@df dat2 exptfplot!(:t, :T1, :T2, :T3, markershape=:square)
-# plot!(fitdat1)
-# plot!(fitdat2)
-modconvtplot!(sol1_play, sol1_Rp12, labels=["MC" "Pikal"], markershape=:circle)
-modconvtplot!(sol2_play, sol2_Rp12, labels=["MC" "Pikal"], markershape=:square)
-modconvtplot!(sol1_MC12)
-modconvtplot!(sol1_MC12)
+@df dat1 exptfplot!(:t, :T1, :T2, labsuffix=", Cycle 1", markershape=:circle)
+@df dat2 exptfplot!(:t, :T3, :T2, labsuffix=", Cycle 2", markershape=:square)
+# plot!(fitdat1, labsuffix=", Cycle 1")
+# plot!(fitdat2, labsuffix=", Cycle 2")
+modconvtplot!(sol1_play, sol1_Rp12, labels=["PBM 1&2, 1" "3PP 1&2, 1"], markershape=:circle)
+modconvtplot!(sol2_play, sol2_Rp12, labels=["PBM 1&2, 2" "3PP 1&2, 2"], markershape=:square)
+# modconvtplot!(sol1_MC12)
+# modconvtplot!(sol2_MC12)
 end
 savefig(plotsdir("suc12_T.svg"))
 
-modconvtplot(sol1_play)
-modconvtplot!(sol2_play)
-modconvtplot!(sol1_MC12)
-modconvtplot!(sol1_MC12)
-
-Tcheck = range(extrema(Tstops)..., length=50)
 begin
-plot(u"°C", u"s^-1", legend=:bottomright, unitformat=:square)
-kineticplot!(MC1_params, T=Tcheck, c=:red, label="Fit to case 1")
-kineticplot!(MC2_params, T=Tcheck, c=:blue, label="Fit to case 2")
-kineticplot!(MC1_params2, T=Tcheck, c=:purple, label="Fit to both")
-kineticplot!(play1_params, T=Tcheck, label="2-param sigmoid+exp")
+plot(u"°C", u"s^-1", legend=:bottomright, xlabel="T", ylabel="k\\  ", unitformat=latexsquareunitlabel)
+kineticplot!(MC1_params, T=Tcheck, c=:red, label="Interp fit to case 1")
+kineticplot!(MC2_params, T=Tcheck, c=:blue, label="Interp fit to case 2")
+kineticplot!(MC1_params2, T=Tcheck, c=:purple, label="Interp fit to 1&2")
+kineticplot!(play1_params, T=Tcheck, label="3-param activation to 1&2")
 end
 savefig(plotsdir("kinetic.svg"))
 
@@ -445,57 +454,101 @@ Rp1 = Rp1_params.Rp.(l)
 Rp2 = Rp2_params.Rp.(l)
 Rp12 = Rp2_params2.Rp.(l)
 
+default(:markersize, 7)
 begin
 colors = [:red :blue :purple :brown]
 rpattr = (marker=:utriangle, seriestype=:samplemarkers, linestyle=:dash)
-pl2 = poreevolplot(sol1_MC1, label="Fit 1, Cycle 1", c=colors[1], marker=:circle)
+# pl2 = poreevolplot(sol1_MC1, label="Fit 1, Cycle 1", c=colors[1], marker=:circle)
 # poreevolplot!(sol2_MC1, label="Fit 1, Cycle 2", c=colors[1], marker=:square)
 # poreevolplot!(sol1_MC2, label="Fit 2, Cycle 1", c=colors[2], marker=:circle)
-poreevolplot!(sol2_MC2, label="Fit 2, Cycle 2", c=colors[2], marker=:square)
+# poreevolplot!(sol2_MC2, label="Fit 2, Cycle 2", c=colors[2], marker=:square)
 # poreevolplot!(sol1_MC12, label="Fit both, Cycle 1", c=colors[3], marker=:circle)
 # poreevolplot!(sol2_MC12, label="Fit both, Cycle 2", c=colors[3], marker=:square)
-poreevolplot!(sol1_play, label="Fit both (se), Cycle 1", c=colors[3], marker=:circle)
-poreevolplot!(sol2_play, label="Fit both (se), Cycle 2", c=colors[3], marker=:square)
-plot!(pl2, l, Rp1, subplot=4, label="Fit 1, 3-parameter Pikal"; c=colors[1], rpattr...)
-plot!(pl2, l, Rp2, subplot=4, label="Fit 2, 3-parameter Pikal"; c=colors[2], rpattr...)
-plot!(pl2, l, Rp12, subplot=4, label="Fit both, 3-parameter Pikal"; c=colors[3], rpattr...)
+poreevolplot(sol1_play, label="PBM 1&2, Cycle 1", c=colors[3], marker=:circle)
+poreevolplot!(sol2_play, label="PBM 1&2, Cycle 2", c=colors[3], marker=:square)
+plot!(l, Rp1, subplot=4, label="3PP 1"; c=colors[1], rpattr...)
+plot!(l, Rp2, subplot=4, label="3PP 2"; c=colors[2], rpattr...)
+plot!(l, Rp12, subplot=4, label="3PP 1&2"; c=colors[3], rpattr...)
 plot!(size=(800, 400))
 end
-savefig(plotsdir("suc12_Rp.svg"))
+savefig(plotsdir("suc12_pores.svg"))
 plot(pl1, pl2, size=(1000, 400))
 
 # -----------------
 # Inspect fit results in Rp space rather than temperature space
-minteg = cumsum(dat2.mfr[1:end-1].*(dat2.t[2:end]-dat2.t[1:end-1]))
+minteg = @df dat1 cumsum(:mfr[1:end-1].*(:t[2:end]-:t[1:end-1]))
 insert!(minteg, 1, 0u"g")
 errfac = minteg[end] / (fillvol*(ρ_solution-c_solid))
-ld = @. errfac*minteg/(A_p*(ρ_solution-c_solid)) |> u"cm"
+ld1 = @. errfac*minteg/(A_p*(ρ_solution-c_solid)) |> u"cm"
+minteg = @df dat2 cumsum(:mfr[1:end-1].*(:t[2:end]-:t[1:end-1]))
+insert!(minteg, 1, 0u"g")
+errfac = minteg[end] / (fillvol*(ρ_solution-c_solid))
+ld2 = @. errfac*minteg/(A_p*(ρ_solution-c_solid)) |> u"cm"
 
-l2 = hf0 .- sol_MC2[1,:]*u"cm"
-Rp_p2 = Rp2_params.Rp.(l)
-Rp_mc2 = [FulbrightPores.lyo_mc_dae!(fill(0.0, 4), u, MC2_params, t) for (u,t) in zip(sol_MC2.u, sol_MC2.t)]
-Rp_p2 = Rp2_params.Rp.(l)
+l1 = hf0 .- sol1_play[1,:]*u"cm"
+l2 = hf0 .- sol2_play[1,:]*u"cm"
+Rp_mc1 = [FulbrightPores.lyo_mc_dae!(fill(0.0, 4), u, play1_params, t) for (u,t) in zip(sol1_play.u, sol1_play.t)]
+Rp_mc2 = [FulbrightPores.lyo_mc_dae!(fill(0.0, 4), u, play2_params, t) for (u,t) in zip(sol2_play.u, sol2_play.t)]
+Rp_p1 = Rp1_params.Rp.(ld1)
+Rp_p2 = Rp2_params.Rp.(ld2)
+
 begin
 plot(u"cm", u"cm^2*Torr*hr/g", ylims=(0, 20), xlabel=L"h_d", ylabel=L"R_p", unitformat=(x,y)->"$x [$(latexify(y))]")
-plot!(l2, Rp_mc2, label="PBE model")
-plot!(l2, Rp_p2, label="3-parameter Pikal")
-plot!(ld, dat2.Rp, label="TDLAS")
+plot!(ld1, dat1.Rp, linealpha=0.8, label="TDLAS 1", c=:red)
+plot!(ld2, dat2.Rp, linealpha=0.8, label="TDLAS 2", c=:blue)
+plot!(l1, Rp_mc1,   linealpha=0.8, label="PBM 1&2, Cycle 1 ", c=:red , marker=:circle, seriestype=:samplemarkers, step=3)
+plot!(l2, Rp_mc2,   linealpha=0.8, label="PBM 1&2, Cycle 2 ", c=:blue, marker=:circle, seriestype=:samplemarkers, step=3)
+plot!(ld1, Rp_p1,   linealpha=0.8, label="3PP 1", c=:red , marker=:utriangle, seriestype=:samplemarkers, step=1000)
+plot!(ld2, Rp_p2,   linealpha=0.8, label="3PP 2", c=:blue, marker=:utriangle, seriestype=:samplemarkers, step=1000)
 end
-savefig(plotsdir("suc2_Rp.svg"))
+savefig(plotsdir("suc12_Rp.svg"))
 
-
-fits = Optim.minimizer.([opt_MC1, opt_MC2, opt12mc]) 
 function namefitparam_arr(fitlog, label)
     fit = exp.(fitlog)
     nt = (label = label,
-        N = fit[1]*fit_un_arr[1],
-        S = fit[2]*fit_un_arr[2],
+        N =  fit[1]*fit_un_arr[1],
+        S =  fit[2]*fit_un_arr[2],
+        C =  fit[5]*fit_un_arr[5],
+        R0 = fit[6]*fit_un_arr[6],
         k0 = fit[3]*fit_un_arr[3],
-        E = fit[4]*fit_un_arr[4],
-        C = fit[5]*fit_un_arr[5],
-        R0 = fit[6]*fit_un_arr[6])
+        E =  fit[4]*fit_un_arr[4],
+    )
 end
-report = Table(map(namefitparam_arr, fits, ["Cycle 1", "Cycle 2", "Both"]))
+function namefitparam_arb(fitlog, label)
+    fit = exp.(fitlog)
+    nt = (label = label,
+        N =  fit[1]*fit_un_arb[1],
+        S =  fit[2]*fit_un_arb[2],
+        C =  fit[7]*fit_un_arb[5],
+        R0 = fit[8]*fit_un_arb[6],
+        k1 = fit[3]*fit_un_arb[3],
+        k2 = fit[4]*fit_un_arb[3],
+        k3 = fit[5]*fit_un_arb[3],
+        k4 = fit[6]*fit_un_arb[3],
+        T1 = Tstops[1],
+        T2 = Tstops[2],
+        T3 = Tstops[3],
+        T4 = Tstops[4],
+    )
+end
+function namefitparam_play(fitlog, label)
+    fit = exp.(fitlog)
+    nt = (label = label,
+        N =  fit[1]*fit_un_play[1],
+        S =  fit[2]*fit_un_play[2],
+        C =  fit[6]*fit_un_play[6],
+        R0 = fit[7]*fit_un_play[7],
+        k0 = fit[3]*fit_un_play[3],
+        Tg = fit[4]*fit_un_play[4],
+        θ  = fit[5]*fit_un_play[5],
+    )
+end
+fits_arb = Optim.minimizer.([opt_MC1, opt_MC2, opt12mc]) 
+fits_play = Optim.minimizer.([opt12play]) 
+rep1 = Table(map(namefitparam_arb, fits_arb, ["Cycle 1", "Cycle 2", "1&2"]))
+rep2 = Table(map(namefitparam_play, fits_play, ["1&2"]))
 
-safesave(datadir("exp_pro", "fit12.html"), pretty_table(HTML, report, header = ["Fit", "N", "S", "k0", "E", "C", "R0"]))
-pretty_table(report, header = ["Fit", "N", "S", "k0", "E", "C", "R0"])
+# safesave(datadir("exp_pro", "fit12.html"), pretty_table(HTML, report, header = ["Fit", "N", "S", "k0", "E", "C", "R0"]))
+safesave(datadir("exp_pro", "fit12.html"), pretty_table(HTML, rep2, header = ["Fit", "N", "S", "C", "R0", "k0", "Tg", "θ"]))
+pretty_table(rep2, header = ["Fit", "N", "S", "C", "R0", "k0", "Tg", "θ"])
+# pretty_table(report, header = ["Fit", "N", "S", "k0", "E", "C", "R0"])

@@ -84,8 +84,6 @@ end
     @series begin
         seriestype := :line
         yscale --> :log10
-        ylabel --> L"k_f"
-        xlabel --> "Temperature"
         label --> L"k_f"
         return T, kf.(T)
     end
