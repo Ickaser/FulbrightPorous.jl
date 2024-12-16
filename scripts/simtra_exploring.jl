@@ -128,7 +128,7 @@ begin
 # Good guesses for Knudsen
 N = RampedVariable(N_typical / hf0)
 S = RampedVariable(V_typical^2*N_typical/hf0)
-C = 2e-2u"m"
+C = 2e-1u"m^0.5"
 R0 = 0.05u"cm^2*Torr*hr/g"
 
 # Good guesses for viscous
@@ -157,7 +157,7 @@ pomc2 = deepcopy(pomc1)
 # poreevolplot(tsol)
 end
 
-fit_un_arr = [u"cm^-1", u"cm^5", u"s^-1", u"J/mol", u"m", u"m/s"]
+fit_un_arr = [u"cm^-1", u"cm^5", u"s^-1", u"J/mol", u"m^0.5", u"m/s"]
 fitguess = ustrip.(fit_un_arr, [N(0), S(0), k0, E, C, R0])
 fitguesslog = log.(fitguess)
 function gen_sol_constNS_arr(fitprmlog, po; verbose=false)
@@ -177,7 +177,7 @@ function gen_sol_constNS_arr(fitprmlog, po; verbose=false)
     return sol, new_params
 end
 
-fit_un_arb = [u"cm^-1", u"cm^5", fill(u"s^-1", 4)..., u"m", u"m/s"]
+fit_un_arb = [u"cm^-1", u"cm^5", fill(u"s^-1", 4)..., u"m^0.5", u"m/s"]
 fitguess = ustrip.(fit_un_arb, [N(0), S(0), k0/10, k0/5, k0/2, k0, C, R0])
 fitguesslog = log.(fitguess)
 Tstops = [-45.0, -37, -33, -30]u"°C" .|> u"K"
@@ -380,7 +380,7 @@ sol2_play = solve(ODEProblem(play_params2), Rodas3(autodiff=true))
 poreevolplot(sol1_play)
 poreevolplot!(sol2_play)
 
-fit_un_play = [u"cm^-1", u"cm^5", u"s^-1", u"K", u"K", u"m", u"m/s"]
+fit_un_play = [u"cm^-1", u"cm^5", u"s^-1", u"K", u"K", u"m^0.5", u"m/s"]
 function gen_sol_constNS_play(fitprmlog, po; verbose=false)
     new_params = deepcopy(po)
     fitprm = exp.(fitprmlog) # Constrain all to be positive by taking exp
