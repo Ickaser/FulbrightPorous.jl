@@ -44,11 +44,13 @@ function lyo_mc_dae!(du, u, params, t)
     Qsub = uconvert(u"W", dmdt*ΔHsub)
 
     dhf_dt = min(0u"cm/hr", dmdt/(ρ_solution-c_solid)/Ap) # Cap dhf_dt at 0: no desublimation
+    dμ0_dt = -k/2*μ0^2 - N(hd)*dhf_dt
+    dμ2_dt = k*μ1^2 - S(hd)*dhf_dt
 
     du[1] = ustrip(u"cm/hr", dhf_dt)
     du[2] = ustrip(u"W", Qsub + Qshf)
-    du[3] = ustrip(u"hr^-1", -k/2*μ0^2 - N(hd)*dhf_dt)
-    du[4] = ustrip(u"cm^6/hr", k*μ1^2 - S(hd)*dhf_dt)
+    du[3] = ustrip(u"hr^-1", dμ0_dt)
+    du[4] = ustrip(u"cm^6/hr", dμ2_dt)
 
     return Rp
 end
@@ -90,7 +92,6 @@ See [`RpFormFit`](@ref LyoPronto.RpFormFit) and [`RampedVariable`](@ref LyoPront
 - `Tsh(t)`, `pch(t)` return shelf temperature and chamber pressure respectively at time `t`.
 """
 lyo_mc_dae_f = ODEFunction(lyo_mc_dae!, mass_matrix=lyo_mc_mm)
-
 
 struct ParamObjMC
     _
