@@ -314,7 +314,7 @@ end
 savefig(plotsdir("suc2_T.svg"))
 
 begin
-blankplothrC(xlim=(0, 20), ylim=(-36, -28), legend=:bottomright)
+blankplot_hrC(xlim=(0, 20), ylim=(-36, -28), legend=:bottomright)
 @df dat8 exptfplot!(:t, :T1, :T2, :T3, marker=:circle)
 modconvtplot!(sol8_MC8, sol8_Rp8, labels=["MC" "Pikal"],marker=:circle)
 end
@@ -394,12 +394,12 @@ sol2_MC128, MC2_params128 = gen_sol_constNS_arb(opt128mc.minimizer, pomc2);
 sol8_MC128, MC8_params128 = gen_sol_constNS_arb(opt128mc.minimizer, pomc8);
 
 begin
-pl1 = blankplothrC(legend=:bottomright)
+pl1 = blankplot_hrC(legend=:bottomright)
 @df dat1 exptfplot!(:t, :T1, :T2, :T3, markershape=:circle)
 # plot!(fitdat1)
 plot!(xlim=(0, 120), ylim=(-36, -31), )
 modconvtplot!(sol1_MC12, sol1_Rp12, labels=["MC" "Pikal"], markershape=:circle)
-pl2 = blankplothrC(legend=:bottomright)
+pl2 = blankplot_hrC(legend=:bottomright)
 @df dat2 exptfplot!(:t, :T1, :T2, :T3, markershape=:square)
 # plot!(fitdat2)
 modconvtplot!(sol2_MC12, sol2_Rp12, labels=["MC" "Pikal"], markershape=:square)
@@ -410,18 +410,18 @@ end
 savefig(plotsdir("suc12_T.svg"))
 
 begin
-pl1 = blankplothrC(legend=:bottomright)
+pl1 = blankplot_hrC(legend=:bottomright)
 @df dat1 exptfplot!(:t, :T1, :T2, :T3, markershape=:circle)
 # plot!(fitdat1)
 plot!(xlim=(0, 60), ylim=(-36, -31), )
 modconvtplot!(sol1_MC128, sol1_Rp128, labels=["MC" "Pikal"], markershape=:circle)
-pl2 = blankplothrC(legend=:bottomright)
+pl2 = blankplot_hrC(legend=:bottomright)
 @df dat2 exptfplot!(:t, :T1, :T2, :T3, markershape=:square)
 # plot!(fitdat2)
 modconvtplot!(sol2_MC128, sol2_Rp128, labels=["MC" "Pikal"], markershape=:square)
 plot!(xlim=(0, 120), ylim=(-36, -31), )
 
-pl8 = blankplothrC(legend=:bottomright)
+pl8 = blankplot_hrC(legend=:bottomright)
 @df dat8 exptfplot!(:t, :T1, :T2, :T3, markershape=:circle)
 # plot!(fitdat8)
 modconvtplot!(sol8_MC128, sol8_Rp128, labels=["MC" "Pikal"], markershape=:circle)
@@ -544,18 +544,18 @@ sol2_myega128, myega2_params128 = gen_sol_constNS_myega(opt128myega.minimizer, M
 sol8_myega128, myega8_params128 = gen_sol_constNS_myega(opt128myega.minimizer, MC8_params128);
 
 begin
-pl1 = blankplothrC(legend=:bottomright)
+pl1 = blankplot_hrC(legend=:bottomright)
 @df dat1 exptfplot!(:t, :T1, :T2, :T3, markershape=:circle)
 plot!(title="Tsh = $(Tsh1(Inf*u"s")|>u"°C")")
 plot!(xlim=(0, 120), ylim=(-36, -31), )
 modconvtplot!(sol1_myega128, sol1_Rp128, labels=["MC" "Pikal"], markershape=:circle)
-pl2 = blankplothrC(legend=:bottomright)
+pl2 = blankplot_hrC(legend=:bottomright)
 @df dat2 exptfplot!(:t, :T1, :T2, :T3, markershape=:square)
 modconvtplot!(sol2_myega128, sol2_Rp128, labels=["MC" "Pikal"], markershape=:square)
 plot!(xlim=(0, 120), ylim=(-38, -31), )
 plot!(title="Tsh = $(Tsh2(Inf*u"s")|>u"°C")")
 
-pl8 = blankplothrC(legend=:bottomright)
+pl8 = blankplot_hrC(legend=:bottomright)
 @df dat8 exptfplot!(:t, :T1, :T2, :T3, markershape=:utriangle)
 # plot!(fitdat8)
 modconvtplot!(sol8_myega128, sol8_Rp128, labels=["MC" "Pikal"], markershape=:utriangle)
@@ -662,7 +662,7 @@ poreevolplot!(sol2_play128)
 poreevolplot!(sol8_play128)
 
 begin
-pl1 = blankplothrC(legend=:bottomright)
+pl1 = blankplot_hrC(legend=:bottomright)
 @df dat1 exptfplot!(:t, :T1, :T2, :T3, markershape=:circle)
 # plot!(fitdat1)
 plot!(title="Tsh = $(Tsh1(Inf*u"s")|>u"°C")")
@@ -670,7 +670,7 @@ plot!(xlim=(0, 120), ylim=(-36, -31), )
 # modconvtplot!(sol1_playg, sol1_Rp18, labels=["MC" "Pikal"], markershape=:circle)
 modconvtplot!(sol1_play18, sol1_Rp128, labels=["MC" "Pikal"], markershape=:circle)
 # modconvtplot!(sol1_play128, sol1_Rp18, labels=["MC" "Pikal"], markershape=:circle)
-pl2 = blankplothrC(legend=:bottomright)
+pl2 = blankplot_hrC(legend=:bottomright)
 @df dat2 exptfplot!(:t, :T1, :T2, :T3, markershape=:square)
 # plot!(fitdat2)
 # modconvtplot!(sol2_playg, sol2_Rp18, labels=["MC" "Pikal"], markershape=:square)
@@ -679,7 +679,7 @@ modconvtplot!(sol2_play18, sol2_Rp128, labels=["MC" "Pikal"], markershape=:squar
 plot!(xlim=(0, 120), ylim=(-38, -31), )
 plot!(title="Tsh = $(Tsh2(Inf*u"s")|>u"°C")")
 
-pl8 = blankplothrC(legend=:bottomright)
+pl8 = blankplot_hrC(legend=:bottomright)
 @df dat8 exptfplot!(:t, :T1, :T2, :T3, markershape=:utriangle)
 # plot!(fitdat8)
 # modconvtplot!(sol8_playg, sol8_Rp18, labels=["MC" "Pikal"], markershape=:utriangle)
@@ -845,12 +845,12 @@ sol5_PBM18 = solve(ODEProblem(po_PBM5), Rodas3());
 
 # Training plot
 begin
-pl1 = blankplothrC(legend=:bottomright)
+pl1 = blankplot_hrC(legend=:bottomright)
 @df dat1 exptfplot!(:t, :T1, :T2, :T3, markershape=:circle)
 plot!(xlim=(0, 70), ylim=(-36, -31), )
 modconvtplot!(sol1_play18, sol1_Rp18, labels=["PBM 1&8" "3PP 1&8"], markershape=:circle)
 plot!(title="Tsh = $(Tsh1(Inf*u"s")|>u"°C")", xlabel="")
-pl8 = blankplothrC(legend=:bottomright)
+pl8 = blankplot_hrC(legend=:bottomright)
 @df dat8 exptfplot!(:t, :T1, :T2, :T3, markershape=:utriangle)
 modconvtplot!(sol8_play18, sol8_Rp18, labels=["PBM 1&8" "3PP 1&8"], markershape=:utriangle)
 plot!(xlim=(0, 30), ylim=(-32, -26))
@@ -862,15 +862,15 @@ savefig(plotsdir("suc128_train_T.svg"))
 # Validation plot
 
 begin
-pl2 = blankplothrC()
+pl2 = blankplot_hrC()
 @df dat2 exptfplot!(:t, :T1, :T2, :T3, markershape=:utriangle)
 modconvtplot!(sol2_play18, sol2_Rp18, labels=["PBM 1&8" "3PP 1&8" ], markershape=:circle)
 plot!(title="Tsh = $(Tsh2(Inf*u"s")|>u"°C")", xlabel="", ylabel="")
-pl3 = blankplothrC()
+pl3 = blankplot_hrC()
 @df dat3 exptfplot!(:t, :T1, :T2, :T3, markershape=:circle)
 modconvtplot!(sol3_PBM18, sol3_Rp18, labels=["PBM 1&8" "3PP 1&8" ], markershape=:circle)
 plot!(title="Tsh = $(Tsh3(Inf*u"s")|>u"°C")", xlabel="")
-pl5 = blankplothrC()
+pl5 = blankplot_hrC()
 @df dat5 exptfplot!(:t, :T1, :T2, :T3, markershape=:square)
 modconvtplot!(sol5_PBM18, sol5_Rp18, labels=[ "PBM 1&8" "3PP 1&8"], markershape=:square)
 plot!(title="Tsh = $(Tsh5(Inf*u"s")|>u"°C")", ylabel="")

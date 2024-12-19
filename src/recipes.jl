@@ -1,5 +1,5 @@
-export blankplothrC
-blankplothrC(;kwargs...) = plot(u"hr", u"°C", xlabel="Time", ylabel="Temperature", unitformat=:square;kwargs...)
+export blankplot_hrC
+blankplot_hrC(;kwargs...) = plot(u"hr", u"°C", xlabel="Time", ylabel="Temperature", unitformat=:square;kwargs...)
 
 # ------------------------
 # Visualize the pore size evolution

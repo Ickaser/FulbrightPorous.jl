@@ -229,10 +229,10 @@ sol1_Rp12, sol2_Rp12, Rp12_params1, Rp12_params2 = gen2sol_Rp(Optim.minimizer(op
 
 # Plot results
 begin
-pl1 = blankplothrC()
+pl1 = blankplot_hrC()
 plot!(fitdat1)
 modconvtplot!(sol1_Rp1, sol1_Rp12, labels=["3PP 1, 1" "3PP 1&2, 1"], linealpha=0.8)
-pl2 = blankplothrC()
+pl2 = blankplot_hrC()
 plot!(fitdat2)
 modconvtplot!(sol2_Rp2, sol2_Rp12, labels=["3PP 2, 2" "3PP 1&2, 2"], linealpha=0.8)
 plot!(pl2, ylabel="")
@@ -265,10 +265,10 @@ opt12_PBM = optimize(obj12PBM, g12_PBM, LBFGS(), Optim.Options(g_tol = 1e-3, tim
 sol1_PBM12, sol2_PBM12, PBM1_params12, PBM2_params12 = gen2sol_PBM(Optim.minimizer(opt12_PBM), poPBM1, poPBM2);
 
 begin
-pl1 = blankplothrC(legend=:bottomright,)
+pl1 = blankplot_hrC(legend=:bottomright,)
 @df dat1 exptfplot!(:t, :T1, :T2, :T3, markershape=:circle)
 modconvtplot!(sol1_PBM12, sol1_Rp12, labels=["PBM 1&2" "3PP 1&2"], markershape=:circle)
-pl2 = blankplothrC(legend=:topleft)
+pl2 = blankplot_hrC(legend=:topleft)
 @df dat2 exptfplot!(:t, :T1, :T2, :T3, markershape=:square)
 modconvtplot!(sol2_PBM12, sol2_Rp12, labels=["PBM 1&2" "3PP 1&2"], markershape=:square)
 pl12 = plot(pl1, pl2,  ylim=(-36, -31), layout=(1,2), link=:all)
@@ -342,15 +342,15 @@ po_PBM8 = deepcopy(PBM1_params12)
 sol8_PBM12 = solve(ODEProblem(po_PBM8), Rodas3());
 
 begin
-pl3 = blankplothrC(legend=:bottomright)
+pl3 = blankplot_hrC(legend=:bottomright)
 @df dat3 exptfplot!(:t, :T1, :T2, :T3, markershape=:circle)
 modconvtplot!(sol3_PBM12, sol3_Rp12, labels=["PBM 1&2, 3", "3PP 1&2, 3"], markershape=:circle)
 plot!(ylim=(-36, -31))
-pl5 = blankplothrC(legend=:bottomright)
+pl5 = blankplot_hrC(legend=:bottomright)
 @df dat5 exptfplot!(:t, :T1, :T2, :T3, markershape=:square)
 modconvtplot!(sol5_PBM12, sol5_Rp12, labels=["PBM 1&2, 5", "3PP 1&2, 5"], markershape=:square)
 plot!(xlim=(0, 55), ylim=(-36, -31))
-pl8 = blankplothrC(legend=:bottomright)
+pl8 = blankplot_hrC(legend=:bottomright)
 @df dat8 exptfplot!(:t, :T1, :T2, :T3, markershape=:utriangle)
 modconvtplot!(sol8_PBM12, labels="PBM 1&2, 8", markershape=:utriangle)
 plot!(xlim=(0, 25), ylim=(-33, -27))
