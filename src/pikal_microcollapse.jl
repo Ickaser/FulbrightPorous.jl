@@ -29,8 +29,7 @@ function lyo_mc_dae!(du, u, params, t)
     hd = hf0 - hf
     ϕ = (ρ_solution - c_solid)/ρ_solution
     μ1 = hd*ϕ*Ap
-    pchl = pch(td)
-    Qshf = Av*Kshf(pchl)*(Tsh(td) - Tf)
+    Qshf = Av*Kshf(pch(td))*(Tsh(td) - Tf)
     Tsub = Tf - Qshf/k_ice/Ap*hf
 
     if μ1 <= 0u"cm^3" || μ0 <= 0.0 || μ2 <= 0u"cm^6"
@@ -69,12 +68,12 @@ const lyo_mc_mm = [1.0 0.0 0.0 0.0;
 
 Compute the right hand side function for the microcollapse-augmented Pikal model.
 
-The DAE system which is the Pikal model plus pore moment evolution (2 ODEs, one nonlinear algebraic equation for pseudosteady conditions)
+The DAE system which is the Pikal model plus pore moment evolution (3 ODEs, one nonlinear algebraic equation for pseudosteady conditions)
 is here treated as a constant-mass-matrix implicit ODE system.
 The implementation is in [`lyo_mc_dae!`](@ref)
 
-The initial conditions `u0 = [h_f, Tf, μ2]` should be unitless, but are internally assigned to be in `[cm, K, cm^6]`.
-The unitless time is taken to be in hours, so derivatives are given in unitless `[cm/hr, K/hr, cm^6/hr]`.
+The initial conditions `u0 = [h_f, Tf, μ0, μ2]` should be unitless, but are internally assigned to be in `[cm, K, NoUnits, cm^6]`.
+The unitless time is taken to be in hours, so derivatives are given in unitless `[cm/hr, K/hr, 1/hr, cm^6/hr]`.
 
 `params` has the form:
 ```
@@ -82,14 +81,16 @@ params = (
     (_, hf0, c_solid, ρ_solution),
     (Kshf, Av, Ap),
     (pch, Tsh) ,
-    (k0, E, C, N, S, R0),
+    (k_f, C, N, S, R0)  
 )
 ```
 where those listed following are callables returning `Quantity`s, and the rest are `Quantity`s.
 See [`RpFormFit`](@ref LyoPronto.RpFormFit) and [`RampedVariable`](@ref LyoPronto.RampedVariable) for convenience types that can help with the callables.
-- `S(hd)` with `hd` a length returns source term for pore size second moment (as a Unitful quantity)
+- `N(hd)` with `hd` a length returns source term for number of pores per height (as a Unitful quantity)
+- `S(hd)` with `hd` a length returns source term for pore size second moment per height (as a Unitful quantity)
 - `Kshf(p)` with `p` a pressure returns heat transfer coefficient (as a Unitful quantity).
 - `Tsh(t)`, `pch(t)` return shelf temperature and chamber pressure respectively at time `t`.
+- `k_f(T)` returns the rate constant for pore coalescence at temperature `T`.
 """
 lyo_mc_dae_f = ODEFunction(lyo_mc_dae!, mass_matrix=lyo_mc_mm)
 
