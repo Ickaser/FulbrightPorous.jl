@@ -16,6 +16,7 @@ import LyoPronto: ODEProblem
     LevenbergMarquardt, RelTerminationMode, AutoForwardDiff, AutoFiniteDiff
 @reexport using Accessors
 @reexport using DataInterpolations
+using UnitfulLatexify, Latexify
 
 
 

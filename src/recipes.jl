@@ -3,6 +3,8 @@ blankplot_hrC(;kwargs...) = plot(u"hr", u"°C", xlabel="Time", ylabel="Temperatu
 
 # ------------------------
 # Visualize the pore size evolution
+export blankplot_lRp
+blankplot_lRp(;kwargs...) = plot(u"cm", u"cm^2*Torr*hr/g", xlabel=L"h_d", ylabel=L"R_p", unitformat=(x,y)->"$x [$(latexify(y))]";kwargs...)
 
 @userplot PoreEvolPlot
 @recipe function f(pep::PoreEvolPlot)
@@ -18,8 +20,6 @@ blankplot_hrC(;kwargs...) = plot(u"hr", u"°C", xlabel="Time", ylabel="Temperatu
     Rp = map(sol.t, sol.u) do t,u
         lyo_mc_dae!(fill(0.0, 4), u, sol.prob.p, t) |> u"cm^2*Torr*hr/g"
     end
-    
-
     seriestype --> :samplemarkers
     layout --> @layout [[a ; b; c;] d]
     @series begin
@@ -67,6 +67,48 @@ end
         ylabel --> "Rp"
         label --> "\$R_p\$"
         t, Rp
+    end
+end
+
+function calc_l(dat, hf0)
+    minteg = @df dat cumsum(:mfr[1:end-1].*(:t[2:end]-:t[1:end-1]))
+    insert!(minteg, 1, 0u"g")
+    frac = minteg ./ minteg[end]
+    ld = frac .*hf0 
+end
+function calc_lRp(sol)
+    l = (sol[1,1] .- sol[1,:])*u"cm"
+    Rp_mc = [FulbrightPores.lyo_mc_dae!(fill(0.0, 4), u, sol.prob.p, t) for (u,t) in zip(sol.u, sol.t)]
+    return l, Rp_mc
+end
+
+@userplot PBMTDLAS
+@recipe function f(pt::PBMTDLAS)
+    sol, dat, Rpp = pt.args
+    l, Rp_mc = calc_lRp(sol)
+    ld = calc_l(dat, sol.prob.p.hf0)
+    Rpd = dat.Rp
+    Rp_pikal = Rpp.(ld)
+    # unitformat --> :square
+    # xlabel --> "Dry layer thickness"
+    # ylabel --> "Rp"
+    @series begin
+        c --> 1
+        seriestype := :line
+        label --> "PBM"
+        return l, Rp_mc
+    end
+    @series begin
+        c --> 2
+        seriestype := :line
+        label --> "3PP"
+        return ld, Rp_pikal
+    end
+    @series begin
+        c --> 3
+        seriestype := :line
+        label --> "TDLAS"
+        return ld, Rpd
     end
 end
 
