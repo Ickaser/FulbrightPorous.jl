@@ -703,69 +703,25 @@ savefig(plotsdir("kinetic.svg"))
 l = range(0u"cm", hf0, length=50)
 Rp1 = Rp1_params.Rp.(l)
 Rp2 = Rp2_params.Rp.(l)
-Rp12 = Rp2_params2.Rp.(l)
-Rp12 = Rp2_params2.Rp.(l)
+Rp8 = Rp8_params.Rp.(l)
+Rp18 = Rp1_params18.Rp.(l)
 
 default(:markersize, 7)
 begin
-colors = [:red :blue :purple :brown]
-rpattr = (marker=:utriangle, seriestype=:samplemarkers, linestyle=:dash)
-# pl2 = poreevolplot(sol1_MC1, label="Fit 1, Cycle 1", c=colors[1], marker=:circle)
-# poreevolplot!(sol2_MC1, label="Fit 1, Cycle 2", c=colors[1], marker=:square)
-# poreevolplot!(sol1_MC2, label="Fit 2, Cycle 1", c=colors[2], marker=:circle)
-# poreevolplot!(sol2_MC2, label="Fit 2, Cycle 2", c=colors[2], marker=:square)
-# poreevolplot!(sol1_MC12, label="Fit both, Cycle 1", c=colors[3], marker=:circle)
-# poreevolplot!(sol2_MC12, label="Fit both, Cycle 2", c=colors[3], marker=:square)
-poreevolplot(sol1_play18, label="PBM 1&8, Cycle 1", c=colors[3], marker=:circle)
-poreevolplot!(sol2_play18, label="PBM 1&8, Cycle 2", c=colors[3], marker=:square)
-plot!(l, Rp1, subplot=4, label="3PP 1"; c=colors[1], rpattr...)
-plot!(l, Rp2, subplot=4, label="3PP 2"; c=colors[2], rpattr...)
-plot!(l, Rp12, subplot=4, label="3PP 1&2"; c=colors[3], rpattr...)
+# colors = [:red :blue :purple :brown]
+plot!(palette=:default)
+rpattr = (seriestype=:samplemarkers, linestyle=:dash)
+poreevolplot(sol1_play18, label="PBM 1&8, Cycle 1", c=1, marker=:circle)
+poreevolplot!(sol2_play18, label="PBM 1&8, Cycle 2", c=2, marker=:square)
+poreevolplot!(sol8_play18, label="PBM 1&8, Cycle 8", c=3, marker=:utriangle)
+plot!(l, Rp1, subplot=4, label="3PP 1"; c=4, marker=:circle, rpattr...)
+plot!(l, Rp2, subplot=4, label="3PP 2"; c=4, marker=:square, rpattr...)
+plot!(l, Rp8, subplot=4, label="3PP 8"; c=4, marker=:utriangle, rpattr...)
+# plot!(l, Rp18, subplot=4, label="3PP 1&8"; c=4, marker=:diamond, rpattr...)
 plot!(size=(800, 400))
 end
-savefig(plotsdir("suc12_pores.svg"))
+savefig(plotsdir("suc18_pores.svg"))
 plot(pl1, pl2, size=(1000, 400))
-
-# -----------------
-# Inspect fit results in Rp space rather than temperature space
-# function calc_l(dat)
-#     minteg = @df dat cumsum(:mfr[1:end-1].*(:t[2:end]-:t[1:end-1]))
-#     insert!(minteg, 1, 0u"g")
-#     errfac = minteg[end] / (fillvol*(ρ_solution-c_solid))
-#     ld = @. errfac*minteg/(A_p*(ρ_solution-c_solid)) |> u"cm"
-# end
-ld1 = calc_l(dat1)
-ld2 = calc_l(dat2)
-ld8 = calc_l(dat8)
-
-# function calc_lRp(sol, prm)
-#     l = prm.hf0 .- sol[1,:]*u"cm"
-#     Rp_mc = [FulbrightPores.lyo_mc_dae!(fill(0.0, 4), u, prm, t) for (u,t) in zip(sol.u, sol.t)]
-#     return l, Rp_mc
-# end
-l1, Rp_mc1 = calc_lRp(sol1_play18, playprms18[1])
-# l2, Rp_mc2 = calc_lRp(sol2_play18, playprms18[1])
-l8, Rp_mc8 = calc_lRp(sol8_play18, playprms18[2])
-Rp_p1 = Rp1_params.Rp.(ld1)
-Rp_p2 = Rp2_params.Rp.(ld2)
-Rp_p8 = Rp8_params.Rp.(ld8)
-
-begin
-pl1 = plot(u"cm", u"cm^2*Torr*hr/g", ylims=(0, 10), xlabel=L"h_d", ylabel=L"R_p", unitformat=(x,y)->"$x [$(latexify(y))]")
-plot!(title="Cycle 1")
-pbmtdlas!(sol1_play18, dat1, Rp1_params.Rp, labels=["PBM 1&8" "3PP 1" "TDLAS"])
-# plot!(ld1, dat1.Rp, linealpha=0.8, label="TDLAS", c=:red)
-# plot!(l1, Rp_mc1,   linealpha=0.8, label="PBM 1&8", c=:red , marker=:circle, seriestype=:samplemarkers, step=3)
-# plot!(ld1, Rp_p1,   linealpha=0.8, label="3PP 1", c=:red , marker=:utriangle, seriestype=:samplemarkers, step=1000)
-# plot!(ld1, Rp1_params18.Rp.(ld1),   linealpha=0.8, label="3PP 1&8", c=:red, marker=:square, seriestype=:samplemarkers, step=1000)
-pl8 = plot(u"cm", u"cm^2*Torr*hr/g", ylims=(0, 20), xlabel=L"h_d", ylabel=L"R_p", unitformat=(x,y)->"$x [$(latexify(y))]")
-plot!(ld8, dat8.Rp, linealpha=0.8, label="TDLAS 8", c=:blue)
-plot!(l8, Rp_mc8,   linealpha=0.8, label="PBM 1&8, Cycle 8 ", c=:blue, marker=:circle, seriestype=:samplemarkers, step=3)
-plot!(ld8, Rp_p8,   linealpha=0.8, label="3PP 8", c=:blue, marker=:utriangle, seriestype=:samplemarkers, step=1000)
-plot!(ld8, Rp1_params18.Rp.(ld8),   linealpha=0.8, label="3PP 1&8", c=:blue, marker=:square, seriestype=:samplemarkers, step=1000)
-plot(pl1, pl8)
-end
-savefig(plotsdir("suc18_Rp.svg"))
 
 function namefitparam_arr(fitlog, label)
     fit = exp.(fitlog)
@@ -831,6 +787,11 @@ po_PBM3 = deepcopy(playprms18[1])
 @reset po_PBM3.Tsh = Tsh3
 sol3_PBM18 = solve(ODEProblem(po_PBM3), Rodas3());
 
+fitdat3 = @df dat3 PrimaryDryFit(:t, (filter(!isnan, :T1), filter(!isnan, :T2), :T3[:t.<45u"hr"]))
+obj3p = x->obj_expT(gen_sol_Rp(x, pop3)[1], fitdat3)
+opt3p = optimize(obj3p, Optim.minimizer(opt_Rp1), NelderMead(), Optim.Options(g_tol = 1e-3, time_limit=15))
+Rp3 = gen_sol_Rp(Optim.minimizer(opt3p), pop3)[2].Rp
+
 pop5 = deepcopy(Rp1_params18)
 @reset pop5.pch = pch5
 @reset pop5.Tsh = Tsh5
@@ -878,4 +839,26 @@ plot!(ylim=(-37, -32), legend=:outerright)
 end
 savefig(plotsdir("suc18train_235val_T.svg"))
 
+# -----------------
+# Inspect fit results in Rp space rather than temperature space
+
+begin
+pl1 = blankplot_lRp(ylims=(0, 12), legend=:topleft)
+plot!(title="Cycle 1")
+pbmtdlas!(sol1_play18, dat1, Rp1_params.Rp, labels=["PBM 1&8" "3PP 1" "TDLAS"])
+plot!(xlabel="")
+pl2 = blankplot_lRp(ylims=(0, 12), legend=:topleft,)
+plot!(title="Cycle 2")
+pbmtdlas!(sol2_play18, dat2, Rp2_params.Rp, labels=["PBM 1&8" "3PP 2" "TDLAS"])
+pl3 = blankplot_lRp(ylims=(0, 12), legend=:topleft,)
+plot!(title="Cycle 3")
+pbmtdlas!(sol3_PBM18, dat3, Rp3, labels=["PBM 1&8" "3PP 3" "TDLAS"])
+plot!(ylabel="")
+pl8 = blankplot_lRp(ylims=(0, 6), legend=:topleft,)
+plot!(title="Cycle 8")
+pbmtdlas!(sol8_play18, dat8, Rp8_params.Rp, labels=["PBM 1&8" "3PP 8" "TDLAS"])
+plot!(xlabel="", ylabel="")
+plot(pl1, pl8, pl2, pl3, layout=(2,2), size=(600,500))
+end
+savefig(plotsdir("suc18_Rp_val.svg"))
 
