@@ -17,6 +17,8 @@ blankplot_lRp(;kwargs...) = plot(u"cm", u"cm^2*Torr*hr/g", xlabel=L"h_d", ylabel
     hd = (po.hf0 .- hf) .|> u"cm"
     ϕ = (po.ρ_solution - po.c_solid)/po.ρ_solution
     μ1 = hd*ϕ*po.Ap .|> u"mm^3"
+    mean = μ1 ./ μ0
+    var = μ2 ./ μ0 .- mean.^2
     Rp = map(sol.t, sol.u) do t,u
         lyo_mc_dae!(fill(0.0, 4), u, sol.prob.p, t) |> u"cm^2*Torr*hr/g"
     end
@@ -24,26 +26,26 @@ blankplot_lRp(;kwargs...) = plot(u"cm", u"cm^2*Torr*hr/g", xlabel=L"h_d", ylabel
     layout --> @layout [[a ; b; c;] d]
     @series begin
         subplot --> 1
-        ylabel --> "μ0" #*", number of pores"
+        ylabel --> "number\nof pores" #*", number of pores"
         xlabel --> ""
         legend --> :none
         xformatter -->  _->""
-        return t, μ0
+        return hd, μ0
     end
     @series begin
         subplot --> 2
-        ylabel --> "μ1" #*", total pore volume"
+        ylabel --> "typical \npore size\n" #*", total pore volume"
         xlabel --> ""
         legend --> :none
         xformatter -->  _->""
-        return t, μ1
+        return hd, mean
     end
     @series begin
         subplot --> 3
-        ylabel --> "μ2" #*", pore size second moment"
-        xlabel --> "Time"
+        ylabel --> "pore size \nvariance\n" #*", pore size second moment"
+        xlabel --> "Dry layer thickness"
         legend --> :none
-        return t, μ2
+        return hd, var
     end
     @series begin
         subplot --> 4
@@ -126,7 +128,7 @@ end
         end
     end
     @series begin
-        seriestype := :line
+        seriestype := :samplemarkers
         yscale --> :log10
         label --> L"k_f"
         return T, kf.(T)
