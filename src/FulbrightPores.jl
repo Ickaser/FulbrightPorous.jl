@@ -10,13 +10,14 @@ import LyoPronto: ODEProblem
 @reexport using LaTeXStrings
 @reexport using CSV
 @reexport using TypedTables
+@reexport using PrettyTables
 @reexport using Optim
 # @reexport using LeastSquaresOptim
 @reexport using NonlinearSolve: NonlinearLeastSquaresProblem, 
     LevenbergMarquardt, RelTerminationMode, AutoForwardDiff, AutoFiniteDiff
 @reexport using Accessors
 @reexport using DataInterpolations
-using UnitfulLatexify, Latexify
+@reexport using UnitfulLatexify, Latexify
 
 
 

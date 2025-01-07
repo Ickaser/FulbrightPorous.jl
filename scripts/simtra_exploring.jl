@@ -1,8 +1,5 @@
 using DrWatson
 @quickactivate :FulbrightPores
-using DataInterpolations
-using UnitfulLatexify, Latexify
-using PrettyTables
 
 const LP = LyoPronto
 pythonplot()
@@ -154,7 +151,7 @@ function gen_sol_Rp(a123, po)
     Rp_un = [u"cm^2*Torr*hr/g", u"cm*Torr*hr/g", u"1/cm"]
     new_params = @set po.Rp = RpFormFit((a123.*Rp_un)...)
     prob = ODEProblem(new_params)
-    sol = solve(prob, Rodas3(autodiff=false))
+    sol = solve(prob, Rodas3())
     return sol, new_params
 end
 obj_Rp1 = x->obj_expT(gen_sol_Rp(x, pop1)[1], fitdat1)

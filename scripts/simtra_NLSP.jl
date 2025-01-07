@@ -1,9 +1,6 @@
 using DrWatson
 @quickactivate :FulbrightPores
 using ForwardDiff, SciMLSensitivity
-using DataInterpolations
-using UnitfulLatexify, Latexify
-using PrettyTables
 
 const NLSP = NonlinearLeastSquaresProblem
 const LM = LevenbergMarquardt
@@ -11,10 +8,14 @@ const LMa = LevenbergMarquardt(autodiff=AutoFiniteDiff())
 const LMf = LevenbergMarquardt(autodiff=AutoForwardDiff())
 pythonplot()
 
+
+# Idea: when evaluating objective, multiply and divide u0 by a fit param
+# so that a Dual will get propagated through the function
+
 tcond = (termination_condition=RelTerminationMode(),)
 
 # ------------------
-# Kv fitting to FIg 7
+# Kv fitting to Fig 7
 
 pKvdat = [ 50.0 4.18; 75.0 5.25;
 100. 6.21; 125. 7.08; 150. 7.81;
