@@ -129,9 +129,21 @@ function Base.getindex(po::ParamObjMC, i)
     end
 end
 
-function ODEProblem(po::ParamObjMC)
-    return ODEProblem(lyo_mc_dae_f, 
-    ustrip.([u"cm", u"K", u"cm^6", NoUnits], 
-    [po.hf0, po.Tsh(0u"s"), 0.0u"cm^6", 0.0]),
-    (0.0, 300.0), po; callback=end_drying_callback)
+function ODEProblem(po::ParamObjMC; u0=nothing, tspan=nothing)
+    if isnothing(tspan)
+        tspan = (0.0, 200.0)
+    end
+    if isnothing(u0)
+        u0 = ustrip.([u"cm", u"K", u"cm^6", NoUnits], [po.hf0, po.Tsh(0u"s"), 0.0u"cm^6", 0.0])
+    end
+    tstops = [0.0]
+    for control in [po.Tsh, po.pch]
+        if control isa RampedVariable && !isnothing(control.timestops)
+            tstops = vcat(tstops, ustrip.(u"hr", control.timestops))
+        elseif control isa LinearInterpolation
+            tstops = vcat(tstops, ustrip.(u"hr", control.t))
+        end
+    end
+    return ODEProblem(lyo_mc_dae_f, u0, tspan, po; 
+        tstops=tstops, callback=end_drying_callback)
 end
