@@ -161,6 +161,7 @@ function gen_sol_Rp(a123, po)
     Rp_un = [u"cm^2*Torr*hr/g", u"cm*Torr*hr/g", u"1/cm"]
     new_params = @set po.Rp = RpFormFit((a123.*Rp_un)...)
     prob = ODEProblem(new_params)
+    # @info "check" prob a123
     sol = solve(prob, Rodas3(autodiff=false))
     return sol, new_params
 end
@@ -238,11 +239,12 @@ end
 
 fit_un_arb = [u"cm^-1", u"cm^5", u"m^0.5", u"m/s", fill(u"s^-1", 4)...]
 fitguess = ustrip.(fit_un_arb, [N(0), S(0), C, R0, k0, k0*1e1, k0*1e2, k0*1e4])
+fitguess[5:8] .= log.(fitguess[5:8]) 
 fitguesslog = log.(fitguess)
 Tstops = [-45.0, -38, -32, -28]u"°C" .|> u"K"
-function gen_sol_constNS_arb(fitprmlog, po; verbose=false)
+function gen_sol_constNS_arb(fitprm, po; verbose=false)
     new_params = deepcopy(po)
-    fitprm = exp.(fitprmlog) # Constrain all to be positive by taking exp
+    # fitprm = exp.(fitprmlog) # Constrain all to be positive by taking exp
     verbose && @info "fitprm" fitprm
     @reset new_params.N = RampedVariable(fitprm[1]*fit_un_arb[1])
     @reset new_params.S = RampedVariable(fitprm[2]*fit_un_arb[2])
@@ -253,14 +255,16 @@ function gen_sol_constNS_arb(fitprmlog, po; verbose=false)
     # kstops = fitprm[5:8]*fit_un_arb[3]
     # spl = LinearInterpolation(kstops, Tstops, extrapolate=true)
     # Lin interp in log space
-    klogs = fitprmlog[5:8]
+    # klogs = fitprmlog[5:8]
     # klogs = log.(fitprm[5:8])
+    klogs = fitprm[5:8]
     spll = LinearInterpolation(klogs, Tstops, extrapolate=true)
     spl = T->exp(spll(T))*fit_un_arb[5]
     # PCHIP interp
-    # spl = PCHIPInterpolation(fitprm[5:8]*fit_un_arb[3], Tstops, extrapolate = true)
+    # spl = PCHIPInterpolation(fitprm[5:8]*fit_un_arb[5], Tstops, extrapolate = true)
     @reset new_params.k_f = spl
     prob = ODEProblem(new_params)
+    # @info "check" new_params.N new_params.S new_params.k_f
     # u0 = ustrip.([u"cm", u"K", u"cm^6", NoUnits], [new_params.hf0, new_params.Tsh(0u"s"), 0.0u"cm^6", 0.0])
     # prob = ODEProblem(lyo_mc_dae_f2, u0, (0.0,200.0), new_params, callback=end_drying_callback)
     sol = solve(prob, Rodas3(autodiff=true))
@@ -271,13 +275,16 @@ end
 # modconvtplot(tsol)
 # plot!(fitdat1)
 
+# obj_MC = (x,p)->[(issorted(x[5:8]) ? (obj_expT(gen_sol_constNS_arb(x, p[1])[1], p[2])) : NaN)]
 obj_MC = (x,p)->[(issorted(x[5:8]) ? (obj_expT(gen_sol_constNS_arb(x, p[1])[1], p[2])) : NaN)]
-@time obj_MC(fitguesslog, (pomc1, fitdat1))
+@time obj_MC(fitguess.*1.1, (pomc1, fitdat1))
 
-@time opt_MC1 = solve(NLSP(obj_MC, fitguesslog, p=(pomc1, fitdat1)), LMf; show_trace=Val(true), maxiters=500)
+@time opt_MC1 = solve(NLSP(obj_MC, fitguess, p=(pomc1, fitdat1)), LMf; show_trace=Val(true), maxiters=200, tcond...)
 obj_MC(opt_MC1.u, (pomc1, fitdat1))
 
-exp.(opt_MC1.u) .*fit_un_arb
+# ----------------------------------
+
+# exp.(opt_MC1.u) .*fit_un_arb
 
 sol1_MC1, MC1_params = gen_sol_constNS_arb(opt_MC1.u, pomc1);
 

@@ -94,27 +94,28 @@ See [`RpFormFit`](@ref LyoPronto.RpFormFit) and [`RampedVariable`](@ref LyoPront
 """
 lyo_mc_dae_f = ODEFunction(lyo_mc_dae!, mass_matrix=lyo_mc_mm)
 
-struct ParamObjMC
-    _
-    hf0
-    c_solid
-    ρ_solution
-    Kshf
-    Av
-    Ap
-    pch
-    Tsh
-    k_f
-    C
-    N
-    S
-    R0
+struct ParamObjMC{T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14}
+    _::T1
+    hf0::T2
+    c_solid::T3
+    ρ_solution::T4
+    Kshf::T5
+    Av::T6
+    Ap::T7
+    pch::T8
+    Tsh::T9
+    k_f::T10
+    C::T11
+    N::T12
+    S::T13
+    R0::T14
 end
 function ParamObjMC(tuptup)
     return ParamObjMC(tuptup[1]..., tuptup[2]...,
         tuptup[3]..., tuptup[4]...)
 end
 Base.size(po::ParamObjMC) = (4,)
+Base.length(po::ParamObjMC) = 14
 function Base.getindex(po::ParamObjMC, i)
     if i == 1
         return (po._, po.hf0, po.c_solid, po.ρ_solution)
