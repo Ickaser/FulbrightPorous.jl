@@ -13,8 +13,9 @@ import LyoPronto: ODEProblem
 @reexport using PrettyTables
 @reexport using Optim
 # @reexport using LeastSquaresOptim
-@reexport using NonlinearSolve: NonlinearLeastSquaresProblem, 
-    LevenbergMarquardt, RelTerminationMode, AutoForwardDiff, AutoFiniteDiff
+@reexport using NonlinearSolve
+@reexport using Optimization
+@reexport using OptimizationOptimJL
 @reexport using Accessors
 @reexport using DataInterpolations
 @reexport using UnitfulLatexify, Latexify

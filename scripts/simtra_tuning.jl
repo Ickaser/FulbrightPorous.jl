@@ -221,11 +221,11 @@ end
 p0 = [0.8, 14, 1]
 opt_Rp1 = optimize(obj_Rp1, p0, LevenbergMarquardt())
 opt_Rp1 = optimize(obj_Rp1, p0, Optim.Options(g_tol=1e-3))
-sol1_Rp1, Rp1_params = gen_sol_Rp(Optim.minimizer(opt_Rp1), pop1);
+sol1_Rp1, Rp1_params = gen_sol_Rp(opt_Rp1.u, pop1);
 opt_Rp2 = optimize(obj_Rp2, p0, Optim.Options(g_tol=1e-3))
-sol2_Rp2, Rp2_params = gen_sol_Rp(Optim.minimizer(opt_Rp2), pop2);
+sol2_Rp2, Rp2_params = gen_sol_Rp(opt_Rp2.u, pop2);
 opt_Rp12 = optimize(obj_Rp12, p0, Optim.Options(g_tol=1e-3))
-sol1_Rp12, sol2_Rp12, Rp12_params1, Rp12_params2 = gen2sol_Rp(Optim.minimizer(opt_Rp12), pop1, pop2);
+sol1_Rp12, sol2_Rp12, Rp12_params1, Rp12_params2 = gen2sol_Rp(opt_Rp12.u, pop1, pop2);
 
 # Plot results
 begin
@@ -262,7 +262,7 @@ obj12PBM(g12_PBM)
 # opt12_PBM = optimize(obj12PBM, g12_PBM, NelderMead(), Optim.Options(g_tol = 1e-3, time_limit=30))
 opt12_PBM = optimize(obj12PBM, g12_PBM, LBFGS(), Optim.Options(g_tol = 1e-3, time_limit=30))
 
-sol1_PBM12, sol2_PBM12, PBM1_params12, PBM2_params12 = gen2sol_PBM(Optim.minimizer(opt12_PBM), poPBM1, poPBM2);
+sol1_PBM12, sol2_PBM12, PBM1_params12, PBM2_params12 = gen2sol_PBM(opt12_PBM.u, poPBM1, poPBM2);
 
 begin
 pl1 = blankplot_hrC(legend=:bottomright,)

@@ -1,6 +1,9 @@
 using DrWatson
 @quickactivate :FulbrightPores
 
+const NLSP = NonlinearLeastSquaresProblem
+const LM = LevenbergMarquardt
+const TR = TrustRegion
 const LP = LyoPronto
 pythonplot()
 
@@ -154,12 +157,19 @@ function gen_sol_Rp(a123, po)
     sol = solve(prob, Rodas3())
     return sol, new_params
 end
-obj_Rp1 = x->obj_expT(gen_sol_Rp(x, pop1)[1], fitdat1)
-@time obj_Rp1([0.8, 14, 1])
+function obj_Rp(x, p)
+    if any(x .< 0)
+        return [NaN]
+    end
+    sol, _ = gen_sol_Rp(x, p[1])
+    return [obj_expT(sol, p[2])]
+end
+@time obj_Rp([0.8, 14, 1], (pop8, fitdat8))
 
-opt_Rp1 = optimize(obj_Rp1, [0.8, 14, 1], Optim.Options(g_tol=1e-3))
+# opt_Rp1 = optimize(obj_Rp1, [0.8, 14, 1], Optim.Options(g_tol=1e-3))
+opt_Rp1 = solve(NLSP(obj_Rp, [0.8, 14, 1], (pop1, fitdat1)), TrustRegion(); maxiters=200, show_trace=Val(true))
 
-sol1_Rp1, Rp1_params = gen_sol_Rp(Optim.minimizer(opt_Rp1), pop1);
+sol1_Rp1, Rp1_params = gen_sol_Rp(opt_Rp1.u, pop1);
 plot(u"hr", u"°C", xlim=(0, 60), ylim=(-40, -30))
 modconvtplot!(sol1_Rp1)
 @df dat1 exptfplot!(:t, :T1, :T2, :T3)
@@ -206,28 +216,8 @@ pomc8 = deepcopy(pomc1)
 # tsol = solve(tprob, Rodas3(autodiff=true))
 # poreevolplot(tsol)
 
-fit_un_arr = [u"cm^-1", u"cm^5", u"m^0.5", u"m/s", u"s^-1", u"J/mol"]
-fitguess = ustrip.(fit_un_arr, [N(0), S(0), C, R0, k0, E, ])
-fitguesslog = log.(fitguess)
-function gen_sol_constNS_arr(fitprmlog, po; verbose=false)
-    new_params = deepcopy(po)
-    fitprm = exp.(fitprmlog) # Constrain all to be positive by taking exp
-    verbose && @info "fitprm" fitprm
-    @reset new_params.N = RampedVariable(fitprm[1]*fit_un_arr[1])
-    @reset new_params.S = RampedVariable(fitprm[2]*fit_un_arr[2])
-    @reset new_params.C  = fitprm[3]*fit_un_arr[3]
-    @reset new_params.R0 = fitprm[4]*fit_un_arr[4]
-    # Arrhenius fit
-    k0 = fitprm[6]*fit_un_arr[5]
-    E = fitprm[6]*fit_un_arr[6]
-    @reset new_params.k_f = T->k0*exp(-E/(R*T))
-    prob = ODEProblem(new_params)
-    sol = solve(prob, Rodas3(autodiff=true))
-    return sol, new_params
-end
-
 fit_un_arb = [u"cm^-1", u"cm^5", u"m^0.5", u"m/s", fill(u"s^-1", 4)...]
-fitguess = ustrip.(fit_un_arb, [N(0), S(0), C, R0, k0, k0*1e1, k0*1e5, k0*1e6])
+fitguess = ustrip.(fit_un_arb, [N(0), S(0), C, R0, k0, k0*1e2, k0*1e4, k0*1e6])
 fitguesslog = log.(fitguess)
 Tstops = [-45.0, -38, -32, -28]u"°C" .|> u"K"
 function gen_sol_constNS_arb(fitprmlog, po; verbose=false)
@@ -257,35 +247,56 @@ end
 # modconvtplot(tsol)
 # plot!(fitdat1)
 
-obj_MC1 = x->(issorted(x[5:8]) ? (obj_expT(gen_sol_constNS_arb(x, pomc1)[1], fitdat1)) : NaN)
-@time obj_MC1(fitguesslog)
+function obj_MC(x,p)
+    if !issorted(x[5:8])
+        # count number of data points
+        return NaN
+    end
+    sol, _ = gen_sol_constNS_arb(x, p[1])
+    return obj_expT(sol, p[2])
+end
+function err_MC(x,p)
+    if !issorted(x[5:8])
+        # count number of data points
+        return fill(NaN, sum(p[2].Tf_iend) + (ismissing(p[2].Tvws) ? 0 : sum(p[2].Tvw_iend)) + !ismissing(p[2].t_end))
+    end
+    sol, _ = gen_sol_constNS_arb(x, p[1])
+    return LyoPronto.err_expT(sol, p[2])
+end
+@time err_MC(fitguesslog, (pomc1, fitdat1))
 
-opt_MC1 = optimize(obj_MC1, fitguesslog, NelderMead(), Optim.Options(g_tol=1e-2))
-# opt_MC1 = optimize(obj_MC1, fitguesslog, LBFGS(), Optim.Options(g_tol = 1e-2))
+# opt_MC1 = solve(NLSP(err_MC, fitguesslog, (pomc1, fitdat1)), LM(); maxiters=100, show_trace=Val(true))
+# opt_MC1 = optimize(obj_MC, fitguesslog, NelderMead(), Optim.Options(g_tol=1e-2))
+opt_MC1 = optimize(obj_MC, fitguesslog, LBFGS(), Optim.Options(g_tol = 1e-2))
+opt_MC1.u .- fitguesslog
 
-exp.(Optim.minimizer(opt_MC1)) .*fit_un_arb
+exp.(opt_MC1.u) .*fit_un_arb
 
-sol1_MC1, MC1_params = gen_sol_constNS_arb(Optim.minimizer(opt_MC1), pomc1);
+sol1_MC1, MC1_params = gen_sol_constNS_arb(opt_MC1.u, pomc1);
 
 
 # ------ Fit to Cycle 2 and Cycle 8 data separately
 
-obj2p = x->obj_expT(gen_sol_Rp(x, pop2)[1], fitdat2)
-opt2p = optimize(obj2p, Optim.minimizer(opt_Rp1), NelderMead(), Optim.Options(g_tol = 1e-3, time_limit=15))
+# obj2p = x->obj_expT(gen_sol_Rp(x, pop2)[1], fitdat2)
+# opt2p = optimize(obj2p, Optim.minimizer(opt_Rp1), NelderMead(), Optim.Options(g_tol = 1e-3, time_limit=15))
+opt2p = solve(NLSP(err_Rp, opt_Rp1.u, (pop2, fitdat2)), TR(); maxiters=200)
 # Enforce monontonic k in objective
-obj2mc = x->(issorted(x[5:8]) ? obj_expT(gen_sol_constNS_arb(x, pomc2)[1], fitdat2) : NaN)
-opt_MC2 = optimize(obj2mc, Optim.minimizer(opt_MC1), NelderMead(), Optim.Options(g_tol = 1e-3, time_limit=10))
+# obj2mc = x->(issorted(x[5:8]) ? obj_expT(gen_sol_constNS_arb(x, pomc2)[1], fitdat2) : NaN)
+# opt_MC2 = optimize(obj2mc, Optim.minimizer(opt_MC1), NelderMead(), Optim.Options(g_tol = 1e-3, time_limit=10))
+opt_MC2 = solve(NLSP(err_MC, opt_MC1.u, (pomc2, fitdat2)), TR(); maxiters=200)
 
-obj8p = x->obj_expT(gen_sol_Rp(x, pop8)[1], fitdat8)
-opt8p = optimize(obj8p, Optim.minimizer(opt_Rp1), NelderMead(), Optim.Options(g_tol = 1e-3, time_limit=15))
+# obj8p = x->obj_expT(gen_sol_Rp(x, pop8)[1], fitdat8)
+# opt8p = optimize(obj8p, Optim.minimizer(opt_Rp1), NelderMead(), Optim.Options(g_tol = 1e-3, time_limit=15))
+opt8p = solve(NLSP(obj_Rp, opt2p.u, (pop8, fitdat8)), TR(); maxiters=50, show_trace=Val(true))
 # Enforce monontonic k in objective
-obj8mc = x->(issorted(x[5:8]) ? obj_expT(gen_sol_constNS_arb(x, pomc8)[1], fitdat8) : NaN)
-opt_MC8 = optimize(obj8mc, Optim.minimizer(opt_MC1), NelderMead(), Optim.Options(g_tol = 1e-3, time_limit=10))
+# obj8mc = x->(issorted(x[5:8]) ? obj_expT(gen_sol_constNS_arb(x, pomc8)[1], fitdat8) : NaN)
+# opt_MC8 = optimize(obj8mc, Optim.minimizer(opt_MC1), NelderMead(), Optim.Options(g_tol = 1e-3, time_limit=10))
+opt_MC8 = solve(NLSP(obj_MC, opt_MC1.u, (pomc8, fitdat8)), TR(); maxiters=200)
 
-sol2_Rp2, Rp2_params = gen_sol_Rp(Optim.minimizer(opt2p), pop2);
-sol8_Rp8, Rp8_params = gen_sol_Rp(Optim.minimizer(opt8p), pop8);
-sol2_MC2, MC2_params = gen_sol_constNS_arb(Optim.minimizer(opt_MC2), pomc2);
-sol8_MC8, MC8_params = gen_sol_constNS_arb(Optim.minimizer(opt_MC8), pomc8);
+sol2_Rp2, Rp2_params = gen_sol_Rp(opt2p.u, pop2);
+sol8_Rp8, Rp8_params = gen_sol_Rp(opt8p.u, pop8);
+sol2_MC2, MC2_params = gen_sol_constNS_arb(opt_MC2.u, pomc2);
+sol8_MC8, MC8_params = gen_sol_constNS_arb(opt_MC8.u, pomc8);
 
 # ----------- Plot separately
 begin
@@ -303,84 +314,89 @@ end
 savefig(plotsdir("suc2_T.svg"))
 
 begin
-blankplot_hrC(xlim=(0, 20), ylim=(-36, -28), legend=:bottomright)
+blankplot_hrC(xlim=(0, 20), ylim=(-32, -26), legend=:bottomright)
 @df dat8 exptfplot!(:t, :T1, :T2, :T3, marker=:circle)
 modconvtplot!(sol8_MC8, sol8_Rp8, labels=["MC" "Pikal"],marker=:circle)
 end
 savefig(plotsdir("suc8_T.svg"))
 
 # Cross-check fits
-sol1_MC2 = gen_sol_constNS_arb(Optim.minimizer(opt_MC2), pomc1)[1]
-sol2_MC1 = gen_sol_constNS_arb(Optim.minimizer(opt_MC1), pomc2)[1]
+sol1_MC2 = gen_sol_constNS_arb(opt_MC2.u, pomc1)[1]
+sol2_MC1 = gen_sol_constNS_arb(opt_MC1.u, pomc2)[1]
 
 # --------------- Fit to Cycle 1 and 2 simultaneously
 
-function gennsol_Rp(fitprm, pos...)
+function gennsol_Rp(fitprm, pos)
     rets = map(pos) do po
         gen_sol_Rp(fitprm, po)
     end
     return [ret[1] for ret in rets], [ret[2] for ret in rets]
 end
-function objn_Rp(fitprm, pos, fitdats)
-    sols, prms = gennsol_Rp(fitprm, pos...)
+function objn_Rp(fitprm, pfs)
+    pos, fitdats = pfs
+    sols, prms = gennsol_Rp(fitprm, pos)
     objs = map(sols, fitdats) do sol, fitdat
         obj_expT(sol, fitdat)
     end
-    return sum(objs)
+    return [sum(objs)]
 end
-obj18p(x) = objn_Rp(x, [pop1, pop2], [fitdat1, fitdat2])
-obj128p(x) = objn_Rp(x, [pop1, pop2, pop8], [fitdat1, fitdat2, fitdat8])
 
-opt18p = optimize(obj18p, Optim.minimizer(opt_Rp1), NelderMead(), Optim.Options(g_tol = 1e-3))
-opt128p = optimize(obj128p, Optim.minimizer(opt_Rp1), NelderMead(), Optim.Options(g_tol = 1e-3))
+pass18p =  ([pop1, pop2], [fitdat1, fitdat2]);
+opt18p = solve(NLSP(objn_Rp, opt_Rp1.u, pass18p), TR())
+pass128p = ([pop1, pop2, pop8], [fitdat1, fitdat2, fitdat8])
+opt128p = solve(NLSP(objn_Rp, opt_Rp1.u, pass128p), TR())
 
-sol1_Rp18, Rp1_params18 = gen_sol_Rp(Optim.minimizer(opt18p), pop1);
-sol2_Rp18, Rp2_params18 = gen_sol_Rp(Optim.minimizer(opt18p), pop2);
-sol8_Rp18, Rp8_params18 = gen_sol_Rp(Optim.minimizer(opt18p), pop8);
-sol1_Rp128, Rp1_params128 = gen_sol_Rp(Optim.minimizer(opt128p), pop1);
-sol2_Rp128, Rp2_params128 = gen_sol_Rp(Optim.minimizer(opt128p), pop2);
-sol8_Rp128, Rp8_params128 = gen_sol_Rp(Optim.minimizer(opt128p), pop8);
+sol1_Rp18, Rp1_params18 = gen_sol_Rp(opt18p.u, pop1);
+sol2_Rp18, Rp2_params18 = gen_sol_Rp(opt18p.u, pop2);
+sol8_Rp18, Rp8_params18 = gen_sol_Rp(opt18p.u, pop8);
+sol1_Rp128, Rp1_params128 = gen_sol_Rp(opt128p.u, pop1);
+sol2_Rp128, Rp2_params128 = gen_sol_Rp(opt128p.u, pop2);
+sol8_Rp128, Rp8_params128 = gen_sol_Rp(opt128p.u, pop8);
 
-function gennsol_constNS(fitprm, pos...)
+function gennsol_constNS(fitprm, pos)
     rets = map(pos) do po
         gen_sol_constNS_arb(fitprm, po)
     end
     return [ret[1] for ret in rets], [ret[2] for ret in rets]
 end
-function objnmc(fitprm, pos, fitdats; verbose=false)
+function objnmc(fitprm, pfs; verbose=false)
+    pos, fitdats = pfs
     if !issorted(fitprm[5:8])
-        return NaN
+        return [NaN]
     end
-    sols, prms = gennsol_constNS(fitprm, pos...)
+    sols, prms = gennsol_constNS(fitprm, pos)
     objs = map(sols, fitdats) do sol, fitdat
         obj_expT(sol, fitdat)
     end
-    return sum(objs)
+    return [sum(objs)]
 end
-obj12mc(x) = objnmc(x, [pomc1, pomc2], [fitdat1, fitdat2])
-obj18mc(x) = objnmc(x, [pomc1, pomc8], [fitdat1, fitdat8])
-obj128mc = x->objnmc(x, [pomc1, pomc2, pomc8], [fitdat1, fitdat2, fitdat8])
+# obj12mc(x) = objnmc(x, [pomc1, pomc2], [fitdat1, fitdat2])
+# obj18mc(x) = objnmc(x, [pomc1, pomc8], [fitdat1, fitdat8])
+# obj128mc = x->objnmc(x, [pomc1, pomc2, pomc8], [fitdat1, fitdat2, fitdat8])
 
-g12mc = (Optim.minimizer(opt_MC2) .+ Optim.minimizer(opt_MC1))/2
-opt12mc = optimize(obj12mc, g12mc, NelderMead(), Optim.Options(g_tol = 1e-3))
-g18mc = (Optim.minimizer(opt_MC8) .+ Optim.minimizer(opt_MC1))/2
-opt18mc = optimize(obj18mc, g18mc, NelderMead(), Optim.Options(g_tol = 1e-3))
-g128mc = (Optim.minimizer(opt_MC2) .+ Optim.minimizer(opt_MC1) .+ Optim.minimizer(opt_MC8))/3
-opt128mc = optimize(obj128mc, g128mc, NelderMead(), Optim.Options(g_tol = 1e-3))
+g12mc = (opt_MC2.u .+ opt_MC1.u)/2
+# opt12mc = optimize(obj12mc, g12mc, NelderMead(), Optim.Options(g_tol = 1e-3))
+opt12mc = solve(NLSP(objnmc, g12mc, ([pomc1, pomc2], [fitdat1, fitdat2])), TR(); maxiters=200)
+g18mc = (opt_MC8.u .+ opt_MC1.u)/2
+# opt18mc = optimize(obj18mc, g18mc, NelderMead(), Optim.Options(g_tol = 1e-3))
+opt18mc = solve(NLSP(objnmc, g18mc, ([pomc1, pomc8], [fitdat1, fitdat8])), TR(), maxiters=200)
+g128mc = (opt_MC2.u .+ opt_MC1.u .+ opt_MC8.u)/3
+# opt128mc = optimize(obj128mc, g128mc, NelderMead(), Optim.Options(g_tol = 1e-3))
+opt128mc = solve(NLSP(objnmc, g18mc, ([pomc1, pomc2, pomc8], [fitdat1, fitdat2, fitdat8])), TR(), maxiters=200)
 
 
 
-sol1_MC12, MC1_params12 = gen_sol_constNS_arb(Optim.minimizer(opt12mc), pomc1);
-sol2_MC12, MC2_params12 = gen_sol_constNS_arb(Optim.minimizer(opt12mc), pomc2);
-sol8_MC12, MC8_params12 = gen_sol_constNS_arb(Optim.minimizer(opt12mc), pomc8);
+sol1_MC12, MC1_params12 = gen_sol_constNS_arb(opt12mc.u, pomc1);
+sol2_MC12, MC2_params12 = gen_sol_constNS_arb(opt12mc.u, pomc2);
+sol8_MC12, MC8_params12 = gen_sol_constNS_arb(opt12mc.u, pomc8);
 
-sol1_MC18, MC1_params18 = gen_sol_constNS_arb(Optim.minimizer(opt18mc), pomc1);
-sol2_MC18, MC2_params18 = gen_sol_constNS_arb(Optim.minimizer(opt18mc), pomc2);
-sol8_MC18, MC8_params18 = gen_sol_constNS_arb(Optim.minimizer(opt18mc), pomc8);
+sol1_MC18, MC1_params18 = gen_sol_constNS_arb(opt18mc.u, pomc1);
+sol2_MC18, MC2_params18 = gen_sol_constNS_arb(opt18mc.u, pomc2);
+sol8_MC18, MC8_params18 = gen_sol_constNS_arb(opt18mc.u, pomc8);
 
-sol1_MC128, MC1_params128 = gen_sol_constNS_arb(Optim.minimizer(opt128mc), pomc1);
-sol2_MC128, MC2_params128 = gen_sol_constNS_arb(Optim.minimizer(opt128mc), pomc2);
-sol8_MC128, MC8_params128 = gen_sol_constNS_arb(Optim.minimizer(opt128mc), pomc8);
+sol1_MC128, MC1_params128 = gen_sol_constNS_arb(opt128mc.u, pomc1);
+sol2_MC128, MC2_params128 = gen_sol_constNS_arb(opt128mc.u, pomc2);
+sol8_MC128, MC8_params128 = gen_sol_constNS_arb(opt128mc.u, pomc8);
 
 begin
 pl1 = blankplot_hrC(legend=:bottomright)
@@ -419,8 +435,8 @@ plot(pl1, pl2, pl8, layout=(3,1), size=(600, 600), legend=:outerright)
 end
 savefig(plotsdir("suc128_T.svg"))
 
-klogs12 = Optim.minimizer(opt12mc)[5:8]
-klogs18 = Optim.minimizer(opt18mc)[5:8]
+klogs12 = opt12mc.u[5:8]
+klogs18 = opt18mc.u[5:8]
 kstops12 = exp.(klogs12)*fit_un_arb[5]
 kstops18 = exp.(klogs18)*fit_un_arb[5]
 Tcheck = range(extrema(Tstops)..., length=50)
@@ -433,19 +449,19 @@ function k_wlf(T, p)
     return k0*exp(C1*(T-Tref)/(T-Tref-C2))
 end
 wlf_un = [u"s^-1", u"K", NoUnits, u"K"]
-function obj_wlf(p)
-    @info "check" p
+function obj_wlf(p, _)
     if p[1] < 0   
-        return NaN
+        return [NaN]
     end
     ks = k_wlf.(Tstops, [p.*wlf_un])
     logks = log.(ustrip.(u"s^-1", ks))
-    sum(abs2.(logks .- klogs12))
+    @info "check" p logks
+    [sum(abs2.(logks .- klogs12))]
 end
-p0_wlf = [1e-16, 273-85, 9, 10]
-obj_wlf(p0_wlf)
-opt_wlf = optimize(obj_wlf, p0_wlf, NelderMead(), Optim.Options(show_trace=true))
-plot(Tstops,  k_wlf.(Tcheck, [Optim.minimizer(opt_wlf).*wlf_un]))
+p0_wlf = [1e-16, 273-85, -9, 10]
+obj_wlf(p0_wlf, nothing)
+opt_wlf = solve(NLSP(obj_wlf, p0_wlf), TR())
+plot(Tcheck,  k_wlf.(Tcheck, [opt_wlf.u.*wlf_un]))
 plot!(Tstops,  kstops12, yscale=:log10)
 plot!(Tstops,  kstops18, yscale=:log10)
 
@@ -457,25 +473,27 @@ function k_myega(T, p)
     return k0*exp((-K/T)*exp(C/T))
 end
 myega_un = [u"s^-1", u"K", u"K"]
-function obj_myega(p)
+function obj_myega(p, _)
     if p[1] < 0 #|| p[2] < 100 #|| p[3] < 100 
         return NaN
     end
     ks = k_myega.(Tstops, [p.*myega_un])
     # @info "checkobj" ks p
     sum(abs2.(log.(ustrip.(u"s^-1", ks)) - klogs18))
+    # log.(ustrip.(u"s^-1", ks)) - klogs18
 end
-p0_myega = [1e-10, 100, 2]
-obj_myega(p0_myega)
-opt_myega = optimize(obj_myega, p0_myega, NelderMead(), Optim.Options(show_trace=true))
-Optim.minimizer(opt_myega)
-plot(Tcheck,  k_myega.(Tcheck, [Optim.minimizer(opt_myega).*myega_un]))
+p0_myega = [1e10, 2e4, 2]
+obj_myega(p0_myega, nothing)
+# opt_myega = solve(NLSP(obj_myega, p0_myega), TR())
+opt_myega = optimize(x->obj_myega(x,nothing), p0_myega, NelderMead())
+myega_p = Optim.minimizer(opt_myega)
+plot(Tcheck,  k_myega.(Tcheck, [myega_p.*myega_un]))
 plot!(Tstops,  kstops12, yscale=:log10)
 plot!(Tstops,  kstops18, yscale=:log10)
 
-myega_params1 = @set MC1_params128.k_f = T->k_myega(T, Optim.minimizer(opt_myega).*myega_un)
-myega_params2 = @set MC2_params128.k_f = T->k_myega(T, Optim.minimizer(opt_myega).*myega_un)
-myega_params8 = @set MC8_params128.k_f = T->k_myega(T, Optim.minimizer(opt_myega).*myega_un)
+myega_params1 = @set MC1_params128.k_f = T->k_myega(T, myega_p.*myega_un)
+myega_params2 = @set MC2_params128.k_f = T->k_myega(T, myega_p.*myega_un)
+myega_params8 = @set MC8_params128.k_f = T->k_myega(T, myega_p.*myega_un)
 sol1_myega = solve(ODEProblem(myega_params1), Rodas3(autodiff=true))
 sol2_myega = solve(ODEProblem(myega_params2), Rodas3(autodiff=true))
 sol8_myega = solve(ODEProblem(myega_params8), Rodas3(autodiff=true))
@@ -503,15 +521,16 @@ function gen_sol_constNS_myega(fitprmlog, po; verbose=false)
     sol = solve(prob, Rodas3(autodiff=true))
     return sol, new_params
 end
-function gennsol_constNS_myega(fitprmlog, pos...)
+function gennsol_constNS_myega(fitprmlog, pos)
     rets = map(pos) do po
         gen_sol_constNS_myega(fitprmlog, po)
     end
     return [ret[1] for ret in rets], [ret[2] for ret in rets]
 end
-function objnmyega(fitprmlog, pos, fitdats; verbose=true)
+function objnmyega(fitprmlog, pfs; verbose=true)
+    pos, fitdats = pfs
     verbose && @info "fitprm" exp.(fitprmlog)
-    sols, prms = gennsol_constNS_myega(fitprmlog, pos...)
+    sols, prms = gennsol_constNS_myega(fitprmlog, pos)
     if any([sol.retcode != ReturnCode.Terminated for sol in sols])
         verbose && @info "unfinished drying" [sol.retcode for sol in sols]
         return NaN
@@ -523,16 +542,16 @@ function objnmyega(fitprmlog, pos, fitdats; verbose=true)
     return sum(objs)
 end
 obj128myega(x) = objnmyega(x, [MC1_params12, MC2_params12, MC8_params128], [fitdat1, fitdat2, fitdat8])
-p0_myegafitlog = [Optim.minimizer(opt128mc)[1:4]..., log.(Optim.minimizer(opt_myega))...]
+p0_myegafitlog = [opt128mc.u[1:4]..., log.(myega_p)...]
 @time obj128myega(p0_myegafitlog)
 opt128myega = optimize(obj128myega, p0_myegafitlog, NelderMead(), Optim.Options(g_tol = 1e-3))
 obj18myega(x) = objnmyega(x, [MC1_params12, MC8_params128], [fitdat1, fitdat8])
 opt18myega = optimize(obj18myega, p0_myegafitlog, NelderMead(), Optim.Options(g_tol = 1e-3))
-@time obj128myega(Optim.minimizer(opt128myega))
-@time obj18myega(Optim.minimizer(opt18myega))
+@time obj128myega(opt128myega.u)
+@time obj18myega(opt18myega.u)
 
-sol1_myega18, myega1_params18 = gen_sol_constNS_myega(Optim.minimizer(opt18myega), MC1_params18);
-sol8_myega18, myega8_params18 = gen_sol_constNS_myega(Optim.minimizer(opt18myega), MC8_params18);
+sol1_myega18, myega1_params18 = gen_sol_constNS_myega(opt18myega.u, MC1_params18);
+sol8_myega18, myega8_params18 = gen_sol_constNS_myega(opt18myega.u, MC8_params18);
 
 begin
 pl1 = blankplot_hrC(legend=:bottomright)
@@ -578,12 +597,12 @@ function obj_play(p)
 end
 obj_play(p0_play)
 opt_play = optimize(obj_play, p0_play, NelderMead(), Optim.Options(show_trace=true))
-plot(Tcheck,  k_play.(Tcheck, [Optim.minimizer(opt_play).*play_un]))
+plot(Tcheck,  k_play.(Tcheck, [opt_play.u.*play_un]))
 plot!(Tstops,  kstops12, yscale=:log10)
 plot!(Tstops,  kstops18, yscale=:log10)
 
-play_params1 = @set MC1_params128.k_f = T->k_play(T, Optim.minimizer(opt_play).*play_un)
-play_params2 = @set MC2_params128.k_f = T->k_play(T, Optim.minimizer(opt_play).*play_un)
+play_params1 = @set MC1_params128.k_f = T->k_play(T, opt_play.u.*play_un)
+play_params2 = @set MC2_params128.k_f = T->k_play(T, opt_play.u.*play_un)
 sol1_play = solve(ODEProblem(play_params1), Rodas3(autodiff=true))
 sol2_play = solve(ODEProblem(play_params2), Rodas3(autodiff=true))
 poreevolplot(sol1_play)
@@ -626,7 +645,7 @@ function objnplay(fitprmlog, pos, fitdats; verbose=true)
     verbose && @info "obj" objs
     return sum(objs)
 end
-p0_playfitlog = [Optim.minimizer(opt128mc)[1:4]..., log.(Optim.minimizer(opt_play))...]
+p0_playfitlog = [opt128mc.u[1:4]..., log.(opt_play.u)...]
 # p0_playfitlog = log.(p0_playfit)
 
 obj12play(x) = objnplay(x, [MC1_params12, MC2_params12], [fitdat1, fitdat2])
@@ -638,10 +657,10 @@ opt12play = optimize(obj12play, p0_playfitlog, NelderMead(), Optim.Options(g_tol
 opt18play = optimize(obj18play, p0_playfitlog, NelderMead(), Optim.Options(g_tol = 1e-2, time_limit=15))
 opt128play = optimize(obj128play, p0_playfitlog, NelderMead(), Optim.Options(g_tol = 1e-2, time_limit=20))
 
-exp.(Optim.minimizer(opt128play)) .*fit_un_play
+exp.(opt128play.u) .*fit_un_play
 
-(sol1_play18, sol2_play18, sol8_play18), playprms18 = gennsol_constNS_play(Optim.minimizer(opt18play), MC1_params128, MC2_params128, MC8_params128);
-(sol1_play128, sol2_play128, sol8_play128), playprms128 = gennsol_constNS_play(Optim.minimizer(opt128play), MC1_params128, MC2_params128, MC8_params128);
+(sol1_play18, sol2_play18, sol8_play18), playprms18 = gennsol_constNS_play(opt18play.u, MC1_params128, MC2_params128, MC8_params128);
+(sol1_play128, sol2_play128, sol8_play128), playprms128 = gennsol_constNS_play(opt128play.u, MC1_params128, MC2_params128, MC8_params128);
 # (sol1_playg, sol2_playg, sol8_playg), playprmsg = gennsol_constNS_play(p0_playfitlog, MC1_params2, MC2_params2, MC8_params128);
 poreevolplot( sol1_play128)
 poreevolplot!(sol2_play128)
@@ -775,8 +794,8 @@ sol3_PBM18 = solve(ODEProblem(po_PBM3), Rodas3());
 
 fitdat3 = @df dat3 PrimaryDryFit(:t, (filter(!isnan, :T1), filter(!isnan, :T2), :T3[:t.<45u"hr"]))
 obj3p = x->obj_expT(gen_sol_Rp(x, pop3)[1], fitdat3)
-opt3p = optimize(obj3p, Optim.minimizer(opt_Rp1), NelderMead(), Optim.Options(g_tol = 1e-3, time_limit=15))
-Rp3 = gen_sol_Rp(Optim.minimizer(opt3p), pop3)[2].Rp
+opt3p = optimize(obj3p, opt_Rp1.u, NelderMead(), Optim.Options(g_tol = 1e-3, time_limit=15))
+Rp3 = gen_sol_Rp(opt3p.u, pop3)[2].Rp
 
 pop5 = deepcopy(Rp1_params18)
 @reset pop5.pch = pch5
@@ -790,8 +809,8 @@ sol5_PBM18 = solve(ODEProblem(po_PBM5), Rodas3());
 fitdat5 = @df dat5 PrimaryDryFit(:t, (filter(!isnan, :T1), filter(!isnan, :T3), :T2[:t.<40u"hr"]))
 plot(fitdat5)
 obj5p = x->obj_expT(gen_sol_Rp(x, pop5)[1], fitdat5)
-opt5p = optimize(obj5p, Optim.minimizer(opt_Rp1), NelderMead(), Optim.Options(g_tol = 1e-3, time_limit=15))
-Rp5 = gen_sol_Rp(Optim.minimizer(opt5p), pop5)[2].Rp
+opt5p = optimize(obj5p, opt_Rp1.u, NelderMead(), Optim.Options(g_tol = 1e-3, time_limit=15))
+Rp5 = gen_sol_Rp(opt5p.u, pop5)[2].Rp
 
 # Training plot
 begin
@@ -858,9 +877,9 @@ savefig(plotsdir("suc18_Rp_val.svg"))
 # Inspect with MYEGA fit instead of tanh, since seems better-conditioned
 
 
-sol2_myega18, myega2_params18 = gen_sol_constNS_myega(Optim.minimizer(opt18myega), MC2_params18);
-sol3_myega18, myega3_params18 = gen_sol_constNS_myega(Optim.minimizer(opt18myega), po_PBM3);
-sol5_myega18, myega5_params18 = gen_sol_constNS_myega(Optim.minimizer(opt18myega), po_PBM5);
+sol2_myega18, myega2_params18 = gen_sol_constNS_myega(opt18myega.u, MC2_params18);
+sol3_myega18, myega3_params18 = gen_sol_constNS_myega(opt18myega.u, po_PBM3);
+sol5_myega18, myega5_params18 = gen_sol_constNS_myega(opt18myega.u, po_PBM5);
 begin
 pl2 = blankplot_hrC(legend=:bottomright)
 @df dat2 exptfplot!(:t, :T1, :T2, :T3, markershape=markers)
