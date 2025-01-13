@@ -21,9 +21,6 @@ function lyo_mc_dae!(du, u, params, t)
     Tf = u[2]*u"K"
     μ0 = u[3]
     μ2 = u[4]*u"cm^6"
-    if Tf < 0u"K"
-        return [NaN, NaN, NaN]
-    end
 
     k = k_f(Tf)
     hd = hf0 - hf
@@ -35,8 +32,9 @@ function lyo_mc_dae!(du, u, params, t)
     if μ1 <= 0u"cm^3" || μ0 <= 0.0 || μ2 <= 0u"cm^6"
         Rp = R0
     else
-        μ32 = μ0^(-1//8)*μ1^(3//4)*μ2^(3//8)
-        Rp = R0 + C * sqrt(R*Tf/Mw) * μ1*hd/μ32/ϕ # Knudsen
+        # μ32 = μ0^(-1//8)*μ1^(3//4)*μ2^(3//8)
+        # Rp = R0 + C * sqrt(R*Tf/Mw) * μ1*hd/μ32/ϕ # Knudsen
+        Rp = R0 + C*sqrt(R*Tf/Mw)/ϕ*hd * sqrt(sqrt(sqrt(μ1^2*μ0/μ2^3))) # Knudsen, rewritten to avoid runtime dispatch
         # Rp = R0 + C*η*R*Tf/Mw/((calc_psub(Tsub)+pch(td))/2) * μ1*hd/μ2/ϕ # Viscous
     end
     dmdt = - Ap*(calc_psub(Tsub)-pch(td))/Rp

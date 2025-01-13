@@ -5,6 +5,7 @@ using ForwardDiff, SciMLSensitivity
 const NLSP = NonlinearLeastSquaresProblem
 const OP = OptimizationProblem
 const BFGS = Optim.BFGS
+const LBFGS = Optim.LBFGS
 const NM = Optim.NelderMead
 const LM = LevenbergMarquardt
 const LMa = LevenbergMarquardt(autodiff=AutoFiniteDiff())
@@ -175,7 +176,7 @@ err_Rp(x,p; verbose=false) = LyoPronto.err_expT(gen_sol_Rp(x, p[1])[1], p[2]; ve
 @time err_Rp([0.8, 14, 1], (pop1, fitdat1))
 
 # opt_Rp1 = solve(NLSP(err_Rp, [0.8, 14, 1], p=(pop1, fitdat1)), LM(); maxiters = 100, abstol=1e-2, show_trace=Val(true), tcond...)
-@time opt_Rp1 = solve(OP(obj_Rpf, [0.8, 14, 1], (pop1, fitdat1)),NM(), show_trace=true)
+@time opt_Rp1 = solve(OP(obj_Rpf, [0.8, 14, 1], (pop1, fitdat1)),BFGS(), maxiters=50, show_trace=true)
 # opt_Rp1 = solve(NLSP(obj_Rp, [0.8, 14, 1], p=(pop1, fitdat1)), LM(); reltol=1e-1, show_trace=Val(true))
 
 sol1_Rp1, Rp1_params = gen_sol_Rp(opt_Rp1.u, pop1);
@@ -225,7 +226,7 @@ pomc8 = deepcopy(pomc1)
 # tsol = solve(tprob, Rodas3(autodiff=true))
 # poreevolplot(tsol)
 
-fit_un_arb = [u"cm^-1", u"cm^5", u"m^0.5", u"m/s", fill(u"s^-1", 4)...]
+const fit_un_arb = (u"cm^-1", u"cm^5", u"m^0.5", u"m/s", fill(u"s^-1", 4)...)
 fitguess = ustrip.(fit_un_arb, [N(0), S(0), C, R0, k0, k0*1e1, k0*1e5, k0*1e6])
 # fitguess[5:8] .= log.(fitguess[5:8]) 
 fitguesslog = log.(fitguess)
@@ -247,7 +248,8 @@ function gen_sol_constNS_arb(fitprmlog, po; verbose=false)
     # klogs = log.(fitprm[5:8])
     # klogs = fitprm[5:8]
     spll = LinearInterpolation(klogs, Tstops, extrapolate=true)
-    spl = T->exp(spll(T))*fit_un_arb[5]
+    spl(T) = exp(spll(T))*fit_un_arb[5]
+    # spl = T->exp(spll(T))*fit_un_arb[5]
     # PCHIP interp
     # spl = PCHIPInterpolation(fitprm[5:8]*fit_un_arb[5], Tstops, extrapolate = true)
     @reset new_params.k_f = spl
@@ -256,7 +258,7 @@ function gen_sol_constNS_arb(fitprmlog, po; verbose=false)
     # u0 = ustrip.([u"cm", u"K", u"cm^6", NoUnits], [new_params.hf0, new_params.Tsh(0u"s"), 0.0u"cm^6", 0.0])
     # prob = ODEProblem(lyo_mc_dae_f2, u0, (0.0,200.0), new_params, callback=end_drying_callback)
     sol = solve(prob, Rodas3())
-    return sol, new_params
+    return sol
 end
 
 # tsol, tparams = gen_sol_constNS_arb(fitguesslog, pomc1); 
@@ -264,12 +266,18 @@ end
 # plot!(fitdat1)
 
 # obj_MC = (x,p)->[(issorted(x[5:8]) ? (obj_expT(gen_sol_constNS_arb(x, p[1])[1], p[2])) : NaN)]
-obj_MC(x,p) = (issorted(x[5:8]) ? (obj_expT(gen_sol_constNS_arb(x, p[1])[1], p[2])) : NaN)
+function obj_MC(x, p)
+    # if !issorted(x[5:8])
+    if ~(x[5] < x[6] < x[7] < x[8])
+        return NaN
+    end
+    return obj_expT(gen_sol_constNS_arb(x, p[1])[1], p[2])
+end
 obj_MCf = OptimizationFunction(obj_MC, AutoForwardDiff())
 @time obj_MC(fitguesslog.*1.1, (pomc1, fitdat1))
 
 # @time opt_MC1 = solve(NLSP(obj_MC, fitguesslog, p=(pomc1, fitdat1)), LMf; show_trace=Val(true), maxiters=200, tcond...)
-@time opt_MC1 = solve(OP(obj_MCf, fitguesslog, (pomc1, fitdat1)), NM();)
+@time opt_MC1 = solve(OP(obj_MCf, fitguesslog, (pomc1, fitdat1)), BFGS(); show_trace=true, g_tol = 1e-3, maxiters=300)
 obj_MC(opt_MC1.u, (pomc1, fitdat1))
 
 # ----------------------------------
@@ -283,17 +291,17 @@ sol1_MC1, MC1_params = gen_sol_constNS_arb(opt_MC1.u, pomc1);
 
 # opt2p = solve(NLSP(obj_Rp, [0.8, 14, 1], p=(pop2, fitdat2)), LM(); tcond..., reltol=1e-1)
 # opt_MC2 = solve(NLSP(obj_MC, fitguesslog, p=(pomc2, fitdat2)), LM(b_uphill=100.0); reltol=1e-1, maxiters=300, show_trace=Val(true), maxtime=20)
-opt2p = solve(OP(obj_Rpf, opt_Rp1.u, (pop2, fitdat2)), BFGS(); )
-@time opt_MC2 = solve(OP(obj_MCf, fitguesslog, (pomc2, fitdat2)), BFGS();)
+opt2p = solve(OP(obj_Rpf, opt_Rp1.u, (pop2, fitdat2)), BFGS(); g_tol=1e-3)
+@time opt_MC2 = solve(OP(obj_MCf, opt_MC1.u, (pomc2, fitdat2)), BFGS(); g_tol=1e-3)
 
 # obj8p = x->obj_expT(gen_sol_Rp(x, pop8)[1], fitdat8)
 # opt8p = optimize(obj8p, opt_Rp1.minimizer, LevenbergMarquardt(), )
 # opt8p = solve(NLSP(obj_Rp, [0.8, 14, 1], p=(pop8,fitdat8)), LM(); reltol=1e-1)
-opt8p = solve(OP(obj_Rpf, opt_Rp1.u, (pop8, fitdat8)), BFGS(); )
+opt8p = solve(OP(obj_Rpf, opt_Rp1.u, (pop8, fitdat8)), BFGS(); g_tol=1e-3)
 # Enforce monontonic k in objective
 # obj8mc = x->(issorted(x[5:8]) ? obj_expT(gen_sol_constNS_arb(x, pomc8)[1], fitdat8) : NaN)
 # opt_MC8 = solve(NLSP(obj_MC, opt_MC2.u, p=(pomc8, fitdat8)), LM(); maxiters=300)
-@time opt_MC8 = solve(OP(obj_MCf, fitguesslog, (pomc8, fitdat8)), BFGS();)
+@time opt_MC8 = solve(OP(obj_MCf, opt_MC1.u, (pomc8, fitdat8)), BFGS();g_tol=1e-3)
 
 sol2_Rp2, Rp2_params = gen_sol_Rp(opt2p.u, pop2);
 sol8_Rp8, Rp8_params = gen_sol_Rp(opt8p.u, pop8);
@@ -347,10 +355,10 @@ end
 obj_npf = OptimizationFunction(objn_Rp, AutoForwardDiff())
 
 @time opt18p = solve(OP(obj_npf, opt_Rp1.minimizer, 
-    ((pop1, pop8), (fitdat1, fitdat8))), BFGS(), show_trace=true)
+    ((pop1, pop8), (fitdat1, fitdat8))), BFGS(), show_trace=true, g_tol=1e-2)
 # opt128p = optimize(obj128p, opt_Rp1.minimizer, LevenbergMarquardt(), )
 @time opt128p = solve(OP(obj_npf, opt_Rp1.minimizer, 
-    ((pop1, pop2, pop8), (fitdat1, fitdat2, fitdat8))), BFGS(), show_trace=true)
+    ((pop1, pop2, pop8), (fitdat1, fitdat2, fitdat8))), BFGS(), show_trace=true, g_tol=1e-2)
 
 sol1_Rp18, Rp1_params18 = gen_sol_Rp(opt12p.minimizer, pop1);
 sol2_Rp18, Rp2_params18 = gen_sol_Rp(opt12p.minimizer, pop2);
@@ -385,7 +393,7 @@ mc18p = ((pomc1, pomc8), (fitdat1, fitdat8))
 mc128p = ((pomc1, pomc2, pomc8), (fitdat1, fitdat2, fitdat8))
 
 g12mc = (opt_MC2.minimizer .+ opt_MC1.minimizer)/2
-@time opt12mc = solve(OP(obj_nmc, g12mc, mc12p), BFGS())
+@time opt12mc = solve(OP(obj_nmc, g12mc, mc12p), BFGS(), g_tol = 1e-1)
 # opt12mc = optimize(obj12mc, g12mc, LevenbergMarquardt(), )
 g18mc = (opt_MC8.minimizer .+ opt_MC1.minimizer)/2
 @time opt18mc = solve(OP(obj_nmc, g18mc, mc18p), BFGS())
@@ -515,7 +523,7 @@ plot!(fitdat8)
 plot(pl1, pl2, pl3)
 end
 
-fit_un_myega = [u"cm^-1", u"cm^5", u"m^0.5", u"m/s", u"s^-1", u"K", u"K"]
+const fit_un_myega = (u"cm^-1", u"cm^5", u"m^0.5", u"m/s", u"s^-1", u"K", u"K")
 function gen_sol_constNS_myega(fitprmlog, po; verbose=false)
     new_params = deepcopy(po)
     fitprm = exp.(fitprmlog) # Constrain all to be positive by taking exp
@@ -618,7 +626,7 @@ sol2_play = solve(ODEProblem(play_params2), Rodas3(autodiff=true))
 poreevolplot(sol1_play)
 poreevolplot!(sol2_play)
 
-fit_un_play = [u"cm^-1", u"cm^5", u"m^0.5", u"m/s", u"s^-1", u"s^-1", u"K", u"K"]
+const fit_un_play = (u"cm^-1", u"cm^5", u"m^0.5", u"m/s", u"s^-1", u"s^-1", u"K", u"K")
 function gen_sol_constNS_play(fitprmlog, po; verbose=false)
     new_params = deepcopy(po)
     fitprm = exp.(fitprmlog) # Constrain all to be positive by taking exp
@@ -785,17 +793,6 @@ plot(pl1, pl2)
 end
 savefig(plotsdir("suc12_Rp.svg"))
 
-function namefitparam_arr(fitlog, label)
-    fit = exp.(fitlog)
-    nt = (label = label,
-        N =  fit[1]*fit_un_arr[1],
-        S =  fit[2]*fit_un_arr[2],
-        C =  fit[3]*fit_un_arr[3],
-        R0 = fit[4]*fit_un_arr[4],
-        k0 = fit[5]*fit_un_arr[5],
-        E =  fit[6]*fit_un_arr[6],
-    )
-end
 function namefitparam_arb(fitlog, label)
     fit = exp.(fitlog)
     nt = (label = label,
