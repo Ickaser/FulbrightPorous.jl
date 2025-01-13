@@ -176,7 +176,7 @@ err_Rp(x,p; verbose=false) = LyoPronto.err_expT(gen_sol_Rp(x, p[1])[1], p[2]; ve
 @time err_Rp([0.8, 14, 1], (pop1, fitdat1))
 
 # opt_Rp1 = solve(NLSP(err_Rp, [0.8, 14, 1], p=(pop1, fitdat1)), LM(); maxiters = 100, abstol=1e-2, show_trace=Val(true), tcond...)
-@time opt_Rp1 = solve(OP(obj_Rpf, [0.8, 14, 1], (pop1, fitdat1)),BFGS(), maxiters=50, show_trace=true)
+@time opt_Rp1 = solve(OP(obj_Rpf, [0.8, 14, 1], (pop1, fitdat1)),BFGS(), g_tol=1e-3)
 # opt_Rp1 = solve(NLSP(obj_Rp, [0.8, 14, 1], p=(pop1, fitdat1)), LM(); reltol=1e-1, show_trace=Val(true))
 
 sol1_Rp1, Rp1_params = gen_sol_Rp(opt_Rp1.u, pop1);
@@ -254,9 +254,6 @@ function gen_sol_constNS_arb(fitprmlog, po; verbose=false)
     # spl = PCHIPInterpolation(fitprm[5:8]*fit_un_arb[5], Tstops, extrapolate = true)
     @reset new_params.k_f = spl
     prob = ODEProblem(new_params)
-    # @info "check" new_params.N new_params.S new_params.k_f
-    # u0 = ustrip.([u"cm", u"K", u"cm^6", NoUnits], [new_params.hf0, new_params.Tsh(0u"s"), 0.0u"cm^6", 0.0])
-    # prob = ODEProblem(lyo_mc_dae_f2, u0, (0.0,200.0), new_params, callback=end_drying_callback)
     sol = solve(prob, Rodas3())
     return sol
 end
@@ -267,15 +264,23 @@ end
 
 # obj_MC = (x,p)->[(issorted(x[5:8]) ? (obj_expT(gen_sol_constNS_arb(x, p[1])[1], p[2])) : NaN)]
 function obj_MC(x, p)
-    # if !issorted(x[5:8])
     if ~(x[5] < x[6] < x[7] < x[8])
         return NaN
     end
     return obj_expT(gen_sol_constNS_arb(x, p[1])[1], p[2])
 end
+function err_MC(x,p)
+    if ~(x[5] < x[6] < x[7] < x[8])
+        # count number of data points
+        return fill(NaN, sum(p[2].Tf_iend) + (ismissing(p[2].Tvws) ? 0 : sum(p[2].Tvw_iend)) + !ismissing(p[2].t_end))
+    end
+    sol, _ = gen_sol_constNS_arb(x, p[1])
+    return LyoPronto.err_expT(sol, p[2])
+end
 obj_MCf = OptimizationFunction(obj_MC, AutoForwardDiff())
 @time obj_MC(fitguesslog.*1.1, (pomc1, fitdat1))
 
+# opt_MC1 = solve(NLSP(err_MC, fitguesslog, (pomc1, fitdat1)), LM(); maxiters=100, show_trace=Val(true))
 # @time opt_MC1 = solve(NLSP(obj_MC, fitguesslog, p=(pomc1, fitdat1)), LMf; show_trace=Val(true), maxiters=200, tcond...)
 @time opt_MC1 = solve(OP(obj_MCf, fitguesslog, (pomc1, fitdat1)), BFGS(); show_trace=true, g_tol = 1e-3, maxiters=300)
 obj_MC(opt_MC1.u, (pomc1, fitdat1))
@@ -289,18 +294,15 @@ sol1_MC1, MC1_params = gen_sol_constNS_arb(opt_MC1.u, pomc1);
 
 # ------ Fit to Cycle 2 and Cycle 8 data separately
 
-# opt2p = solve(NLSP(obj_Rp, [0.8, 14, 1], p=(pop2, fitdat2)), LM(); tcond..., reltol=1e-1)
-# opt_MC2 = solve(NLSP(obj_MC, fitguesslog, p=(pomc2, fitdat2)), LM(b_uphill=100.0); reltol=1e-1, maxiters=300, show_trace=Val(true), maxtime=20)
+# opt2p = solve(NLSP(err_Rp, opt_Rp1.u, (pop2, fitdat2)), TR(); maxiters=200)
 opt2p = solve(OP(obj_Rpf, opt_Rp1.u, (pop2, fitdat2)), BFGS(); g_tol=1e-3)
+# opt_MC2 = solve(NLSP(err_MC, opt_MC1.u, (pomc2, fitdat2)), TR(); maxiters=200)
 @time opt_MC2 = solve(OP(obj_MCf, opt_MC1.u, (pomc2, fitdat2)), BFGS(); g_tol=1e-3)
 
-# obj8p = x->obj_expT(gen_sol_Rp(x, pop8)[1], fitdat8)
-# opt8p = optimize(obj8p, opt_Rp1.minimizer, LevenbergMarquardt(), )
 # opt8p = solve(NLSP(obj_Rp, [0.8, 14, 1], p=(pop8,fitdat8)), LM(); reltol=1e-1)
 opt8p = solve(OP(obj_Rpf, opt_Rp1.u, (pop8, fitdat8)), BFGS(); g_tol=1e-3)
 # Enforce monontonic k in objective
-# obj8mc = x->(issorted(x[5:8]) ? obj_expT(gen_sol_constNS_arb(x, pomc8)[1], fitdat8) : NaN)
-# opt_MC8 = solve(NLSP(obj_MC, opt_MC2.u, p=(pomc8, fitdat8)), LM(); maxiters=300)
+# opt_MC8 = solve(NLSP(err_MC, opt_MC2.u, p=(pomc8, fitdat8)), LM(); maxiters=300)
 @time opt_MC8 = solve(OP(obj_MCf, opt_MC1.u, (pomc8, fitdat8)), BFGS();g_tol=1e-3)
 
 sol2_Rp2, Rp2_params = gen_sol_Rp(opt2p.u, pop2);

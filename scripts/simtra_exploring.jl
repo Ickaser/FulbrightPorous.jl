@@ -1,9 +1,8 @@
 using DrWatson
 @quickactivate :FulbrightPores
 
-const NLSP = NonlinearLeastSquaresProblem
-const LM = LevenbergMarquardt
-const TR = TrustRegion
+const OP = OptimizationProblem
+const BFGS = Optim.BFGS
 const LP = LyoPronto
 pythonplot()
 
@@ -21,8 +20,8 @@ function fitKv(KKK)
     err = @. Kv(pd) - Kvd
     return ustrip(sum(abs2.(err))), Kv
 end
-optKv = optimize(x->fitKv(x)[1], [10.0, 1, 1])
-K_shf = fitKv(Optim.minimizer(optKv))[2]
+optKv = solve(NonlinearLeastSquaresProblem((x,p,t)->fitKv(x)[1], [10.0, 1, 1]), LevenbergMarquardt())
+K_shf = fitKv(optKv.u)[2]
 
 # --------------------------
 # Cycle 1
@@ -122,7 +121,7 @@ plot(fitdat8)
 
 
 # -------------
-# Model setup
+# Parameter setup
 
 rad_i = 1.1u"cm"
 rad_o = 1.2u"cm"
@@ -150,8 +149,8 @@ pop8 = deepcopy(pop1)
 @reset pop8.pch = pch8
 @reset pop8.Tsh = Tsh8
 
+const Rp_un = (u"cm^2*Torr*hr/g", u"cm*Torr*hr/g", u"1/cm")
 function gen_sol_Rp(a123, po)
-    Rp_un = [u"cm^2*Torr*hr/g", u"cm*Torr*hr/g", u"1/cm"]
     new_params = @set po.Rp = RpFormFit((a123.*Rp_un)...)
     prob = ODEProblem(new_params)
     sol = solve(prob, Rodas3())
@@ -159,15 +158,15 @@ function gen_sol_Rp(a123, po)
 end
 function obj_Rp(x, p)
     if any(x .< 0)
-        return [NaN]
+        return NaN
     end
     sol, _ = gen_sol_Rp(x, p[1])
-    return [obj_expT(sol, p[2])]
+    return obj_expT(sol, p[2])
 end
-@time obj_Rp([0.8, 14, 1], (pop8, fitdat8))
+obj_Rpf = OptimizationFunction(obj_Rp, AutoForwardDiff())
+@time obj_Rpf([0.8, 14, 1], (pop8, fitdat8))
 
-# opt_Rp1 = optimize(obj_Rp1, [0.8, 14, 1], Optim.Options(g_tol=1e-3))
-opt_Rp1 = solve(NLSP(obj_Rp, [0.8, 14, 1], (pop1, fitdat1)), TrustRegion(); maxiters=200, show_trace=Val(true))
+@time opt_Rp1 = solve(OP(obj_Rpf, [0.8, 14, 1], (pop1, fitdat1)),BFGS(), g_tol = 1e-3)
 
 sol1_Rp1, Rp1_params = gen_sol_Rp(opt_Rp1.u, pop1);
 plot(u"hr", u"°C", xlim=(0, 60), ylim=(-40, -30))
@@ -196,13 +195,13 @@ R0 = 0.05u"cm^2*Torr*hr/g"
 
 k0 = 1e-16u"1/s"
 E = u"R"*Tsh1(0u"s")
-kf = T->k0*exp(-E/(R*T))
+kf_g = T->k0*exp(-E/(R*T))
 
 pb_mc = (
     (Rp_g, hf0, c_solid, ρ_solution),
     (K_shf, A_v, A_p),
     (pch1, Tsh1),
-    (kf, C, N, S, R0)
+    (kf_g, C, N, S, R0)
 )
 pomc1 = ParamObjMC(pb_mc)
 pomc2 = deepcopy(pomc1)
@@ -212,12 +211,8 @@ pomc8 = deepcopy(pomc1)
 @reset pomc8.pch = pch8
 @reset pomc8.Tsh = Tsh8
 
-# tprob = ODEProblem(pomc1)
-# tsol = solve(tprob, Rodas3(autodiff=true))
-# poreevolplot(tsol)
-
-fit_un_arb = [u"cm^-1", u"cm^5", u"m^0.5", u"m/s", fill(u"s^-1", 4)...]
-fitguess = ustrip.(fit_un_arb, [N(0), S(0), C, R0, k0, k0*1e2, k0*1e4, k0*1e6])
+const fit_un_arb = (u"cm^-1", u"cm^5", u"m^0.5", u"m/s", fill(u"s^-1", 4)...)
+fitguess = ustrip.(fit_un_arb, [N(0), S(0), C, R0, k0, k0*1e1, k0*1e5, k0*1e6])
 fitguesslog = log.(fitguess)
 Tstops = [-45.0, -38, -32, -28]u"°C" .|> u"K"
 function gen_sol_constNS_arb(fitprmlog, po; verbose=false)
@@ -228,47 +223,28 @@ function gen_sol_constNS_arb(fitprmlog, po; verbose=false)
     @reset new_params.S = RampedVariable(fitprm[2]*fit_un_arb[2])
     @reset new_params.C  = fitprm[3]*fit_un_arb[3]
     @reset new_params.R0 = fitprm[4]*fit_un_arb[4]
-    # Linear interpolant
-    # kstops = fitprm[5:8]*fit_un_arb[3]
-    # spl = LinearInterpolation(kstops, Tstops, extrapolate=true)
     # Lin interp in log space
     klogs = fitprmlog[5:8]
+    # klogs = log.(fitprm[5:8])
+    # klogs = fitprm[5:8]
     spll = LinearInterpolation(klogs, Tstops, extrapolate=true)
-    spl = T->exp(spll(T))*fit_un_arb[5]
-    # PCHIP interp
-    # spl = PCHIPInterpolation(fitprm[5:8]*fit_un_arb[3], Tstops, extrapolate = true)
+    spl(T) = exp(spll(T))*fit_un_arb[5]
     @reset new_params.k_f = spl
     prob = ODEProblem(new_params)
-    sol = solve(prob, Rodas3(autodiff=true))
-    return sol, new_params
+    sol = solve(prob, Rodas3())
+    return sol
 end
 
-# tsol, tparams = gen_sol_constNS_arb(fitguesslog, pomc1); 
-# modconvtplot(tsol)
-# plot!(fitdat1)
-
 function obj_MC(x,p)
-    if !issorted(x[5:8])
-        # count number of data points
+    if ~(x[5] < x[6] < x[7] < x[8])
         return NaN
     end
     sol, _ = gen_sol_constNS_arb(x, p[1])
     return obj_expT(sol, p[2])
 end
-function err_MC(x,p)
-    if !issorted(x[5:8])
-        # count number of data points
-        return fill(NaN, sum(p[2].Tf_iend) + (ismissing(p[2].Tvws) ? 0 : sum(p[2].Tvw_iend)) + !ismissing(p[2].t_end))
-    end
-    sol, _ = gen_sol_constNS_arb(x, p[1])
-    return LyoPronto.err_expT(sol, p[2])
-end
-@time err_MC(fitguesslog, (pomc1, fitdat1))
+obj_MCf = OptimizationFunction(obj_MC, AutoForwardDiff())
 
-# opt_MC1 = solve(NLSP(err_MC, fitguesslog, (pomc1, fitdat1)), LM(); maxiters=100, show_trace=Val(true))
-# opt_MC1 = optimize(obj_MC, fitguesslog, NelderMead(), Optim.Options(g_tol=1e-2))
-opt_MC1 = optimize(obj_MC, fitguesslog, LBFGS(), Optim.Options(g_tol = 1e-2))
-opt_MC1.u .- fitguesslog
+@time opt_MC1 = solve(OP(obj_MCf, fitguesslog, (pomc1, fitdat1)), BFGS(); show_trace=true, g_tol = 1e-3, maxiters=300)
 
 exp.(opt_MC1.u) .*fit_un_arb
 
@@ -277,21 +253,11 @@ sol1_MC1, MC1_params = gen_sol_constNS_arb(opt_MC1.u, pomc1);
 
 # ------ Fit to Cycle 2 and Cycle 8 data separately
 
-# obj2p = x->obj_expT(gen_sol_Rp(x, pop2)[1], fitdat2)
-# opt2p = optimize(obj2p, Optim.minimizer(opt_Rp1), NelderMead(), Optim.Options(g_tol = 1e-3, time_limit=15))
-opt2p = solve(NLSP(err_Rp, opt_Rp1.u, (pop2, fitdat2)), TR(); maxiters=200)
-# Enforce monontonic k in objective
-# obj2mc = x->(issorted(x[5:8]) ? obj_expT(gen_sol_constNS_arb(x, pomc2)[1], fitdat2) : NaN)
-# opt_MC2 = optimize(obj2mc, Optim.minimizer(opt_MC1), NelderMead(), Optim.Options(g_tol = 1e-3, time_limit=10))
-opt_MC2 = solve(NLSP(err_MC, opt_MC1.u, (pomc2, fitdat2)), TR(); maxiters=200)
+opt2p = solve(OP(obj_Rpf, opt_Rp1.u, (pop2, fitdat2)), BFGS(); g_tol=1e-3)
+opt_MC2 = solve(OP(obj_MCf, opt_MC1.u, (pomc2, fitdat2)), BFGS(); g_tol=1e-3)
 
-# obj8p = x->obj_expT(gen_sol_Rp(x, pop8)[1], fitdat8)
-# opt8p = optimize(obj8p, Optim.minimizer(opt_Rp1), NelderMead(), Optim.Options(g_tol = 1e-3, time_limit=15))
-opt8p = solve(NLSP(obj_Rp, opt2p.u, (pop8, fitdat8)), TR(); maxiters=50, show_trace=Val(true))
-# Enforce monontonic k in objective
-# obj8mc = x->(issorted(x[5:8]) ? obj_expT(gen_sol_constNS_arb(x, pomc8)[1], fitdat8) : NaN)
-# opt_MC8 = optimize(obj8mc, Optim.minimizer(opt_MC1), NelderMead(), Optim.Options(g_tol = 1e-3, time_limit=10))
 opt_MC8 = solve(NLSP(obj_MC, opt_MC1.u, (pomc8, fitdat8)), TR(); maxiters=200)
+@time opt_MC8 = solve(OP(obj_MCf, opt_MC1.u, (pomc8, fitdat8)), BFGS();g_tol=1e-3)
 
 sol2_Rp2, Rp2_params = gen_sol_Rp(opt2p.u, pop2);
 sol8_Rp8, Rp8_params = gen_sol_Rp(opt8p.u, pop8);
@@ -333,18 +299,22 @@ function gennsol_Rp(fitprm, pos)
     return [ret[1] for ret in rets], [ret[2] for ret in rets]
 end
 function objn_Rp(fitprm, pfs)
+    if any(fitprm .< 0)
+        return NaN
+    end
     pos, fitdats = pfs
     sols, prms = gennsol_Rp(fitprm, pos)
     objs = map(sols, fitdats) do sol, fitdat
         obj_expT(sol, fitdat)
     end
-    return [sum(objs)]
+    return sum(objs)
 end
+obj_npf = OptimizationFunction(objn_Rp, AutoForwardDiff())
 
 pass18p =  ([pop1, pop2], [fitdat1, fitdat2]);
-opt18p = solve(NLSP(objn_Rp, opt_Rp1.u, pass18p), TR())
 pass128p = ([pop1, pop2, pop8], [fitdat1, fitdat2, fitdat8])
-opt128p = solve(NLSP(objn_Rp, opt_Rp1.u, pass128p), TR())
+opt18p = solve(OP(objn_Rp, opt_Rp1.u, pass18p), BFGS(); g_tol=1e-2)
+opt128p = solve(OP(objn_Rp, opt_Rp1.u, pass128p), BFGS(); g_tol=1e-2)
 
 sol1_Rp18, Rp1_params18 = gen_sol_Rp(opt18p.u, pop1);
 sol2_Rp18, Rp2_params18 = gen_sol_Rp(opt18p.u, pop2);
