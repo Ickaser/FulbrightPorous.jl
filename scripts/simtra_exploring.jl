@@ -440,42 +440,6 @@ plot(pl1, pl2, pl8, layout=(3,1), size=(600, 600), legend=:outerright)
 end
 savefig(plotsdir("suc128_T.svg"))
 
-kstops18 = exp.(opt18mc.u[5:8]).*fit_un_mult[5:8]
-kstops128 = exp.(opt128mc.u[5:8]).*fit_un_mult[5:8]
-klogs18 = log.(ustrip.(u"s^-1", kstops18))
-klogs128 = log.(ustrip.(u"s^-1", kstops128))
-Tcheck = range(extrema(Tstops)..., length=50)
-plot(Tstops, kstops18, yscale=:log10)
-plot!(Tstops, kstops128, yscale=:log10)
-plot!(Tstops, MC1_params.k_f, yscale=:log10)
-plot!(Tstops, MC8_params.k_f, yscale=:log10)
-
-# Willams Landel Ferry temparature dependence:...
-function k_wlf(T, p)
-    k0, Tref, C1, C2 = p
-    return k0*exp(C1*(T-Tref)/(T-Tref-C2))
-end
-wlf_un = (u"s^-1", u"K", NoUnits, u"K")
-wlf_mult = (1e-12u"s^-1", 190u"K", -9, 10u"K")
-function obj_wlf(p, _)
-    if p[1] < 0   
-        return fill(NaN, length(klogs18))
-    end
-    ks = k_wlf.(Tstops, [p.*wlf_mult])
-    logks = log.(ustrip.(u"s^-1", ks))
-    # @info "check" logks klogs18
-    return sum(abs2.(logks .- klogs18))
-    # return logks  .- klogs18
-end
-p0_wlf = [1.0, 1, 1, 1]
-objf_wlf = OptimizationFunction(obj_wlf, AutoForwardDiff())
-obj_wlf(p0_wlf, nothing)
-# opt_wlf = solve(NLSP(err_wlf, p0_wlf), LevenbergMarquardt(), show_trace=Val(true))
-opt_wlf = solve(OP(objf_wlf, p0_wlf), alg)
-plot(Tcheck,  k_wlf.(Tcheck, [opt_wlf.u.*wlf_mult]))
-plot!(Tstops,  kstops18, yscale=:log10)
-plot!(Tstops,  kstops128, yscale=:log10)
-
 # ------------------------
 # MYEGA temparature dependence of viscosity
 struct MYEGA_k
