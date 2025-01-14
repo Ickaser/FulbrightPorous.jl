@@ -147,7 +147,7 @@ function Base.show(io::IO, po::ParamObjMC)
     $(po.C), 
     $(po.N), 
     $(po.S), 
-    $(po.R0) 
+    $(po.Rs) 
     )"
     return print(io, str)
 end
