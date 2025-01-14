@@ -183,7 +183,7 @@ function obj_Rp(x, p)
         return NaN
     end
     sol, _ = gen_sol_Rp(x, p[1])
-    return obj_expT(sol, p[2])
+    return obj_expT(sol, p[2], tweight=1e-4)
 end
 obj_Rpf = OptimizationFunction(obj_Rp, AutoForwardDiff())
 @time obj_Rpf([0.8, 14, 1], (pop8, fitdat8))
@@ -266,7 +266,7 @@ function obj_MC(x,p)
         return NaN
     end
     sol, _ = gen_sol_constNS_arb(x, p[1])
-    return obj_expT(sol, p[2])
+    return obj_expT(sol, p[2], tweight=0)
 end
 obj_MCf = OptimizationFunction(obj_MC, AutoForwardDiff())
 lb_MC = vcat(fill(0.0, 4), fill(-20., 4))
@@ -333,7 +333,7 @@ function objn_Rp(fitprm, pfs)
     pos, fitdats = pfs
     sols, prms = gennsol_Rp(fitprm, pos)
     objs = map(sols, fitdats) do sol, fitdat
-        obj_expT(sol, fitdat)
+        obj_expT(sol, fitdat, tweight=1e-3)
     end
     return sum(objs)
 end
@@ -364,7 +364,7 @@ function objnmc(fitprm, pfs; verbose=false)
     end
     sols, prms = gennsol_constNS(fitprm, pos)
     objs = map(sols, fitdats) do sol, fitdat
-        obj_expT(sol, fitdat)
+        obj_expT(sol, fitdat, tweight=1e-3)
     end
     return [sum(objs)]
 end
@@ -534,7 +534,7 @@ function objnmyega(fitprmlog, pfs; verbose=true)
         return NaN
     end
     objs = map(sols, fitdats) do sol, fitdat
-        obj_expT(sol, fitdat)
+        obj_expT(sol, fitdat, tweight=0)
     end
     verbose && @info "obj" objs
     return sum(objs)
@@ -638,7 +638,7 @@ function objnplay(fitprmlog, pos, fitdats; verbose=true)
         return NaN
     end
     objs = map(sols, fitdats) do sol, fitdat
-        obj_expT(sol, fitdat)
+        obj_expT(sol, fitdat, tweight=0)
     end
     verbose && @info "obj" objs
     return sum(objs)
