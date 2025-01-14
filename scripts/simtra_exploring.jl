@@ -617,41 +617,66 @@ savefig(plotsdir("suc18_myega_train_T.svg"))
 
 # -------------------------------------
 # playground temparature dependence of viscosity
-function k_play(T, p)
-    k0, kf, K, C = p
-    rat = k0/kf
-    # x = ustrip(u"K", T-K)
-    # x = ustrip(u"K", T-K)
-    x = (T-K)/C
-    # sig = (tanh(x)+1)/2
+struct Play_k
+    k0
+    kf
+    K
+    C
+end
+Play_k(a) = Play_k(a...)
+function (pk::Play_k)(T)
+    rat = pk.k0/pk.kf
+    x = (T-pk.K)/pk.C
     # return k0/(tanh(-x)+1) # This has the right behavior...
     return k0*(exp(x) + exp(-x))/((1+rat)*exp(-x)+rat*exp(x)) # but this way it can avoid numerical issues
 end
-play_un = [u"s^-1", u"s^-1", u"K", u"K"]
-p0_play = [1e-17, 1e-10, 230, 0.8]
-scatter(Tcheck,  k_play.(Tcheck, [p0_play .* play_un]), yscale=:log10)
-plot!(Tstops,  kstops12, yscale=:log10)
+function k_play(T, p)
+    return Play_k(p)(T)
+end
+play_un = (u"s^-1", u"s^-1", u"K", u"K")
+play_mult = (1e-15u"s^-1", 1e-11u"s^-1", 236u"K", 0.8u"K")
+p0_play = fill(1.0, 4)
+# p0_play = [1e-17, 1e-10, 230, 0.8]
+scatter(Tcheck,  k_play.(Tcheck, [p0_play .* play_mult]), yscale=:log10)
 plot!(Tstops,  kstops18, yscale=:log10)
-function obj_play(p)
+plot!(Tstops,  kstops128, yscale=:log10)
+
+function obj_play(p,_)
     if p[1] < 0 || p[2] < 0 #|| p[3] < 100 
         return NaN
     end
-    ks = k_play.(Tstops, [p.*play_un])
+    ks = k_play.(Tstops, [p.*play_mult])
     # @info "check" ks kstops18
     sum(abs2.(log.(ustrip.(u"s^-1", ks)) - klogs18))
 end
-obj_play(p0_play)
-opt_play = optimize(obj_play, p0_play, NelderMead(), Optim.Options(show_trace=true))
-plot(Tcheck,  k_play.(Tcheck, [opt_play.u.*play_un]))
-plot!(Tstops,  kstops12, yscale=:log10)
+objf_play = OptimizationFunction(obj_play, AutoForwardDiff())
+obj_play(p0_play,nothing)
+opt_play = solve(OP(objf_play, p0_play), alg, show_trace=true)
+pk = Play_k(opt_play.u .* play_mult)
+plot(Tcheck,  pk.(Tcheck))
 plot!(Tstops,  kstops18, yscale=:log10)
+plot!(Tstops,  kstops128, yscale=:log10)
 
-play_params1 = @set MC1_params128.k_f = T->k_play(T, opt_play.u.*play_un)
-play_params2 = @set MC2_params128.k_f = T->k_play(T, opt_play.u.*play_un)
-sol1_play = solve(ODEProblem(play_params1), Rodas3(autodiff=true))
-sol2_play = solve(ODEProblem(play_params2), Rodas3(autodiff=true))
+play_params1 = @set MC1_params128.k_f = Play_k(opt_play.u.*play_mult)
+play_params2 = @set MC2_params128.k_f = Play_k(opt_play.u.*play_mult)
+play_params8 = @set MC8_params128.k_f = Play_k(opt_play.u.*play_mult)
+sol1_play = solve(ODEProblem(play_params1), Rodas3())
+sol2_play = solve(ODEProblem(play_params2), Rodas3())
+sol8_play = solve(ODEProblem(play_params8), Rodas3())
 poreevolplot(sol1_play)
 poreevolplot!(sol2_play)
+poreevolplot!(sol8_play)
+
+begin
+blankplot_hrC()
+modconvtplot!(sol1_play, sol1_MC1)
+plot!(fitdat1)
+end
+begin
+blankplot_hrC()
+modconvtplot!(sol8_play, sol8_MC8)
+plot!(fitdat8)
+end
 
 fit_un_play = [u"cm^-1", u"cm^5", u"m^0.5", u"m/s", u"s^-1", u"s^-1", u"K", u"K"]
 function gen_sol_constNS_play(fitprmlog, po; verbose=false)
