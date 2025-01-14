@@ -5,6 +5,8 @@ using SavitzkyGolay
 const OP = OptimizationProblem
 const NLSP = NonlinearLeastSquaresProblem
 const BFGS = Optim.BFGS
+using LineSearches
+alg = BFGS(linesearch=LineSearches.BackTracking())
 const LP = LyoPronto
 pythonplot()
 
@@ -186,9 +188,10 @@ function obj_Rp(x, p)
     return obj_expT(sol, p[2], tweight=1e-4)
 end
 obj_Rpf = OptimizationFunction(obj_Rp, AutoForwardDiff())
-@time obj_Rpf([0.8, 14, 1], (pop8, fitdat8))
+@time obj_Rpf([0.8, 90, 10], (pop8, fitdat8))
+# @time ForwardDiff.gradient(x->obj_Rpf(x, (pop8, fitdat8)), [0.8, 90, 1])
 
-@time opt_Rp1 = solve(OP(obj_Rpf, [0.8, 14, 1], (pop1, fitdat1)),BFGS(), g_tol = 1e-3)
+@time opt_Rp1 = solve(OP(obj_Rpf, [0.8, 90, 1], (pop1, fitdat1)),alg, g_tol = 1e-3)
 
 sol1_Rp1, Rp1_params = gen_sol_Rp(opt_Rp1.u, pop1);
 plot(u"hr", u"°C", xlim=(0, 60), ylim=(-40, -30))
@@ -281,11 +284,12 @@ sol1_MC1, MC1_params = gen_sol_constNS_arb(opt_MC1.u, pomc1);
 
 # ------ Fit to Cycle 2 and Cycle 8 data separately
 
-opt2p = solve(OP(obj_Rpf, opt_Rp1.u, (pop2, fitdat2)), BFGS(); g_tol=1e-3)
-opt_MC2 = solve(OP(obj_MCf, opt_MC1.u, (pomc2, fitdat2)), BFGS(); g_tol=1e-3)
+opt2p = solve(OP(obj_Rpf, opt_Rp1.u, (pop2, fitdat2)), alg; g_tol=1e-3)
+# opt_MC2 = solve(OP(obj_MCf, opt_MC1.u, (pomc2, fitdat2)), BFGS(); g_tol=1e-3)
 
-opt_MC8 = solve(NLSP(obj_MC, opt_MC1.u, (pomc8, fitdat8)), TR(); maxiters=200)
-@time opt_MC8 = solve(OP(obj_MCf, opt_MC1.u, (pomc8, fitdat8)), BFGS();g_tol=1e-3)
+# opt_MC8 = solve(NLSP(obj_MC, opt_MC1.u, (pomc8, fitdat8)), TR(); maxiters=200)
+opt8p = solve(OP(obj_Rpf, opt_Rp1.u, (pop8, fitdat8)), alg; g_tol=1e-3)
+@time opt_MC8 = solve(OP(obj_MCf, opt_MC1.u, (pomc8, fitdat8), lb=lb_MC, ub=ub_MC), alg; show_trace=true, g_tol=1e-2)
 
 sol2_Rp2, Rp2_params = gen_sol_Rp(opt2p.u, pop2);
 sol8_Rp8, Rp8_params = gen_sol_Rp(opt8p.u, pop8);
@@ -341,8 +345,8 @@ obj_npf = OptimizationFunction(objn_Rp, AutoForwardDiff())
 
 pass18p =  ([pop1, pop2], [fitdat1, fitdat2]);
 pass128p = ([pop1, pop2, pop8], [fitdat1, fitdat2, fitdat8])
-opt18p = solve(OP(objn_Rp, opt_Rp1.u, pass18p), BFGS(); g_tol=1e-2)
-opt128p = solve(OP(objn_Rp, opt_Rp1.u, pass128p), BFGS(); g_tol=1e-2)
+@time opt18p = solve(OP(obj_npf, opt_Rp1.u, pass18p), alg; g_tol=1e-2, show_trace=true)
+@time opt128p = solve(OP(obj_npf, opt_Rp1.u, pass128p), alg; g_tol=1e-2)
 
 sol1_Rp18, Rp1_params18 = gen_sol_Rp(opt18p.u, pop1);
 sol2_Rp18, Rp2_params18 = gen_sol_Rp(opt18p.u, pop2);
@@ -352,35 +356,33 @@ sol2_Rp128, Rp2_params128 = gen_sol_Rp(opt128p.u, pop2);
 sol8_Rp128, Rp8_params128 = gen_sol_Rp(opt128p.u, pop8);
 
 function gennsol_constNS(fitprm, pos)
-    rets = map(pos) do po
+    sols = map(pos) do po
         gen_sol_constNS_arb(fitprm, po)
     end
-    return [ret[1] for ret in rets], [ret[2] for ret in rets]
+    return sols
 end
 function objnmc(fitprm, pfs; verbose=false)
     pos, fitdats = pfs
-    if !issorted(fitprm[5:8])
-        return [NaN]
+    if ~(fitprm[5] < fitprm[6] < fitprm[7] < fitprm[8])
+        return NaN
     end
-    sols, prms = gennsol_constNS(fitprm, pos)
+    sols = gennsol_constNS(fitprm, pos)
     objs = map(sols, fitdats) do sol, fitdat
         obj_expT(sol, fitdat, tweight=1e-3)
     end
-    return [sum(objs)]
+    return sum(objs)
 end
 # obj12mc(x) = objnmc(x, [pomc1, pomc2], [fitdat1, fitdat2])
 # obj18mc(x) = objnmc(x, [pomc1, pomc8], [fitdat1, fitdat8])
 # obj128mc = x->objnmc(x, [pomc1, pomc2, pomc8], [fitdat1, fitdat2, fitdat8])
+obj_nMCf = OptimizationFunction(objnmc, AutoForwardDiff())
 
-g12mc = (opt_MC2.u .+ opt_MC1.u)/2
-# opt12mc = optimize(obj12mc, g12mc, NelderMead(), Optim.Options(g_tol = 1e-3))
-opt12mc = solve(NLSP(objnmc, g12mc, ([pomc1, pomc2], [fitdat1, fitdat2])), TR(); maxiters=200)
 g18mc = (opt_MC8.u .+ opt_MC1.u)/2
 # opt18mc = optimize(obj18mc, g18mc, NelderMead(), Optim.Options(g_tol = 1e-3))
-opt18mc = solve(NLSP(objnmc, g18mc, ([pomc1, pomc8], [fitdat1, fitdat8])), TR(), maxiters=200)
-g128mc = (opt_MC2.u .+ opt_MC1.u .+ opt_MC8.u)/3
+@time opt18mc = solve(OP(obj_nMCf, g18mc, ([pomc1, pomc8], [fitdat1, fitdat8]), lb=lb_MC, ub=ub_MC), alg, g_tol=1e-3, )
 # opt128mc = optimize(obj128mc, g128mc, NelderMead(), Optim.Options(g_tol = 1e-3))
-opt128mc = solve(NLSP(objnmc, g18mc, ([pomc1, pomc2, pomc8], [fitdat1, fitdat2, fitdat8])), TR(), maxiters=200)
+@time opt128mc = solve(OP(obj_nMCf, g18mc, ([pomc1, pomc2, pomc8], [fitdat1, fitdat2, fitdat8]), lb=lb_MC, ub=ub_MC), alg, g_tol=1e-3)
+
 
 
 
