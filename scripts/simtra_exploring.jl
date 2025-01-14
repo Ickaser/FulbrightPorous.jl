@@ -194,9 +194,11 @@ obj_Rpf = OptimizationFunction(obj_Rp, AutoForwardDiff())
 @time opt_Rp1 = solve(OP(obj_Rpf, [0.8, 90, 1], (pop1, fitdat1)),alg, g_tol = 1e-3)
 
 sol1_Rp1, Rp1_params = gen_sol_Rp(opt_Rp1.u, pop1);
-plot(u"hr", u"°C", xlim=(0, 60), ylim=(-40, -30))
+# plot(u"hr", u"°C", xlim=(0, 60), ylim=(-40, -30))
+blankplot_hrC(ylim=(-40, -30))
 modconvtplot!(sol1_Rp1)
-@df dat1 exptfplot!(:t, :T1, :T2, :T3)
+# @df dat1 exptfplot!(:t, :T1, :T2, :T3)
+plot!(fitdat1)
 
 # -------------- Provide guess values for new parameters
 
@@ -210,13 +212,13 @@ N_typical = fillvol/V_typical
 N = RampedVariable(N_typical / hf0)
 S = RampedVariable(V_typical^2*N_typical/hf0)
 C = 2e-1u"m^0.5"
-R0 = 0.05u"cm^2*Torr*hr/g"
+Rs = 0.05u"cm^2*Torr*hr/g"
 
 # Good guesses for viscous
 # N = RampedVariable(N_typical / hf0) 
 # S = RampedVariable(1e0u"cm^5")
 # C = 2e2u"m"
-# R0 = 0.01u"cm^2*Torr*hr/g"
+# Rs = 0.01u"cm^2*Torr*hr/g"
 
 k0 = 1e-16u"1/s"
 E = u"R"*Tsh1(0u"s")
@@ -226,7 +228,7 @@ pb_mc = (
     (Rp_g, hf0, c_solid, ρ_solution),
     (K_shf, A_v, A_p),
     (pch1, Tsh1),
-    (kf_g, C, N, S, R0)
+    (kf_g, C, N, S, Rs)
 )
 pomc1 = ParamObjMC(pb_mc)
 pomc2 = deepcopy(pomc1)
@@ -277,9 +279,8 @@ ub_MC = vcat(fill(Inf, 4), fill(20., 4))
 
 @time opt_MC1 = solve(OP(obj_MCf, fitguess, (pomc1, fitdat1), lb=lb_MC, ub=ub_MC), alg;show_trace=true, g_tol = 1e-2, maxtime=10)
 
-exp.(opt_MC1.u) .*fit_un_arb
-
-sol1_MC1, MC1_params = gen_sol_constNS_arb(opt_MC1.u, pomc1);
+sol1_MC1 = gen_sol_constNS_arb(opt_MC1.u, pomc1);
+MC1_params1 = sol1_MC1.prob.p
 
 
 # ------ Fit to Cycle 2 and Cycle 8 data separately
@@ -293,34 +294,32 @@ opt8p = solve(OP(obj_Rpf, opt_Rp1.u, (pop8, fitdat8)), alg; g_tol=1e-3)
 
 sol2_Rp2, Rp2_params = gen_sol_Rp(opt2p.u, pop2);
 sol8_Rp8, Rp8_params = gen_sol_Rp(opt8p.u, pop8);
-sol2_MC2, MC2_params = gen_sol_constNS_arb(opt_MC2.u, pomc2);
-sol8_MC8, MC8_params = gen_sol_constNS_arb(opt_MC8.u, pomc8);
+# sol2_MC2, MC2_params = gen_sol_constNS_arb(opt_MC2.u, pomc2);
+sol8_MC8 = gen_sol_constNS_arb(opt_MC8.u, pomc8);
+MC8_params = sol8_MC8.prob.p
 
 # ----------- Plot separately
 begin
-plot(u"hr", u"°C", xlim=(0, 70), ylim=(-36, -31), legend=:bottomright)
+plot(u"hr", u"°C", xlim=(0, 120), ylim=(-36, -31), legend=:bottomright)
 @df dat1 exptfplot!(:t, :T1, :T2, :T3, marker=:square)
 modconvtplot!(sol1_MC1, sol1_Rp1, labels=["MC" "Pikal"],marker=:square)
 end
 savefig(plotsdir("suc1_T.svg"))
 
-begin
-plot(u"hr", u"°C", xlim=(0, 125), ylim=(-36, -32), legend=:bottomright)
-@df dat2 exptfplot!(:t, :T1, :T2, :T3, marker=:circle)
-modconvtplot!(sol2_MC2, sol2_Rp2, labels=["MC" "Pikal"],marker=:circle)
-end
-savefig(plotsdir("suc2_T.svg"))
+# begin
+# plot(u"hr", u"°C", xlim=(0, 125), ylim=(-36, -32), legend=:bottomright)
+# @df dat2 exptfplot!(:t, :T1, :T2, :T3, marker=:circle)
+# modconvtplot!(sol2_MC2, sol2_Rp2, labels=["MC" "Pikal"],marker=:circle)
+# end
+# savefig(plotsdir("suc2_T.svg"))
 
 begin
-blankplot_hrC(xlim=(0, 20), ylim=(-32, -26), legend=:bottomright)
-@df dat8 exptfplot!(:t, :T1, :T2, :T3, marker=:circle)
+blankplot_hrC(xlim=(0, 45), ylim=(-32, -26), legend=:bottomright)
+# @df dat8 exptfplot!(:t, :T1, :T2, :T3, marker=:circle)
+plot!(fitdat8)
 modconvtplot!(sol8_MC8, sol8_Rp8, labels=["MC" "Pikal"],marker=:circle)
 end
 savefig(plotsdir("suc8_T.svg"))
-
-# Cross-check fits
-sol1_MC2 = gen_sol_constNS_arb(opt_MC2.u, pomc1)[1]
-sol2_MC1 = gen_sol_constNS_arb(opt_MC1.u, pomc2)[1]
 
 # --------------- Fit to Cycle 1 and 2 simultaneously
 
