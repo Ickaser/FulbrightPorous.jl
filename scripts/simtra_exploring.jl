@@ -3,6 +3,7 @@ using DrWatson
 using SavitzkyGolay
 
 const OP = OptimizationProblem
+const NLSP = NonlinearLeastSquaresProblem
 const BFGS = Optim.BFGS
 const LP = LyoPronto
 pythonplot()
@@ -21,7 +22,7 @@ function fitKv(KKK)
     err = @. Kv(pd) - Kvd
     return ustrip(sum(abs2.(err))), Kv
 end
-optKv = solve(NonlinearLeastSquaresProblem((x,p,t)->fitKv(x)[1], [10.0, 1, 1]), LevenbergMarquardt())
+optKv = solve(NLSP((x,p,t)->fitKv(x)[1], [10.0, 1, 1]), LevenbergMarquardt())
 K_shf = fitKv(optKv.u)[2]
 
 # --------------------------
