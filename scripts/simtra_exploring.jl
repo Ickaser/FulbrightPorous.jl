@@ -385,17 +385,19 @@ g18mc = (opt_MC8.u .+ opt_MC1.u)/2
 
 
 
-sol1_MC12, MC1_params12 = gen_sol_constNS_arb(opt12mc.u, pomc1);
-sol2_MC12, MC2_params12 = gen_sol_constNS_arb(opt12mc.u, pomc2);
-sol8_MC12, MC8_params12 = gen_sol_constNS_arb(opt12mc.u, pomc8);
+sol1_MC18  = gen_sol_constNS_arb(opt18mc.u, pomc1);
+sol2_MC18  = gen_sol_constNS_arb(opt18mc.u, pomc2);
+sol8_MC18  = gen_sol_constNS_arb(opt18mc.u, pomc8);
+MC1_params18 = sol1_MC18.prob.p
+MC2_params18 = sol2_MC18.prob.p
+MC8_params18 = sol8_MC18.prob.p
 
-sol1_MC18, MC1_params18 = gen_sol_constNS_arb(opt18mc.u, pomc1);
-sol2_MC18, MC2_params18 = gen_sol_constNS_arb(opt18mc.u, pomc2);
-sol8_MC18, MC8_params18 = gen_sol_constNS_arb(opt18mc.u, pomc8);
-
-sol1_MC128, MC1_params128 = gen_sol_constNS_arb(opt128mc.u, pomc1);
-sol2_MC128, MC2_params128 = gen_sol_constNS_arb(opt128mc.u, pomc2);
-sol8_MC128, MC8_params128 = gen_sol_constNS_arb(opt128mc.u, pomc8);
+sol1_MC128  = gen_sol_constNS_arb(opt128mc.u, pomc1);
+sol2_MC128  = gen_sol_constNS_arb(opt128mc.u, pomc2);
+sol8_MC128  = gen_sol_constNS_arb(opt128mc.u, pomc8);
+MC1_params128 = sol1_MC128.prob.p
+MC2_params128 = sol2_MC128.prob.p
+MC8_params128 = sol8_MC128.prob.p
 
 begin
 pl1 = blankplot_hrC(legend=:bottomright)
