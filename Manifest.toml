@@ -2,7 +2,7 @@
 
 julia_version = "1.11.1"
 manifest_format = "2.0"
-project_hash = "dc7225bf311d484defbef2b59c0d0783f6584384"
+project_hash = "f16e8b4aedced9f284da222ab22a7d48eece93db"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "72af59f5b8f09faee36b4ec48e014a79210f2f4f"
@@ -2136,7 +2136,7 @@ version = "0.6.43"
 
 [[deps.SavitzkyGolay]]
 deps = ["LinearAlgebra"]
-git-tree-sha1 = "95b73ab0d01f880e00c7ee62405aecf8b1d0ed57"
+path = "C:\\Users\\iwheeler\\.julia\\dev\\SavitzkyGolay"
 uuid = "c4bf5708-b6a6-4fbe-bcd0-6850ed671584"
 version = "0.8.0"
 
