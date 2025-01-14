@@ -1,5 +1,6 @@
 using DrWatson
 @quickactivate :FulbrightPores
+using SavitzkyGolay
 
 const OP = OptimizationProblem
 const BFGS = Optim.BFGS
@@ -31,20 +32,28 @@ dat1raw = CSV.read(datadir("exp_raw", "Simtra_Rp", "Suc_Cycle1.csv"), Table)
 dat1 = map(simtra_rename, dat1raw)
 # dat1 = dat1[dat1.T2 .< 250u"K"]
 
-fitdat1 = PrimaryDryFit(collect(dat1.t), (
-    collect(filter(x->(!isnan(x) && x<-32.5u"°C"), dat1.T1)),
-    collect(filter(!isnan, dat1.T2[dat1.t .< 60u"hr"])),
-    # collect(filter(!isnan, dat1.T3)),
-))
+pch1_pir_der2 = savitzky_golay(dat1.pch_pir, 391, 3, deriv=2, rate=1/u"minute").y
+t_end1 = dat1.t[argmax(pch1_pir_der2[10u"hr" .< dat1.t .< 85u"hr"])] + 10u"hr"
 
-plot(fitdat1)
 pch1 = RampedVariable(100u"mTorr")
 @df dat1 plot(:t, :pch_cm, ylim=(0, 200))
+@df dat1 plot(:t, :pch_pir, ylim=(0, 200))
 plot!(pch1)
+tendplot!(t_end1)
+
 # There's a slight delay before shelf temperature ramps
 Tsh1 = RampedVariable(uconvert.(u"K", [-40, -40, -25]u"°C"), [1u"K/minute", 0.5u"K/minute"], [23u"minute"])
 @df dat1 plot(:t, :Tsh, xlim=(0, 2))
 plot!(Tsh1)
+
+fitdat1 = PrimaryDryFit(collect(dat1.t), (
+    collect(filter(x->(!isnan(x) && x<-32.5u"°C"), dat1.T1)),
+    collect(filter(!isnan, dat1.T2[dat1.t .< 60u"hr"])),
+    # collect(filter(!isnan, dat1.T3)),
+    ),
+    t_end1
+)
+plot(fitdat1)
 
 # ------------------------------
 # Cycle 2
@@ -59,15 +68,21 @@ begin
 plot!(ylim=(-40, -30))
 end
 
+pch2_pir_der2 = savitzky_golay(dat2.pch_pir, 391, 3, deriv=2, rate=1/u"minute").y
+t_end2 = dat2.t[argmax(pch2_pir_der2[10u"hr" .< dat2.t .< 120u"hr"])] + 10u"hr"
+pch2 = RampedVariable(100u"mTorr")
+@df dat2 plot(:t, :pch_cm, ylim=(0, 200))
+@df dat2 plot(:t, :pch_pir, ylim=(0, 200))
+plot!(pch2)
+tendplot!(t_end2)
+
 fitdat2 = @df dat2 PrimaryDryFit(collect(:t), (
     # collect(filter(!isnan, :T1)),
     collect(filter(!isnan, :T2[:t .< 85u"hr"])),
-    collect(filter(!isnan, :T3)),))
+    collect(filter(!isnan, :T3)),),
+    t_end2)
 plot(fitdat2)
 
-pch2 = RampedVariable(100u"mTorr")
-@df dat2 plot(:t, :pch_cm, ylim=(0, 200))
-plot!(pch2)
 Tsh2 = Tsh1 - 5u"K"
 @df dat2 plot(:t, :Tsh, xlim=(0, 2))
 plot!(Tsh2)
@@ -106,9 +121,14 @@ dat8 = map(simtra_rename, dat8raw)
 @df dat8 exptfplot(:t, :T1, :T2, :T3)
 @df dat8 plot!(:t, :Tsh_i, xlim=(0, 20), ylim=(-40, -20))
 
+pch8_pir_der2 = savitzky_golay(dat8.pch_pir, 391, 3, deriv=2, rate=1/u"minute").y
+t_end8 = dat8.t[argmax(pch8_pir_der2[10u"hr" .< dat8.t .< 41u"hr"])] + 10u"hr"
 pch8 = RampedVariable(100u"mTorr")
 @df dat8 plot(:t, :pch_cm, ylim=(0, 200))
+@df dat8 plot(:t, :pch_pir, ylim=(0, 200))
 plot!(pch8)
+tendplot!(t_end8)
+
 Tsh8 = RampedVariable(uconvert.(u"K", [-40, -40, -10]u"°C"), [1u"K/minute", 0.5u"K/minute"], [4u"minute"])
 @df dat8 plot(:t, :Tsh_i, xlim=(0, 2))
 plot!(Tsh8)
@@ -116,7 +136,8 @@ plot!(Tsh8)
 fitdat8 = @df dat8 PrimaryDryFit(collect(:t), (
     collect(filter(!isnan, :T1)),
     collect(filter(!isnan, :T2[:t .< 17u"hr"])),
-    collect(filter(!isnan, :T3[:t .< 17u"hr"])),))
+    collect(filter(!isnan, :T3[:t .< 17u"hr"])),),
+    t_end8)
 plot(fitdat8)
 
 
