@@ -178,13 +178,13 @@ function gen_sol_Rp(a123, po)
     new_params = @set po.Rp = RpFormFit((a123.*Rp_un)...)
     prob = ODEProblem(new_params; tspan=(0.0, 1000.0))
     sol = solve(prob, Rodas3())
-    return sol, new_params
+    return sol
 end
 function obj_Rp(x, p)
     if any(x .< 0)
         return NaN
     end
-    sol, _ = gen_sol_Rp(x, p[1])
+    sol = gen_sol_Rp(x, p[1])
     return obj_expT(sol, p[2], tweight=1e-4)
 end
 obj_Rpf = OptimizationFunction(obj_Rp, AutoForwardDiff())
@@ -193,7 +193,7 @@ obj_Rpf = OptimizationFunction(obj_Rp, AutoForwardDiff())
 
 @time opt_Rp1 = solve(OP(obj_Rpf, [0.8, 90, 1], (pop1, fitdat1)),alg, g_tol = 1e-3)
 
-sol1_Rp1, Rp1_params = gen_sol_Rp(opt_Rp1.u, pop1);
+sol1_Rp1 = gen_sol_Rp(opt_Rp1.u, pop1);
 # plot(u"hr", u"°C", xlim=(0, 60), ylim=(-40, -30))
 blankplot_hrC(ylim=(-40, -30))
 modconvtplot!(sol1_Rp1)
@@ -292,8 +292,11 @@ opt2p = solve(OP(obj_Rpf, opt_Rp1.u, (pop2, fitdat2)), alg; g_tol=1e-3)
 opt8p = solve(OP(obj_Rpf, opt_Rp1.u, (pop8, fitdat8)), alg; g_tol=1e-3)
 @time opt_MC8 = solve(OP(obj_MCf, opt_MC1.u, (pomc8, fitdat8), lb=lb_MC, ub=ub_MC), alg; show_trace=true, g_tol=1e-2)
 
-sol2_Rp2, Rp2_params = gen_sol_Rp(opt2p.u, pop2);
-sol8_Rp8, Rp8_params = gen_sol_Rp(opt8p.u, pop8);
+sol2_Rp2 = gen_sol_Rp(opt2p.u, pop2);
+sol8_Rp8 = gen_sol_Rp(opt8p.u, pop8);
+Rp1_params = sol1_Rp1.prob.p
+Rp2_params = sol2_Rp2.prob.p
+Rp8_params = sol8_Rp8.prob.p
 # sol2_MC2, MC2_params = gen_sol_constNS_arb(opt_MC2.u, pomc2);
 sol8_MC8 = gen_sol_constNS_arb(opt_MC8.u, pomc8);
 MC8_params = sol8_MC8.prob.p
@@ -324,10 +327,10 @@ savefig(plotsdir("suc8_T.svg"))
 # --------------- Fit to Cycle 1 and 2 simultaneously
 
 function gennsol_Rp(fitprm, pos)
-    rets = map(pos) do po
+    sols = map(pos) do po
         gen_sol_Rp(fitprm, po)
     end
-    return [ret[1] for ret in rets], [ret[2] for ret in rets]
+    return sols
 end
 function objn_Rp(fitprm, pfs)
     if any(fitprm .< 0)
@@ -347,12 +350,13 @@ pass128p = ([pop1, pop2, pop8], [fitdat1, fitdat2, fitdat8])
 @time opt18p = solve(OP(obj_npf, opt_Rp1.u, pass18p), alg; g_tol=1e-2, show_trace=true)
 @time opt128p = solve(OP(obj_npf, opt_Rp1.u, pass128p), alg; g_tol=1e-2)
 
-sol1_Rp18, Rp1_params18 = gen_sol_Rp(opt18p.u, pop1);
-sol2_Rp18, Rp2_params18 = gen_sol_Rp(opt18p.u, pop2);
-sol8_Rp18, Rp8_params18 = gen_sol_Rp(opt18p.u, pop8);
-sol1_Rp128, Rp1_params128 = gen_sol_Rp(opt128p.u, pop1);
-sol2_Rp128, Rp2_params128 = gen_sol_Rp(opt128p.u, pop2);
-sol8_Rp128, Rp8_params128 = gen_sol_Rp(opt128p.u, pop8);
+sol1_Rp18 = gen_sol_Rp(opt18p.u, pop1);
+sol2_Rp18 = gen_sol_Rp(opt18p.u, pop2);
+sol8_Rp18 = gen_sol_Rp(opt18p.u, pop8);
+sol1_Rp128 = gen_sol_Rp(opt128p.u, pop1);
+sol2_Rp128 = gen_sol_Rp(opt128p.u, pop2);
+sol8_Rp128 = gen_sol_Rp(opt128p.u, pop8);
+Rp1_params18 = sol1_Rp18.prob.p
 
 function gennsol_constNS(fitprm, pos)
     sols = map(pos) do po
@@ -800,9 +804,9 @@ po_PBM3 = deepcopy(playprms18[1])
 sol3_PBM18 = solve(ODEProblem(po_PBM3), Rodas3());
 
 fitdat3 = @df dat3 PrimaryDryFit(:t, (filter(!isnan, :T1), filter(!isnan, :T2), :T3[:t.<45u"hr"]))
-obj3p = x->obj_expT(gen_sol_Rp(x, pop3)[1], fitdat3)
+obj3p = x->obj_expT(gen_sol_Rp(x, pop3), fitdat3)
 opt3p = optimize(obj3p, opt_Rp1.u, NelderMead(), Optim.Options(g_tol = 1e-3, time_limit=15))
-Rp3 = gen_sol_Rp(opt3p.u, pop3)[2].Rp
+Rp3 = gen_sol_Rp(opt3p.u, pop3).prob.p.Rp
 
 pop5 = deepcopy(Rp1_params18)
 @reset pop5.pch = pch5
@@ -815,9 +819,9 @@ sol5_PBM18 = solve(ODEProblem(po_PBM5), Rodas3());
 
 fitdat5 = @df dat5 PrimaryDryFit(:t, (filter(!isnan, :T1), filter(!isnan, :T3), :T2[:t.<40u"hr"]))
 plot(fitdat5)
-obj5p = x->obj_expT(gen_sol_Rp(x, pop5)[1], fitdat5)
+obj5p = x->obj_expT(gen_sol_Rp(x, pop5), fitdat5)
 opt5p = optimize(obj5p, opt_Rp1.u, NelderMead(), Optim.Options(g_tol = 1e-3, time_limit=15))
-Rp5 = gen_sol_Rp(opt5p.u, pop5)[2].Rp
+Rp5 = gen_sol_Rp(opt5p.u, pop5).prob.p.Rp
 
 # Training plot
 begin
