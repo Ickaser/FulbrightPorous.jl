@@ -174,7 +174,7 @@ pop8 = deepcopy(pop1)
 const Rp_un = (u"cm^2*Torr*hr/g", u"cm*Torr*hr/g", u"1/cm")
 function gen_sol_Rp(a123, po)
     new_params = @set po.Rp = RpFormFit((a123.*Rp_un)...)
-    prob = ODEProblem(new_params)
+    prob = ODEProblem(new_params; tspan=(0.0, 1000.0))
     sol = solve(prob, Rodas3())
     return sol, new_params
 end
@@ -252,7 +252,7 @@ function gen_sol_constNS_arb(fitprmlog, po; verbose=false)
     spll = LinearInterpolation(klogs, Tstops, extrapolate=true)
     spl(T) = exp(spll(T))*fit_un_arb[5]
     @reset new_params.k_f = spl
-    prob = ODEProblem(new_params)
+    prob = ODEProblem(new_params; tspan=(0.0, 1000.0))
     sol = solve(prob, Rodas3())
     return sol
 end
