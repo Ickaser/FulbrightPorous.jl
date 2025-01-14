@@ -401,15 +401,15 @@ MC8_params128 = sol8_MC128.prob.p
 
 begin
 pl1 = blankplot_hrC(legend=:bottomright)
-@df dat1 exptfplot!(:t, :T1, :T2, :T3, markershape=:circle)
-# plot!(fitdat1)
-plot!(xlim=(0, 70), ylim=(-36, -31), )
-modconvtplot!(sol1_MC18, sol1_Rp18, labels=["MC" "Pikal"], markershape=:circle)
+# @df dat1 exptfplot!(:t, :T1, :T2, :T3, markershape=:circle)
+plot!(fitdat1)
+plot!(xlim=(0, 100), ylim=(-36, -31), )
+modconvtplot!(sol1_MC18, sol1_Rp18, labels=["MC" "Pikal"], markeralpha=0)
 pl8 = blankplot_hrC(legend=:bottomright)
-@df dat8 exptfplot!(:t, :T1, :T2, :T3, markershape=:square)
-# plot!(fitdat2)
-modconvtplot!(sol8_MC18, sol8_Rp18, labels=["MC" "Pikal"], markershape=:square)
-plot!(xlim=(0, 25), ylim=(-32, -26), )
+# @df dat8 exptfplot!(:t, :T1, :T2, :T3, markershape=:square)
+plot!(fitdat8, markershap=:square)
+modconvtplot!(sol8_MC18, sol8_Rp18, labels=["MC" "Pikal"], markeralpha=0)
+plot!(xlim=(0, 45), ylim=(-32, -26), )
 
 plot(pl1, pl8, layout=(2,1), legend=:outerright)
 end
