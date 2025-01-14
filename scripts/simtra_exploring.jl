@@ -447,8 +447,8 @@ klogs128 = log.(ustrip.(u"s^-1", kstops128))
 Tcheck = range(extrema(Tstops)..., length=50)
 plot(Tstops, kstops18, yscale=:log10)
 plot!(Tstops, kstops128, yscale=:log10)
-plot!(MC8_params18.k_f, yscale=:log10)
-plot!(MC8_params.k_f, yscale=:log10)
+plot!(Tstops, MC1_params.k_f, yscale=:log10)
+plot!(Tstops, MC8_params.k_f, yscale=:log10)
 
 # Willams Landel Ferry temparature dependence:...
 function k_wlf(T, p)
@@ -478,36 +478,51 @@ plot!(Tstops,  kstops128, yscale=:log10)
 
 # ------------------------
 # MYEGA temparature dependence of viscosity
-function k_myega(T, p)
-    k0, K, C = p
-    # @info "check" K/T C/T K/T*exp(C/T)
-    return k0*exp((-K/T)*exp(C/T))
+struct MYEGA_k
+    k0
+    K
+    C
 end
-myega_un = [u"s^-1", u"K", u"K"]
+MYEGA_k(a) = MYEGA_k(a...)
+MYEGA_k = MYEGA_k
+(mk::MYEGA_k)(T) = mk.k0*exp((-mk.K/T)*exp(mk.C/T))
+function k_myega(T, p)
+    return MYEGA_k(p)(T)
+end
+
+myega_un = (u"s^-1", u"K", u"K")
+# p0_myega = [1e10, 800, 650]
+myega_mult = (1e5u"s^-1", 800u"K", 600u"K")
+p0_myega = [1.0, 1, 1]
 function obj_myega(p, _)
     if p[1] < 0 #|| p[2] < 100 #|| p[3] < 100 
         return NaN
     end
-    ks = k_myega.(Tstops, [p.*myega_un])
-    # @info "checkobj" ks p
-    sum(abs2.(log.(ustrip.(u"s^-1", ks)) - klogs18))
-    # log.(ustrip.(u"s^-1", ks)) - klogs18
+    mk = MYEGA_k(p.*myega_mult)
+    ks = mk.(Tstops)
+    logks = log.(ustrip.(u"s^-1", ks))
+    # @info mk logks klogs18
+    return sum(abs2.(logks .- klogs18))
 end
-p0_myega = [1e10, 2e4, 2]
+objf_myega = OptimizationFunction(obj_myega, AutoForwardDiff())
 obj_myega(p0_myega, nothing)
-# opt_myega = solve(NLSP(obj_myega, p0_myega), TR())
-opt_myega = optimize(x->obj_myega(x,nothing), p0_myega, NelderMead())
-myega_p = Optim.minimizer(opt_myega)
-plot(Tcheck,  k_myega.(Tcheck, [myega_p.*myega_un]))
-plot!(Tstops,  kstops12, yscale=:log10)
-plot!(Tstops,  kstops18, yscale=:log10)
 
-myega_params1 = @set MC1_params128.k_f = T->k_myega(T, myega_p.*myega_un)
-myega_params2 = @set MC2_params128.k_f = T->k_myega(T, myega_p.*myega_un)
-myega_params8 = @set MC8_params128.k_f = T->k_myega(T, myega_p.*myega_un)
-sol1_myega = solve(ODEProblem(myega_params1), Rodas3(autodiff=true))
-sol2_myega = solve(ODEProblem(myega_params2), Rodas3(autodiff=true))
-sol8_myega = solve(ODEProblem(myega_params8), Rodas3(autodiff=true))
+# opt_myega = solve(NLSP(obj_myega, p0_myega), TR())
+opt_myega = solve(OP(objf_myega, p0_myega, lb=fill(0.0, 3), ub=fill(Inf, 3)), BFGS())
+myega_p = (opt_myega.u .* myega_mult)
+mk = MYEGA_k(myega_p)
+mkt = MYEGA_k(myega_mult)
+plot(Tcheck,  mk.(Tcheck))
+plot!(Tcheck,  mkt.(Tcheck))
+plot!(Tstops,  kstops18, yscale=:log10)
+plot!(Tstops,  kstops128, yscale=:log10)
+
+myega_params1 = @set MC1_params128.k_f = mk
+myega_params2 = @set MC2_params128.k_f = mk
+myega_params8 = @set MC8_params128.k_f = mk
+sol1_myega = solve(ODEProblem(myega_params1), Rodas3())
+sol2_myega = solve(ODEProblem(myega_params2, tspan=(0.0, 1000.0)), Rodas3())
+sol8_myega = solve(ODEProblem(myega_params8), Rodas3())
 begin
 pl1 =modconvtplot(sol1_myega)
 plot!(fitdat1)
@@ -518,64 +533,83 @@ plot!(fitdat8)
 plot(pl1, pl2, pl3)
 end
 
-fit_un_myega = [u"cm^-1", u"cm^5", u"m^0.5", u"m/s", u"s^-1", u"K", u"K"]
-function gen_sol_constNS_myega(fitprmlog, po; verbose=false)
+fit_un_myega = (u"cm^-1", u"cm^5", u"m^0.5", u"m/s", u"s^-1", u"K", u"K")
+fit_mult_myega = (myega_params1.N(0), myega_params1.S(0), myega_params1.C, myega_params1.Rs, myega_p...)
+function gen_sol_constNS_myega(fitprm, po; verbose=false)
     new_params = deepcopy(po)
-    fitprm = exp.(fitprmlog) # Constrain all to be positive by taking exp
-    verbose && @info "fitprm" fitprm
-    @reset new_params.N = RampedVariable(fitprm[1]*fit_un_myega[1])
-    @reset new_params.S = RampedVariable(fitprm[2]*fit_un_myega[2])
-    @reset new_params.C  = fitprm[3]*fit_un_myega[3]
-    @reset new_params.R0 = fitprm[4]*fit_un_myega[4]
-    @reset new_params.k_f = T->k_myega(T, fitprm[5:7].*fit_un_myega[5:7])
-    prob = ODEProblem(new_params)
+    # fitprm = exp.(fitprmlog)
+    @reset new_params.N = RampedVariable(fitprm[1]*fit_mult_myega[1])
+    @reset new_params.S = RampedVariable(fitprm[2]*fit_mult_myega[2])
+    @reset new_params.C  = fitprm[3]*fit_mult_myega[3]
+    @reset new_params.Rs = fitprm[4]*fit_mult_myega[4]
+    @reset new_params.k_f = MYEGA_k(fitprm[5:7].*fit_mult_myega[5:7])
+    verbose && @info "fitprm" fitprm new_params
+    prob = ODEProblem(new_params, tspan=1000.0)
     sol = solve(prob, Rodas3(autodiff=true))
-    return sol, new_params
+    return sol
 end
-function gennsol_constNS_myega(fitprmlog, pos)
-    rets = map(pos) do po
-        gen_sol_constNS_myega(fitprmlog, po)
+function gennsol_constNS_myega(fitprm, pos)
+    sols = map(pos) do po
+        gen_sol_constNS_myega(fitprm, po)
     end
-    return [ret[1] for ret in rets], [ret[2] for ret in rets]
+    return sols
 end
-function objnmyega(fitprmlog, pfs; verbose=true)
+function objnmyega(fitprm, pfs; verbose=false)
     pos, fitdats = pfs
-    verbose && @info "fitprm" exp.(fitprmlog)
-    sols, prms = gennsol_constNS_myega(fitprmlog, pos)
+    # verbose && @info "fitprm" fitprm
+    sols = gennsol_constNS_myega(fitprm, pos)
     if any([sol.retcode != ReturnCode.Terminated for sol in sols])
-        verbose && @info "unfinished drying" [sol.retcode for sol in sols]
-        return NaN
+        if verbose
+            for sol in sols 
+                if sol.retcode != ReturnCode.Terminated
+                    @info "unfinished drying" sol[1,end] fitprm 
+                end
+            end
+        end
+        # verbose && @info "unfinished drying" [sol for 
+        # return NaN
     end
     objs = map(sols, fitdats) do sol, fitdat
         obj_expT(sol, fitdat, tweight=0)
     end
-    verbose && @info "obj" objs
+    verbose && @info "obj" objs fitprm 
     return sum(objs)
 end
-obj128myega(x) = objnmyega(x, [MC1_params12, MC2_params12, MC8_params128], [fitdat1, fitdat2, fitdat8])
-p0_myegafitlog = [opt128mc.u[1:4]..., log.(myega_p)...]
-@time obj128myega(p0_myegafitlog)
-opt128myega = optimize(obj128myega, p0_myegafitlog, NelderMead(), Optim.Options(g_tol = 1e-3))
-obj18myega(x) = objnmyega(x, [MC1_params12, MC8_params128], [fitdat1, fitdat8])
-opt18myega = optimize(obj18myega, p0_myegafitlog, NelderMead(), Optim.Options(g_tol = 1e-3))
-@time obj128myega(opt128myega.u)
-@time obj18myega(opt18myega.u)
+p0_myegafit = fill(1.0, 7)
+@time objnmyega(p0_myegafit, pass128, verbose=true)
 
-sol1_myega18, myega1_params18 = gen_sol_constNS_myega(opt18myega.u, MC1_params18);
-sol8_myega18, myega8_params18 = gen_sol_constNS_myega(opt18myega.u, MC8_params18);
+objnf_myega = OptimizationFunction(objnmyega, AutoForwardDiff())
+pass128 = ([MC1_params128, MC2_params128, MC8_params128], [fitdat1, fitdat2, fitdat8]);
+pass18 = ([MC1_params128, MC8_params128], [fitdat1, fitdat8]);
+
+lb_myega = fill(0.0, 7)
+ub_myega = fill(Inf, 7)
+
+# Needs a maxiters, because the gradients have wildly different dimensions
+@time opt18myega = solve(OP(objnf_myega, p0_myegafit, pass18), alg, g_tol=1e-2, maxiters=200)
+# @time opt18myega = solve(OP(objnf_myega, p0_myegafit, pass18, lb=lb_myega, ub=ub_myega), alg, g_tol=1e-2, show_trace=true, maxiters=2)
+# @time opt128myega = solve(OP(objnf_myega, p0_myegafit, pass128, lb=lb_myega, ub=ub_myega), alg, g_tol=1e-2, show_trace=true)
+
+sol1_myega18  = gen_sol_constNS_myega(opt18myega.u, MC1_params18);
+sol2_myega18  = gen_sol_constNS_myega(opt18myega.u, MC2_params18);
+sol8_myega18  = gen_sol_constNS_myega(opt18myega.u, MC8_params18);
+# sol1_myega128 = gen_sol_constNS_myega(opt128myega.u, MC1_params18);
+# sol2_myega128 = gen_sol_constNS_myega(opt128myega.u, MC2_params18);
+# sol8_myega128 = gen_sol_constNS_myega(opt128myega.u, MC8_params18);
 
 begin
+markers = [:square :circle :utriangle]
 pl1 = blankplot_hrC(legend=:bottomright)
 @df dat1 exptfplot!(:t, :T1, :T2, :T3, markershape=markers)
 plot!(title="Cycle 1, Tsh = $(Tsh1(Inf*u"s")|>u"°C")")
-plot!(xlim=(0, 70), ylim=(-36, -31), )
-modconvtplot!(sol1_myega18, sol1_Rp18, labels=["MC" "Pikal"], markeralpha=0)
+plot!(xlim=(0, 100), ylim=(-36, -31), )
+modconvtplot!(sol1_myega, sol1_Rp18, labels=["MC" "Pikal"], markeralpha=0)
 
 pl8 = blankplot_hrC(legend=:bottomright)
 @df dat8 exptfplot!(:t, :T1, :T2, :T3, markershape=markers)
 # plot!(fitdat8)
-modconvtplot!(sol8_myega18, sol8_Rp18, labels=["MC" "Pikal"], markeralpha=0)
-plot!(xlim=(0, 25), ylim=(-32, -26))
+modconvtplot!(sol8_myega, sol8_Rp18, labels=["MC" "Pikal"], markeralpha=0)
+plot!(xlim=(0, 45), ylim=(-32, -26))
 plot!(title="Tsh = $(Tsh8(Inf*u"s")|>u"°C")")
 plot(pl1, pl8, layout=(2,1), size=(600, 500), legend=:outerright)
 end
