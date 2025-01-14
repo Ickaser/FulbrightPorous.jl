@@ -189,18 +189,54 @@ function obj_Rp(x, p)
 end
 obj_Rpf = OptimizationFunction(obj_Rp, AutoForwardDiff())
 @time obj_Rpf([0.8, 90, 10], (pop8, fitdat8))
+
+function gennsol_Rp(fitprm, pos)
+    return [gen_sol_Rp(fitprm, po) for po in pos]
+end
+function objn_Rp(fitprm, pfs)
+    if any(fitprm .< 0)
+        return NaN
+    end
+    pos, fitdats = pfs
+    sols = gennsol_Rp(fitprm, pos)
+    objs = map(sols, fitdats) do sol, fitdat
+        obj_expT(sol, fitdat, tweight=1e-3)
+    end
+    return sum(objs)
+end
+obj_npf = OptimizationFunction(objn_Rp, AutoForwardDiff())
 # @time ForwardDiff.gradient(x->obj_Rpf(x, (pop8, fitdat8)), [0.8, 90, 1])
 
 @time opt_Rp1 = solve(OP(obj_Rpf, [0.8, 90, 1], (pop1, fitdat1)),alg, g_tol = 1e-3)
+opt2p = solve(OP(obj_Rpf, opt_Rp1.u, (pop2, fitdat2)), alg; g_tol=1e-3)
+opt8p = solve(OP(obj_Rpf, opt_Rp1.u, (pop8, fitdat8)), alg; g_tol=1e-3)
 
 sol1_Rp1 = gen_sol_Rp(opt_Rp1.u, pop1);
+sol2_Rp2 = gen_sol_Rp(opt2p.u, pop2);
+sol8_Rp8 = gen_sol_Rp(opt8p.u, pop8);
 # plot(u"hr", u"°C", xlim=(0, 60), ylim=(-40, -30))
 blankplot_hrC(ylim=(-40, -30))
 modconvtplot!(sol1_Rp1)
 # @df dat1 exptfplot!(:t, :T1, :T2, :T3)
 plot!(fitdat1)
 
-# -------------- Provide guess values for new parameters
+pass18p =  ([pop1, pop2], [fitdat1, fitdat2]);
+pass128p = ([pop1, pop2, pop8], [fitdat1, fitdat2, fitdat8])
+@time opt18p = solve(OP(obj_npf, opt_Rp1.u, pass18p), alg; g_tol=1e-2, show_trace=true)
+@time opt128p = solve(OP(obj_npf, opt_Rp1.u, pass128p), alg; g_tol=1e-2)
+
+sol1_Rp18 = gen_sol_Rp(opt18p.u, pop1);
+sol2_Rp18 = gen_sol_Rp(opt18p.u, pop2);
+sol8_Rp18 = gen_sol_Rp(opt18p.u, pop8);
+sol1_Rp128 = gen_sol_Rp(opt128p.u, pop1);
+sol2_Rp128 = gen_sol_Rp(opt128p.u, pop2);
+sol8_Rp128 = gen_sol_Rp(opt128p.u, pop8);
+Rp1_params18 = sol1_Rp18.prob.p
+Rp1_params = sol1_Rp1.prob.p
+Rp2_params = sol2_Rp2.prob.p
+Rp8_params = sol8_Rp8.prob.p
+
+# -------------- Set up parameters
 
 # typical diameter: 50 μm
 d_typical = 50u"μm"
@@ -220,15 +256,13 @@ Rs = 0.05u"cm^2*Torr*hr/g"
 # C = 2e2u"m"
 # Rs = 0.01u"cm^2*Torr*hr/g"
 
-k0 = 1e-16u"1/s"
-E = u"R"*Tsh1(0u"s")
-kf_g = T->k0*exp(-E/(R*T))
+k0 = 1e-14u"1/s"
 
 pb_mc = (
     (Rp_g, hf0, c_solid, ρ_solution),
     (K_shf, A_v, A_p),
     (pch1, Tsh1),
-    (kf_g, C, N, S, Rs)
+    (ConstPhysProp(k0), C, N, S, Rs)
 )
 pomc1 = ParamObjMC(pb_mc)
 pomc2 = deepcopy(pomc1)
@@ -238,13 +272,10 @@ pomc8 = deepcopy(pomc1)
 @reset pomc8.pch = pch8
 @reset pomc8.Tsh = Tsh8
 
-const fit_un_arb = (u"cm^-1", u"cm^5", u"m^0.5", u"m/s", fill(u"s^-1", 4)...)
 # const fit_un_mult = (u"cm^-1", u"cm^5", u"m^0.5", u"m/s", fill(u"s^-1", 4)...)
-fit_un_mult = (N(0), S(0), C, Rs, k0, k0, k0, k0)
-fitguess = vcat(fill(1.0, 4), -1, 1, 5, 10)
-# fitguesslog = log.(fitguess)
-Tstops = [-45.0, -38, -32, -28]u"°C" .|> u"K"
-function gen_sol_constNS_arb(fitprm, po; verbose=false)
+const fit_mul_porous = (N(0), S(0), C, Rs)
+const fit_un_interp = (fill(u"s^-1", 4)...)
+function gen_sol_constNS_arb(fitprm, po, k_f_gen; verbose=false)
     new_params = deepcopy(po)
     # fitprm = exp.(fitprmlog) # Constrain all to be positive by taking exp
     verbose && @info "fitprm" fitprm
@@ -252,56 +283,56 @@ function gen_sol_constNS_arb(fitprm, po; verbose=false)
     @reset new_params.S = RampedVariable(fitprm[2]*fit_un_mult[2])
     @reset new_params.C  = fitprm[3]*fit_un_mult[3]
     @reset new_params.Rs = fitprm[4]*fit_un_mult[4]
-    # Lin interp in log space
-    # klogs = fitprmlog[5:8]
-    # klogs = log.(fitprm[5:8])
-    klogs = fitprm[5:8]
-    spll = LinearInterpolation(klogs, Tstops, extrapolate=true)
-    spl(T) = exp(spll(T))*fit_un_mult[5]
-    # spl = LinearInterpolation(exp.(fitprm[5:8]).*fit_un_mult[5:8], Tstops, extrapolate=true)
-    @reset new_params.k_f = spl
+    @reset new_params.k_f = k_f_gen(fitprm[5:end])
     prob = ODEProblem(new_params; tspan=(0.0, 1000.0))
     sol = solve(prob, Rodas3())
     return sol
 end
+function gennsol_constNS(fitprm, pos, k_f_gen)
+    sols = map(pos) do po
+        gen_sol_constNS_arb(fitprm, po, k_f_gen)
+    end
+    return sols
+end
 
-function obj_MC(x,p)
-    ks = x[5:8].*fit_un_mult[5]
+# -----------------------------
+# Fit k by interpolating at four values
+Tstops = [-45.0, -38, -32, -28]u"°C" .|> u"K"
+fit_mul_interp = (k0, k0, k0)
+function k_f_interp(logk)
+    # Lin interp in log space
+    spll = LinearInterpolation(logk, Tstops, extrapolate=true)
+    spl(T) = exp(spll(T))*fit_mul_interp
+    # spl = LinearInterpolation(exp.(logk).*fit_un_interp, Tstops, extrapolate=true)
+end
+function obj_interp(x,p)
+    ks = x[5:8]
     if ~(ks[1] <= ks[2] <= ks[3] <= ks[4])
         return NaN
     end
-    sol, _ = gen_sol_constNS_arb(x, p[1])
+    sol, _ = gen_sol_constNS_arb(x, p[1], k_f_interp)
     return obj_expT(sol, p[2], tweight=0)
 end
-obj_MCf = OptimizationFunction(obj_MC, AutoForwardDiff())
+function obj_ninterp(fitprm, pfs; verbose=false)
+    pos, fitdats = pfs
+    if ~(fitprm[5] < fitprm[6] < fitprm[7] < fitprm[8])
+        return NaN
+    end
+    sols = gennsol_constNS(fitprm, pos, k_f_interp)
+    objs = map(sols, fitdats) do sol, fitdat
+        obj_expT(sol, fitdat, tweight=1e-3)
+    end
+    return sum(objs)
+end
+objf_interp = OptimizationFunction(obj_interp, AutoForwardDiff())
+objnf_interp = OptimizationFunction(obj_ninterp, AutoForwardDiff())
 lb_MC = vcat(fill(0.0, 4), fill(-20., 4))
 ub_MC = vcat(fill(Inf, 4), fill(20., 4))
 
 @time opt_MC1 = solve(OP(obj_MCf, fitguess, (pomc1, fitdat1), lb=lb_MC, ub=ub_MC), alg;show_trace=true, g_tol = 1e-2, maxtime=10)
 
-sol1_MC1 = gen_sol_constNS_arb(opt_MC1.u, pomc1);
+sol1_MC1 = gen_sol_constNS_arb(opt_MC1.u, pomc1, k_f_interp);
 MC1_params1 = sol1_MC1.prob.p
-
-
-# ------ Fit to Cycle 2 and Cycle 8 data separately
-
-opt2p = solve(OP(obj_Rpf, opt_Rp1.u, (pop2, fitdat2)), alg; g_tol=1e-3)
-# opt_MC2 = solve(OP(obj_MCf, opt_MC1.u, (pomc2, fitdat2)), BFGS(); g_tol=1e-3)
-
-# opt_MC8 = solve(NLSP(obj_MC, opt_MC1.u, (pomc8, fitdat8)), TR(); maxiters=200)
-opt8p = solve(OP(obj_Rpf, opt_Rp1.u, (pop8, fitdat8)), alg; g_tol=1e-3)
-@time opt_MC8 = solve(OP(obj_MCf, opt_MC1.u, (pomc8, fitdat8), lb=lb_MC, ub=ub_MC), alg; show_trace=true, g_tol=1e-2)
-
-sol2_Rp2 = gen_sol_Rp(opt2p.u, pop2);
-sol8_Rp8 = gen_sol_Rp(opt8p.u, pop8);
-Rp1_params = sol1_Rp1.prob.p
-Rp2_params = sol2_Rp2.prob.p
-Rp8_params = sol8_Rp8.prob.p
-# sol2_MC2, MC2_params = gen_sol_constNS_arb(opt_MC2.u, pomc2);
-sol8_MC8 = gen_sol_constNS_arb(opt_MC8.u, pomc8);
-MC8_params = sol8_MC8.prob.p
-
-# ----------- Plot separately
 begin
 plot(u"hr", u"°C", xlim=(0, 120), ylim=(-36, -31), legend=:bottomright)
 @df dat1 exptfplot!(:t, :T1, :T2, :T3, marker=:square)
@@ -309,13 +340,11 @@ modconvtplot!(sol1_MC1, sol1_Rp1, labels=["MC" "Pikal"],marker=:square)
 end
 savefig(plotsdir("suc1_T.svg"))
 
-# begin
-# plot(u"hr", u"°C", xlim=(0, 125), ylim=(-36, -32), legend=:bottomright)
-# @df dat2 exptfplot!(:t, :T1, :T2, :T3, marker=:circle)
-# modconvtplot!(sol2_MC2, sol2_Rp2, labels=["MC" "Pikal"],marker=:circle)
-# end
-# savefig(plotsdir("suc2_T.svg"))
 
+@time opt_MC8 = solve(OP(obj_MCf, opt_MC1.u, (pomc8, fitdat8), lb=lb_MC, ub=ub_MC), alg; show_trace=true, g_tol=1e-2)
+
+sol8_MC8 = gen_sol_constNS_arb(opt_MC8.u, pomc8, k_f_interp);
+MC8_params = sol8_MC8.prob.p
 begin
 blankplot_hrC(xlim=(0, 45), ylim=(-32, -26), legend=:bottomright)
 # @df dat8 exptfplot!(:t, :T1, :T2, :T3, marker=:circle)
@@ -324,121 +353,75 @@ modconvtplot!(sol8_MC8, sol8_Rp8, labels=["MC" "Pikal"],marker=:circle)
 end
 savefig(plotsdir("suc8_T.svg"))
 
-# --------------- Fit to Cycle 1 and 2 simultaneously
-
-function gennsol_Rp(fitprm, pos)
-    sols = map(pos) do po
-        gen_sol_Rp(fitprm, po)
-    end
-    return sols
-end
-function objn_Rp(fitprm, pfs)
-    if any(fitprm .< 0)
-        return NaN
-    end
-    pos, fitdats = pfs
-    sols, prms = gennsol_Rp(fitprm, pos)
-    objs = map(sols, fitdats) do sol, fitdat
-        obj_expT(sol, fitdat, tweight=1e-3)
-    end
-    return sum(objs)
-end
-obj_npf = OptimizationFunction(objn_Rp, AutoForwardDiff())
-
-pass18p =  ([pop1, pop2], [fitdat1, fitdat2]);
-pass128p = ([pop1, pop2, pop8], [fitdat1, fitdat2, fitdat8])
-@time opt18p = solve(OP(obj_npf, opt_Rp1.u, pass18p), alg; g_tol=1e-2, show_trace=true)
-@time opt128p = solve(OP(obj_npf, opt_Rp1.u, pass128p), alg; g_tol=1e-2)
-
-sol1_Rp18 = gen_sol_Rp(opt18p.u, pop1);
-sol2_Rp18 = gen_sol_Rp(opt18p.u, pop2);
-sol8_Rp18 = gen_sol_Rp(opt18p.u, pop8);
-sol1_Rp128 = gen_sol_Rp(opt128p.u, pop1);
-sol2_Rp128 = gen_sol_Rp(opt128p.u, pop2);
-sol8_Rp128 = gen_sol_Rp(opt128p.u, pop8);
-Rp1_params18 = sol1_Rp18.prob.p
-
-function gennsol_constNS(fitprm, pos)
-    sols = map(pos) do po
-        gen_sol_constNS_arb(fitprm, po)
-    end
-    return sols
-end
-function objnmc(fitprm, pfs; verbose=false)
-    pos, fitdats = pfs
-    if ~(fitprm[5] < fitprm[6] < fitprm[7] < fitprm[8])
-        return NaN
-    end
-    sols = gennsol_constNS(fitprm, pos)
-    objs = map(sols, fitdats) do sol, fitdat
-        obj_expT(sol, fitdat, tweight=1e-3)
-    end
-    return sum(objs)
-end
-# obj12mc(x) = objnmc(x, [pomc1, pomc2], [fitdat1, fitdat2])
-# obj18mc(x) = objnmc(x, [pomc1, pomc8], [fitdat1, fitdat8])
-# obj128mc = x->objnmc(x, [pomc1, pomc2, pomc8], [fitdat1, fitdat2, fitdat8])
-obj_nMCf = OptimizationFunction(objnmc, AutoForwardDiff())
-
 g18mc = (opt_MC8.u .+ opt_MC1.u)/2
 # opt18mc = optimize(obj18mc, g18mc, NelderMead(), Optim.Options(g_tol = 1e-3))
-@time opt18mc = solve(OP(obj_nMCf, g18mc, ([pomc1, pomc8], [fitdat1, fitdat8]), lb=lb_MC, ub=ub_MC), alg, g_tol=1e-3, )
+@time opt18mc = solve(OP(obj_ninterp, g18mc, ([pomc1, pomc8], [fitdat1, fitdat8]), lb=lb_MC, ub=ub_MC), alg, g_tol=1e-3, )
 # opt128mc = optimize(obj128mc, g128mc, NelderMead(), Optim.Options(g_tol = 1e-3))
-@time opt128mc = solve(OP(obj_nMCf, g18mc, ([pomc1, pomc2, pomc8], [fitdat1, fitdat2, fitdat8]), lb=lb_MC, ub=ub_MC), alg, g_tol=1e-3)
+@time opt128mc = solve(OP(obj_ninterp, g18mc, ([pomc1, pomc2, pomc8], [fitdat1, fitdat2, fitdat8]), lb=lb_MC, ub=ub_MC), alg, g_tol=1e-3)
 
 
 
 
-sol1_MC18  = gen_sol_constNS_arb(opt18mc.u, pomc1);
-sol2_MC18  = gen_sol_constNS_arb(opt18mc.u, pomc2);
-sol8_MC18  = gen_sol_constNS_arb(opt18mc.u, pomc8);
+sol1_MC18  = gen_sol_constNS_arb(opt18mc.u, pomc1, k_f_interp);
+sol2_MC18  = gen_sol_constNS_arb(opt18mc.u, pomc2, k_f_interp);
+sol8_MC18  = gen_sol_constNS_arb(opt18mc.u, pomc8, k_f_interp);
 MC1_params18 = sol1_MC18.prob.p
 MC2_params18 = sol2_MC18.prob.p
 MC8_params18 = sol8_MC18.prob.p
 
-sol1_MC128  = gen_sol_constNS_arb(opt128mc.u, pomc1);
-sol2_MC128  = gen_sol_constNS_arb(opt128mc.u, pomc2);
-sol8_MC128  = gen_sol_constNS_arb(opt128mc.u, pomc8);
+sol1_MC128  = gen_sol_constNS_arb(opt128mc.u, pomc1, k_f_interp);
+sol2_MC128  = gen_sol_constNS_arb(opt128mc.u, pomc2, k_f_interp);
+sol8_MC128  = gen_sol_constNS_arb(opt128mc.u, pomc8, k_f_interp);
 MC1_params128 = sol1_MC128.prob.p
 MC2_params128 = sol2_MC128.prob.p
 MC8_params128 = sol8_MC128.prob.p
 
-begin
-pl1 = blankplot_hrC(legend=:bottomright)
-# @df dat1 exptfplot!(:t, :T1, :T2, :T3, markershape=:circle)
-plot!(fitdat1)
-plot!(xlim=(0, 100), ylim=(-36, -31), )
-modconvtplot!(sol1_MC18, sol1_Rp18, labels=["MC" "Pikal"], markeralpha=0)
-pl8 = blankplot_hrC(legend=:bottomright)
-# @df dat8 exptfplot!(:t, :T1, :T2, :T3, markershape=:square)
-plot!(fitdat8, markershap=:square)
-modconvtplot!(sol8_MC18, sol8_Rp18, labels=["MC" "Pikal"], markeralpha=0)
-plot!(xlim=(0, 45), ylim=(-32, -26), )
-
-plot(pl1, pl8, layout=(2,1), legend=:outerright)
-end
-savefig(plotsdir("suc18_T.svg"))
-
-begin
-pl1 = blankplot_hrC(legend=:bottomright)
-@df dat1 exptfplot!(:t, :T1, :T2, :T3, markershape=:circle)
+# begin
+# pl1 = blankplot_hrC(legend=:bottomright)
+# # @df dat1 exptfplot!(:t, :T1, :T2, :T3, markershape=:circle)
 # plot!(fitdat1)
-plot!(xlim=(0, 60), ylim=(-36, -31), )
-modconvtplot!(sol1_MC128, sol1_Rp128, labels=["MC" "Pikal"], markershape=:circle)
-pl2 = blankplot_hrC(legend=:bottomright)
-@df dat2 exptfplot!(:t, :T1, :T2, :T3, markershape=:square)
-# plot!(fitdat2)
-modconvtplot!(sol2_MC128, sol2_Rp128, labels=["MC" "Pikal"], markershape=:square)
-plot!(xlim=(0, 120), ylim=(-36, -31), )
+# plot!(xlim=(0, 100), ylim=(-36, -31), )
+# modconvtplot!(sol1_MC18, sol1_Rp18, labels=["MC" "Pikal"], markeralpha=0)
+# pl8 = blankplot_hrC(legend=:bottomright)
+# # @df dat8 exptfplot!(:t, :T1, :T2, :T3, markershape=:square)
+# plot!(fitdat8, markershap=:square)
+# modconvtplot!(sol8_MC18, sol8_Rp18, labels=["MC" "Pikal"], markeralpha=0)
+# plot!(xlim=(0, 45), ylim=(-32, -26), )
 
-pl8 = blankplot_hrC(legend=:bottomright)
-@df dat8 exptfplot!(:t, :T1, :T2, :T3, markershape=:circle)
-# plot!(fitdat8)
-modconvtplot!(sol8_MC128, sol8_Rp128, labels=["MC" "Pikal"], markershape=:circle)
-plot!(xlim=(0, 20), ylim=(-32, -27))
-plot(pl1, pl2, pl8, layout=(3,1), size=(600, 600), legend=:outerright)
-end
-savefig(plotsdir("suc128_T.svg"))
+# plot(pl1, pl8, layout=(2,1), legend=:outerright)
+# end
+# savefig(plotsdir("suc18_T.svg"))
+
+# begin
+# pl1 = blankplot_hrC(legend=:bottomright)
+# @df dat1 exptfplot!(:t, :T1, :T2, :T3, markershape=:circle)
+# # plot!(fitdat1)
+# plot!(xlim=(0, 60), ylim=(-36, -31), )
+# modconvtplot!(sol1_MC128, sol1_Rp128, labels=["MC" "Pikal"], markershape=:circle)
+# pl2 = blankplot_hrC(legend=:bottomright)
+# @df dat2 exptfplot!(:t, :T1, :T2, :T3, markershape=:square)
+# # plot!(fitdat2)
+# modconvtplot!(sol2_MC128, sol2_Rp128, labels=["MC" "Pikal"], markershape=:square)
+# plot!(xlim=(0, 120), ylim=(-36, -31), )
+
+# pl8 = blankplot_hrC(legend=:bottomright)
+# @df dat8 exptfplot!(:t, :T1, :T2, :T3, markershape=:circle)
+# # plot!(fitdat8)
+# modconvtplot!(sol8_MC128, sol8_Rp128, labels=["MC" "Pikal"], markershape=:circle)
+# plot!(xlim=(0, 20), ylim=(-32, -27))
+# plot(pl1, pl2, pl8, layout=(3,1), size=(600, 600), legend=:outerright)
+# end
+# savefig(plotsdir("suc128_T.svg"))
+
+kstops18 = exp.(opt18mc.u[5:8]).*fit_mul_interp
+kstops128 = exp.(opt128mc.u[5:8]).*fit_mul_interp
+klogs18 = log.(ustrip.(u"s^-1", kstops18))
+klogs128 = log.(ustrip.(u"s^-1", kstops128))
+Tcheck = range(extrema(Tstops)..., length=50)
+plot(Tstops, kstops18, yscale=:log10)
+plot!(Tstops, kstops128, yscale=:log10)
+plot!(Tstops, MC1_params.k_f, yscale=:log10)
+plot!(Tstops, MC8_params.k_f, yscale=:log10)
 
 # ------------------------
 # MYEGA temparature dependence of viscosity
@@ -448,17 +431,15 @@ struct MYEGA_k
     C
 end
 MYEGA_k(a) = MYEGA_k(a...)
-MYEGA_k = MYEGA_k
 (mk::MYEGA_k)(T) = mk.k0*exp((-mk.K/T)*exp(mk.C/T))
 function k_myega(T, p)
     return MYEGA_k(p)(T)
 end
 
 myega_un = (u"s^-1", u"K", u"K")
-# p0_myega = [1e10, 800, 650]
 myega_mult = (1e5u"s^-1", 800u"K", 600u"K")
 p0_myega = [1.0, 1, 1]
-function obj_myega(p, _)
+function obj_kin_myega(p, _)
     if p[1] < 0 #|| p[2] < 100 #|| p[3] < 100 
         return NaN
     end
@@ -466,14 +447,14 @@ function obj_myega(p, _)
     ks = mk.(Tstops)
     logks = log.(ustrip.(u"s^-1", ks))
     # @info mk logks klogs18
-    return sum(abs2.(logks .- klogs18))
+    return sum(abs2.(logks .- klogs128))
 end
-objf_myega = OptimizationFunction(obj_myega, AutoForwardDiff())
+objf_myega = OptimizationFunction(obj_kin_myega, AutoForwardDiff())
 obj_myega(p0_myega, nothing)
 
-# opt_myega = solve(NLSP(obj_myega, p0_myega), TR())
-opt_myega = solve(OP(objf_myega, p0_myega, lb=fill(0.0, 3), ub=fill(Inf, 3)), BFGS())
-myega_p = (opt_myega.u .* myega_mult)
+opt_kin_myega = solve(OP(objf_myega, p0_myega, lb=fill(0.0, 3), ub=fill(Inf, 3)), alg)
+myega_p = (opt_kin_myega.u .* myega_mult)
+
 mk = MYEGA_k(myega_p)
 mkt = MYEGA_k(myega_mult)
 plot(Tcheck,  mk.(Tcheck))
@@ -499,29 +480,30 @@ end
 
 fit_un_myega = (u"cm^-1", u"cm^5", u"m^0.5", u"m/s", u"s^-1", u"K", u"K")
 fit_mult_myega = (myega_params1.N(0), myega_params1.S(0), myega_params1.C, myega_params1.Rs, myega_p...)
-function gen_sol_constNS_myega(fitprm, po; verbose=false)
-    new_params = deepcopy(po)
-    # fitprm = exp.(fitprmlog)
-    @reset new_params.N = RampedVariable(fitprm[1]*fit_mult_myega[1])
-    @reset new_params.S = RampedVariable(fitprm[2]*fit_mult_myega[2])
-    @reset new_params.C  = fitprm[3]*fit_mult_myega[3]
-    @reset new_params.Rs = fitprm[4]*fit_mult_myega[4]
-    @reset new_params.k_f = MYEGA_k(fitprm[5:7].*fit_mult_myega[5:7])
-    verbose && @info "fitprm" fitprm new_params
-    prob = ODEProblem(new_params, tspan=1000.0)
-    sol = solve(prob, Rodas3(autodiff=true))
-    return sol
-end
-function gennsol_constNS_myega(fitprm, pos)
-    sols = map(pos) do po
-        gen_sol_constNS_myega(fitprm, po)
-    end
-    return sols
-end
+# function gen_sol_constNS_myega(fitprm, po; verbose=false)
+#     new_params = deepcopy(po)
+#     # fitprm = exp.(fitprmlog)
+#     @reset new_params.N = RampedVariable(fitprm[1]*fit_mult_myega[1])
+#     @reset new_params.S = RampedVariable(fitprm[2]*fit_mult_myega[2])
+#     @reset new_params.C  = fitprm[3]*fit_mult_myega[3]
+#     @reset new_params.Rs = fitprm[4]*fit_mult_myega[4]
+#     @reset new_params.k_f = MYEGA_k(fitprm[5:7].*fit_mult_myega[5:7])
+#     verbose && @info "fitprm" fitprm new_params
+#     prob = ODEProblem(new_params, tspan=1000.0)
+#     sol = solve(prob, Rodas3(autodiff=true))
+#     return sol
+# end
+# function gennsol_constNS_myega(fitprm, pos)
+#     sols = map(pos) do po
+#         gen_sol_constNS_myega(fitprm, po)
+#     end
+#     return sols
+# end
+k_f_myega(vec) = MYEGA_k(exp.(vec).*mult_myega)
 function objnmyega(fitprm, pfs; verbose=false)
     pos, fitdats = pfs
     # verbose && @info "fitprm" fitprm
-    sols = gennsol_constNS_myega(fitprm, pos)
+    sols = gennsol_constNS(fitprm, pos, k_f_myega)
     if any([sol.retcode != ReturnCode.Terminated for sol in sols])
         if verbose
             for sol in sols 
@@ -539,24 +521,24 @@ function objnmyega(fitprm, pfs; verbose=false)
     verbose && @info "obj" objs fitprm 
     return sum(objs)
 end
+objnf_myega = OptimizationFunction(objnmyega, AutoForwardDiff())
 p0_myegafit = fill(1.0, 7)
 @time objnmyega(p0_myegafit, pass128, verbose=true)
 
-objnf_myega = OptimizationFunction(objnmyega, AutoForwardDiff())
 pass128 = ([MC1_params128, MC2_params128, MC8_params128], [fitdat1, fitdat2, fitdat8]);
 pass18 = ([MC1_params128, MC8_params128], [fitdat1, fitdat8]);
 
-lb_myega = fill(0.0, 7)
-ub_myega = fill(Inf, 7)
+lb_myega = vcat(fill(0.0, 4), fill(-20., 3))
+ub_myega = vcat(fill(Inf, 4), fill( 20., 3))
 
 # Needs a maxiters, because the gradients have wildly different dimensions
-@time opt18myega = solve(OP(objnf_myega, p0_myegafit, pass18), alg, g_tol=1e-2, maxiters=200)
+@time opt18myega = solve(OP(objnf_myega, p0_myegafit, pass18, lb=lb_myega, ub=ub_myega), alg, g_tol=1e-2, maxiters=200)
 # @time opt18myega = solve(OP(objnf_myega, p0_myegafit, pass18, lb=lb_myega, ub=ub_myega), alg, g_tol=1e-2, show_trace=true, maxiters=2)
 # @time opt128myega = solve(OP(objnf_myega, p0_myegafit, pass128, lb=lb_myega, ub=ub_myega), alg, g_tol=1e-2, show_trace=true)
 
-sol1_myega18  = gen_sol_constNS_myega(opt18myega.u, MC1_params18);
-sol2_myega18  = gen_sol_constNS_myega(opt18myega.u, MC2_params18);
-sol8_myega18  = gen_sol_constNS_myega(opt18myega.u, MC8_params18);
+sol1_myega18  = gen_sol_constNS(opt18myega.u, MC1_params18, k_f_myega);
+sol2_myega18  = gen_sol_constNS(opt18myega.u, MC2_params18, k_f_myega);
+sol8_myega18  = gen_sol_constNS(opt18myega.u, MC8_params18, k_f_myega);
 # sol1_myega128 = gen_sol_constNS_myega(opt128myega.u, MC1_params18);
 # sol2_myega128 = gen_sol_constNS_myega(opt128myega.u, MC2_params18);
 # sol8_myega128 = gen_sol_constNS_myega(opt128myega.u, MC8_params18);
@@ -605,7 +587,7 @@ scatter(Tcheck,  k_play.(Tcheck, [p0_play .* play_mult]), yscale=:log10)
 plot!(Tstops,  kstops18, yscale=:log10)
 plot!(Tstops,  kstops128, yscale=:log10)
 
-function obj_play(p,_)
+function obj_kin_play(p,_)
     if p[1] < 0 || p[2] < 0 #|| p[3] < 100 
         return NaN
     end
@@ -614,7 +596,7 @@ function obj_play(p,_)
     sum(abs2.(log.(ustrip.(u"s^-1", ks)) - klogs18))
 end
 objf_play = OptimizationFunction(obj_play, AutoForwardDiff())
-obj_play(p0_play,nothing)
+obj_kin_play(p0_play,nothing)
 opt_play = solve(OP(objf_play, p0_play), alg, show_trace=true)
 pk = Play_k(opt_play.u .* play_mult)
 plot(Tcheck,  pk.(Tcheck))
@@ -642,63 +624,51 @@ modconvtplot!(sol8_play, sol8_MC8)
 plot!(fitdat8)
 end
 
-fit_un_play = [u"cm^-1", u"cm^5", u"m^0.5", u"m/s", u"s^-1", u"s^-1", u"K", u"K"]
-function gen_sol_constNS_play(fitprmlog, po; verbose=false)
-    new_params = deepcopy(po)
-    fitprm = exp.(fitprmlog) # Constrain all to be positive by taking exp
-    verbose && @info "fitprm" fitprm
-    @reset new_params.N = RampedVariable(fitprm[1]*fit_un_play[1])
-    @reset new_params.S = RampedVariable(fitprm[2]*fit_un_play[2])
-    @reset new_params.C  = fitprm[3]*fit_un_play[3]
-    @reset new_params.R0 = fitprm[4]*fit_un_play[4]
-    @reset new_params.k_f = T->k_play(T, fitprm[5:8].*fit_un_play[5:8])
-    prob = ODEProblem(new_params)
-    sol = solve(prob, Rodas3(autodiff=true))
-    return sol, new_params
-end
-function gennsol_constNS_play(fitprmlog, pos...)
-    rets = map(pos) do po
-        gen_sol_constNS_play(fitprmlog, po)
-    end
-    return [ret[1] for ret in rets], [ret[2] for ret in rets]
-end
-function objnplay(fitprmlog, pos, fitdats; verbose=true)
-    verbose && @info "fitprm" exp.(fitprmlog)
-    if exp(fitprmlog[7]) < 225 || exp(fitprmlog[7]) > 250
-        verbose && @info "temperature unreasonable" exp(fitprmlog[7])
-        return NaN 
-    end
-    sols, prms = gennsol_constNS_play(fitprmlog, pos...)
+k_f_play(vec) = Play_k(exp.(vec).*play_mult)
+function objnplay(fitprm, pfs; verbose=false)
+    pos, fitdats = pfs
+    # verbose && @info "fitprm" fitprm
+#     Tact = exp(fitprmlog[7] - 1)*fit_mult_play[7]
+#     if Tact < 225u"K" || Tact > 250u"K"
+#         verbose && @info "temperature unreasonable" exp(fitprmlog[7])
+#         return NaN 
+#     end
+    sols = gennsol_constNS(fitprm, pos, k_f_play)
     if any([sol.retcode != ReturnCode.Terminated for sol in sols])
-        verbose && @info "unfinished drying" [sol.retcode for sol in sols]
-        return NaN
+        if verbose
+            for sol in sols 
+                if sol.retcode != ReturnCode.Terminated
+                    @info "unfinished drying" sol[1,end] fitprm 
+                end
+            end
+        end
+        # verbose && @info "unfinished drying" [sol for 
+        # return NaN
     end
     objs = map(sols, fitdats) do sol, fitdat
         obj_expT(sol, fitdat, tweight=0)
     end
-    verbose && @info "obj" objs
+    verbose && @info "obj" objs fitprm 
     return sum(objs)
 end
-p0_playfitlog = [opt128mc.u[1:4]..., log.(opt_play.u)...]
-# p0_playfitlog = log.(p0_playfit)
+objnf_play = OptimizationFunction(objnplay, AutoForwardDiff())
 
-obj12play(x) = objnplay(x, [MC1_params12, MC2_params12], [fitdat1, fitdat2])
-obj18play(x) = objnplay(x, [MC1_params12, MC8_params128], [fitdat1, fitdat8])
-obj128play(x) = objnplay(x, [MC1_params128, MC2_params128, MC8_params128], [fitdat1, fitdat2, fitdat8])
-obj12play(p0_playfitlog)
+lb_play = fill(0.0, 8)
+lb_play[7] = log(225u"K"/play_mult[7]) + 1
+ub_play = fill(Inf, 8)
+ub_play[7] = log(250u"K"/play_mult[7]) + 1
 
-opt12play = optimize(obj12play, p0_playfitlog, NelderMead(), Optim.Options(g_tol = 1e-2, time_limit=10))
-opt18play = optimize(obj18play, p0_playfitlog, NelderMead(), Optim.Options(g_tol = 1e-2, time_limit=15))
-opt128play = optimize(obj128play, p0_playfitlog, NelderMead(), Optim.Options(g_tol = 1e-2, time_limit=20))
+opt18play = solve(OP(objnf_play, p0_playfitlog, pass18, lb=lb_play, ub=ub_play), Optim.NelderMead(), maxiters=50, time_limit=15)
+# opt18play = solve(OP(objnf_play, p0_playfitlog, pass18), alg, g_tol = 1e-2, maxiters = 50, time_limit=15, show_trace=true)
+# opt128play = solve(OP(objnf_play, p0_playfitlog, pass128), alg, g_tol = 1e-2, maxiters = 5, time_limit=15, show_trace=true)
 
-exp.(opt128play.u) .*fit_un_play
-
-(sol1_play18, sol2_play18, sol8_play18), playprms18 = gennsol_constNS_play(opt18play.u, MC1_params128, MC2_params128, MC8_params128);
-(sol1_play128, sol2_play128, sol8_play128), playprms128 = gennsol_constNS_play(opt128play.u, MC1_params128, MC2_params128, MC8_params128);
+sol1_play18, sol2_play18, sol8_play18 = gennsol_constNS(opt18play.u, (MC1_params128, MC2_params128, MC8_params128), k_f_play);
+# (sol1_play128, sol2_play128, sol8_play128), playprms128 = gennsol_constNS_play(opt128play.u, MC1_params128, MC2_params128, MC8_params128);
 # (sol1_playg, sol2_playg, sol8_playg), playprmsg = gennsol_constNS_play(p0_playfitlog, MC1_params2, MC2_params2, MC8_params128);
-poreevolplot( sol1_play128)
-poreevolplot!(sol2_play128)
-poreevolplot!(sol8_play128)
+poreevolplot( sol1_play)
+poreevolplot!(sol1_play18)
+poreevolplot!(sol2_play18)
+poreevolplot!(sol8_play18)
 
 begin
 pl1 = blankplot_hrC(legend=:bottomright)
@@ -725,16 +695,11 @@ savefig(plotsdir("suc128_play_T.svg"))
 begin
 plot(u"°C", u"s^-1", legend=:bottomright, xlabel="T", ylabel="k\\  ", unitformat=latexsquareunitlabel)
 # kineticplot!(MC1_params,    T=Tcheck, label="Interp fit to case 1")
-# kineticplot!(MC2_params,    T=Tcheck, label="Interp fit to case 2")
-kineticplot!(MC1_params12,  T=Tcheck, c=1, marker=markers[1], label="Interp fit to 1&2")
-kineticplot!(MC1_params18,  T=Tcheck, c=1, marker=markers[2], label="Interp fit to 1&8")
-kineticplot!(MC1_params128, T=Tcheck, c=1, marker=markers[3], label="Interp fit to 1&2&8")
-kineticplot!(myega1_params18  , T=Tcheck, c=2, marker=markers[2], label="MYEGA fit to 1&8")
-kineticplot!(myega1_params128  , T=Tcheck, c=2, marker=markers[3], label="MYEGA fit to 1&2&8")
-kineticplot!(playprms18[1]  , T=Tcheck, c=3, marker=markers[2], label="Tanh fit to 1&8")
-kineticplot!(playprms128[1]  , T=Tcheck,c=3, marker=markers[3], label="Tanh fit to 1&2&8")
-
-# kineticplot!(play1_params, T=Tcheck, label="3-param activation to 1&2")
+kineticplot!(MC8_params,     label="Interp fit to case 8")
+kineticplot!(MC1_params18,   c=1, marker=markers[2], label="Interp fit to 1&8")
+kineticplot!(MC1_params128,  c=1, marker=markers[3], label="Interp fit to 1&2&8")
+kineticplot!(myega_params1,   c=2, marker=markers[2], label="MYEGA fit to interpolation")
+kineticplot!(play_params1  , c=3, marker=markers[2], label="Tanh fit to interpolation")
 end
 savefig(plotsdir("kinetic.svg"))
 
@@ -762,45 +727,34 @@ plot!(size=(800, 400))
 end
 savefig(plotsdir("suc18_pores.svg"))
 
-function namefitparam_arr(fitlog, label)
-    fit = exp.(fitlog)
-    nt = (label = label,
-        N =  fit[1]*fit_un_arr[1],
-        S =  fit[2]*fit_un_arr[2],
-        C =  fit[3]*fit_un_arr[3],
-        R0 = fit[4]*fit_un_arr[4],
-        k0 = fit[5]*fit_un_arr[5],
-        E =  fit[6]*fit_un_arr[6],
-    )
-end
 function namefitparam_arb(fitlog, label)
     fit = exp.(fitlog)
     nt = (label = label,
-        N =  fit[1]*fit_un_arb[1],
-        S =  fit[2]*fit_un_arb[2],
-        C =  fit[3]*fit_un_arb[3],
-        R0 = fit[4]*fit_un_arb[4],
-        k1 = fit[5]*fit_un_arb[5],
-        k2 = fit[6]*fit_un_arb[5],
-        k3 = fit[7]*fit_un_arb[5],
-        k4 = fit[8]*fit_un_arb[5],
-        T1 = Tstops[1],
-        T2 = Tstops[2],
-        T3 = Tstops[3],
-        T4 = Tstops[4],
+        # N =  fit[1]*fit_un_arb[1],
+        # S =  fit[2]*fit_un_arb[2],
+        # C =  fit[3]*fit_un_arb[3],
+        # Rs = fit[4]*fit_un_arb[4],
+        # k1 = fit[5]*fit_un_arb[5],
+        # k2 = fit[6]*fit_un_arb[5],
+        # k3 = fit[7]*fit_un_arb[5],
+        # k4 = fit[8]*fit_un_arb[5],
+        # T1 = Tstops[1],
+        # T2 = Tstops[2],
+        # T3 = Tstops[3],
+        # T4 = Tstops[4],
     )
 end
 function namefitparam_play(fitlog, label)
     fit = exp.(fitlog)
     nt = (label = label,
-        N =  fit[1]*fit_un_play[1],
-        S =  fit[2]*fit_un_play[2],
-        C =  fit[3]*fit_un_play[3],
-        R0 = fit[4]*fit_un_play[4],
-        k0 = fit[5]*fit_un_play[5],
-        kf = fit[6]*fit_un_play[6],
-        Tact = fit[7]*fit_un_play[7],
-        θ  = fit[8]*fit_un_play[8],
+        # N =  fit[1]*fit_un_play[1],
+        # S =  fit[2]*fit_un_play[2],
+        # C =  fit[3]*fit_un_play[3],
+        # Rs = fit[4]*fit_un_play[4],
+        # k0 = fit[5]*fit_un_play[5],
+        # kf = fit[6]*fit_un_play[6],
+        # Tact = fit[7]*fit_un_play[7],
+        # θ  = fit[8]*fit_un_play[8],
     )
 end
 fits_arb = Optim.minimizer.([opt_MC1, opt_MC2, opt12mc, opt18mc, opt128mc]) 
@@ -808,10 +762,10 @@ fits_play = Optim.minimizer.([opt12play, opt18play, opt128play])
 rep1 = Table(map(namefitparam_arb, fits_arb, ["1", "2", "1&2", "1&8", "1&2&8"]))
 rep2 = Table(map(namefitparam_play, fits_play, ["1&2", "1&8", "1&2&8"]))
 
-# safesave(datadir("exp_pro", "fit12.html"), pretty_table(HTML, report, header = ["Fit", "N", "S", "k0", "E", "C", "R0"]))
-safesave(datadir("exp_pro", "fit_arb.html"), pretty_table(HTML, rep1, header = ["Fit", "N", "S", "C", "R0", "k1", "k2", "k3", "k4", "T1", "T2", "T3", "T4"]))
-safesave(datadir("exp_pro", "fit_play.html"), pretty_table(HTML, rep2, header = ["Fit", "N", "S", "C", "R0", "k0", "kf", "Tact", "θ"]))
-# pretty_table(report, header = ["Fit", "N", "S", "k0", "E", "C", "R0"])
+# safesave(datadir("exp_pro", "fit12.html"), pretty_table(HTML, report, header = ["Fit", "N", "S", "k0", "E", "C", "Rs"]))
+safesave(datadir("exp_pro", "fit_arb.html"), pretty_table(HTML, rep1, header = ["Fit", "N", "S", "C", "Rs", "k1", "k2", "k3", "k4", "T1", "T2", "T3", "T4"]))
+safesave(datadir("exp_pro", "fit_play.html"), pretty_table(HTML, rep2, header = ["Fit", "N", "S", "C", "Rs", "k0", "kf", "Tact", "θ"]))
+# pretty_table(report, header = ["Fit", "N", "S", "k0", "E", "C", "Rs"])
 
 # ---------------------
 # Validation
