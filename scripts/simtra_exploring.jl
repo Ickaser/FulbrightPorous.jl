@@ -234,23 +234,26 @@ pomc8 = deepcopy(pomc1)
 @reset pomc8.Tsh = Tsh8
 
 const fit_un_arb = (u"cm^-1", u"cm^5", u"m^0.5", u"m/s", fill(u"s^-1", 4)...)
-fitguess = ustrip.(fit_un_arb, [N(0), S(0), C, R0, k0, k0*1e1, k0*1e5, k0*1e6])
-fitguesslog = log.(fitguess)
+# const fit_un_mult = (u"cm^-1", u"cm^5", u"m^0.5", u"m/s", fill(u"s^-1", 4)...)
+fit_un_mult = (N(0), S(0), C, Rs, k0, k0, k0, k0)
+fitguess = vcat(fill(1.0, 4), -1, 1, 5, 10)
+# fitguesslog = log.(fitguess)
 Tstops = [-45.0, -38, -32, -28]u"°C" .|> u"K"
-function gen_sol_constNS_arb(fitprmlog, po; verbose=false)
+function gen_sol_constNS_arb(fitprm, po; verbose=false)
     new_params = deepcopy(po)
-    fitprm = exp.(fitprmlog) # Constrain all to be positive by taking exp
+    # fitprm = exp.(fitprmlog) # Constrain all to be positive by taking exp
     verbose && @info "fitprm" fitprm
-    @reset new_params.N = RampedVariable(fitprm[1]*fit_un_arb[1])
-    @reset new_params.S = RampedVariable(fitprm[2]*fit_un_arb[2])
-    @reset new_params.C  = fitprm[3]*fit_un_arb[3]
-    @reset new_params.R0 = fitprm[4]*fit_un_arb[4]
+    @reset new_params.N = RampedVariable(fitprm[1]*fit_un_mult[1])
+    @reset new_params.S = RampedVariable(fitprm[2]*fit_un_mult[2])
+    @reset new_params.C  = fitprm[3]*fit_un_mult[3]
+    @reset new_params.Rs = fitprm[4]*fit_un_mult[4]
     # Lin interp in log space
-    klogs = fitprmlog[5:8]
+    # klogs = fitprmlog[5:8]
     # klogs = log.(fitprm[5:8])
-    # klogs = fitprm[5:8]
+    klogs = fitprm[5:8]
     spll = LinearInterpolation(klogs, Tstops, extrapolate=true)
-    spl(T) = exp(spll(T))*fit_un_arb[5]
+    spl(T) = exp(spll(T))*fit_un_mult[5]
+    # spl = LinearInterpolation(exp.(fitprm[5:8]).*fit_un_mult[5:8], Tstops, extrapolate=true)
     @reset new_params.k_f = spl
     prob = ODEProblem(new_params; tspan=(0.0, 1000.0))
     sol = solve(prob, Rodas3())
@@ -258,15 +261,18 @@ function gen_sol_constNS_arb(fitprmlog, po; verbose=false)
 end
 
 function obj_MC(x,p)
-    if ~(x[5] < x[6] < x[7] < x[8])
+    ks = x[5:8].*fit_un_mult[5]
+    if ~(ks[1] <= ks[2] <= ks[3] <= ks[4])
         return NaN
     end
     sol, _ = gen_sol_constNS_arb(x, p[1])
     return obj_expT(sol, p[2])
 end
 obj_MCf = OptimizationFunction(obj_MC, AutoForwardDiff())
+lb_MC = vcat(fill(0.0, 4), fill(-20., 4))
+ub_MC = vcat(fill(Inf, 4), fill(20., 4))
 
-@time opt_MC1 = solve(OP(obj_MCf, fitguesslog, (pomc1, fitdat1)), BFGS(); show_trace=true, g_tol = 1e-3, maxiters=300)
+@time opt_MC1 = solve(OP(obj_MCf, fitguess, (pomc1, fitdat1), lb=lb_MC, ub=ub_MC), alg;show_trace=true, g_tol = 1e-2, maxtime=10)
 
 exp.(opt_MC1.u) .*fit_un_arb
 
