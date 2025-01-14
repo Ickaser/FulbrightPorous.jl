@@ -119,7 +119,11 @@ end
 @userplot KineticPlot
 @recipe function f(kp::KineticPlot; T = range(230, 250, length=101)*u"K")
     prm = kp.args[1]
-    kf = prm.k_f
+    if prm isa ParamObjMC
+        kf = prm.k_f
+    elseif prm isa ODESolution
+        kf = prm.prob.p.k_f
+    end
     if typeof(kf) <: DataInterpolations.AbstractInterpolation
         @series begin
             seriestype := :scatter
