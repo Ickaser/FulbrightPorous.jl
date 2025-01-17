@@ -19,13 +19,16 @@ pKvdat = [ 50.0 4.18; 75.0 5.25;
 pd = pKvdat[:,1]*u"mTorr"
 Kvd = pKvdat[:,2]*u"J/hr/cm^2/K"
 function fitKv(KKK) 
-    Kc, Kp, Kd = KKK .* [u"W/m^2/K", u"W/m^2/K/Torr", u"1/Torr"]
+    Kc, Kp, Kd = KKK .* (u"W/m^2/K", u"W/m^2/K/Torr", u"1/Torr")
     Kv = RpFormFit(Kc, Kp, Kd)
-    err = @. Kv(pd) - Kvd
-    return ustrip(sum(abs2.(err))), Kv
+    err = @. ustrip(u"W/m^2/K", Kv(pd) - Kvd)
+    # return sum(abs2.(err)), Kv
+    return err, Kv
 end
-optKv = solve(NLSP((x,p,t)->fitKv(x)[1], [10.0, 1, 1]), LevenbergMarquardt())
+optKv = solve(NLSP((x,p)->fitKv(x)[1], [10.0, 100, 1]), LevenbergMarquardt())
 K_shf = fitKv(optKv.u)[2]
+plot(pd, K_shf.(pd))
+scatter!(pd, Kvd)
 
 # --------------------------
 # Cycle 1
