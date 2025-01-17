@@ -124,17 +124,57 @@ end
     elseif prm isa ODESolution
         kf = prm.prob.p.k_f
     end
-    if typeof(kf) <: DataInterpolations.AbstractInterpolation
+    if kf isa DataInterpolations.AbstractInterpolation
         @series begin
             seriestype := :scatter
             primary := false
             return kf.t, kf.u
         end
+    # elseif kf isa InterpK
+    #     @series begin
+    #         seriestype := :scatter
+    #         primary := false
+    #         return kf.spl.t, kf.spl.u
+    #     end
     end
     @series begin
         seriestype := :samplemarkers
         yscale --> :log10
         label --> L"k_f"
         return T, kf.(T)
+    end
+end
+
+# ----------------------------
+using Distributions
+@userplot BetaPlot
+@recipe function f(bp::BetaPlot)
+    sol = bp.args[1]
+    ts = range(1, sol.t[end], length=5)
+    for ti in ts
+        hf = sol(ti, idxs=1)*u"cm"
+        μ0 = sol(ti, idxs=3)
+        μ2 = sol(ti, idxs=4)*u"cm^6" .|> u"mm^6"
+        po = sol.prob.p
+        hd = (po.hf0 .- hf) .|> u"cm"
+        ϕ = (po.ρ_solution - po.c_solid)/po.ρ_solution
+        μ1 = hd*ϕ*po.Ap .|> u"mm^3"
+        
+        # mean = μ1 ./ μ0
+        # var = μ2 ./ μ0 .- mean.^2
+        maxV = ϕ*po.hf0*po.Ap |> u"mm^3"
+        mean = μ1/μ0/maxV
+        var = μ2/μ0/maxV^2 - mean^2
+        v = mean*(1-mean)/var - 1
+        α = mean*v
+        β = (1-mean)*v
+        xs = logrange(1e-36, 1, length=100)
+        vs = xs .* maxV
+        βs = pdf(Beta(α, β), xs)
+        @info "check" α β mean var βs
+        @series begin
+            label --> "t = $(round(ti, digits=2))"
+            vs, βs
+        end
     end
 end
