@@ -23,6 +23,7 @@ import LyoPronto: ODEProblem
 
 
 include("pikal_microcollapse.jl")
+include("kinetic_models.jl")
 include("simtra_rename.jl")
 include("recipes.jl")
 

@@ -174,9 +174,9 @@ pop8 = deepcopy(pop1)
 @reset pop8.pch = pch8
 @reset pop8.Tsh = Tsh8
 
-const Rp_un = (u"cm^2*Torr*hr/g", u"cm*Torr*hr/g", u"1/cm")
+const Rp_scale = (0.5u"cm^2*Torr*hr/g", 60u"cm*Torr*hr/g", 10u"1/cm")
 function gen_sol_Rp(a123, po)
-    new_params = @set po.Rp = RpFormFit((a123.*Rp_un)...)
+    new_params = @set po.Rp = RpFormFit((a123.*Rp_scale)...)
     prob = ODEProblem(new_params; tspan=(0.0, 1000.0))
     sol = solve(prob, Rodas3())
     return sol
@@ -189,7 +189,7 @@ function obj_Rp(x, p)
     return obj_expT(sol, p[2], tweight=1e-4)
 end
 obj_Rpf = OptimizationFunction(obj_Rp, AutoForwardDiff())
-@time obj_Rpf([0.8, 90, 10], (pop8, fitdat8))
+@time obj_Rpf(fill(1.0, 3), (pop8, fitdat8))
 
 function gennsol_Rp(fitprm, pos)
     return [gen_sol_Rp(fitprm, po) for po in pos]
@@ -208,7 +208,7 @@ end
 obj_npf = OptimizationFunction(objn_Rp, AutoForwardDiff())
 # @time ForwardDiff.gradient(x->obj_Rpf(x, (pop8, fitdat8)), [0.8, 90, 1])
 
-@time opt_Rp1 = solve(OP(obj_Rpf, [0.8, 90, 1], (pop1, fitdat1)),alg, g_tol = 1e-3)
+@time opt_Rp1 = solve(OP(obj_Rpf, fill(1.0, 3), (pop1, fitdat1)),alg, g_tol = 1e-3)
 opt2p = solve(OP(obj_Rpf, opt_Rp1.u, (pop2, fitdat2)), alg; g_tol=1e-3)
 opt8p = solve(OP(obj_Rpf, opt_Rp1.u, (pop8, fitdat8)), alg; g_tol=1e-3)
 
@@ -274,16 +274,16 @@ pomc8 = deepcopy(pomc1)
 @reset pomc8.pch = pch8
 @reset pomc8.Tsh = Tsh8
 
-# const fit_un_mult = (u"cm^-1", u"cm^5", u"m^0.5", u"m/s", fill(u"s^-1", 4)...)
-const fit_mul_porous = (N(0), S(0), C, Rs)
+# const fit_un_scale = (u"cm^-1", u"cm^5", u"m^0.5", u"m/s", fill(u"s^-1", 4)...)
+const fit_scl_porous = (N(0), S(0), C, Rs)
 function gen_sol_constNS_arb(fitprm, po, k_f_gen; verbose=false)
     new_params = deepcopy(po)
     # fitprm = exp.(fitprmlog) # Constrain all to be positive by taking exp
     verbose && @info "fitprm" fitprm
-    @reset new_params.N = RampedVariable(fitprm[1]*fit_mul_porous[1])
-    @reset new_params.S = RampedVariable(fitprm[2]*fit_mul_porous[2])
-    @reset new_params.C  = fitprm[3]*fit_mul_porous[3]
-    @reset new_params.Rs = fitprm[4]*fit_mul_porous[4]
+    @reset new_params.N = RampedVariable(fitprm[1]*fit_scl_porous[1])
+    @reset new_params.S = RampedVariable(fitprm[2]*fit_scl_porous[2])
+    @reset new_params.C  = fitprm[3]*fit_scl_porous[3]
+    @reset new_params.Rs = fitprm[4]*fit_scl_porous[4]
     @reset new_params.k_f = k_f_gen(fitprm[5:end])
     prob = ODEProblem(new_params; tspan=(0.0, 1000.0))
     sol = solve(prob, Rodas3())
@@ -298,38 +298,8 @@ end
 
 # -----------------------------
 # Fit k by interpolating at four values
-Tstops = [-45.0, -38, -32, -28]u"°C" .|> u"K"
-const fit_un_interp = (fill(u"s^-1", 4)...,)
-fit_mul_interp = (k0, k0, k0, k0)
-struct InterpK{itype<:DataInterpolations.AbstractInterpolation} 
-    # logk
-    # Tstops
-    spl::itype
-end
-(ik::InterpK)(T) = exp(ik.spl(T))*fit_mul_interp[1]
-function InterpK(klog::AbstractVector, T)
-    return InterpK(LinearInterpolation(klog, T, extrapolation=ExtrapolationType.Linear))
-end
-function InterpK(klog::AbstractVector)
-    T = [-45.0, -38, -32, -28]u"°C" .|> u"K"
-    return InterpK(klog, T)
-    # return InterpK(LinearInterpolation(klog, T_stops,extrapolation=ExtrapolationType.Linear))
-end
-function Base.show(io::IO, ik::InterpK)
-    str = "InterpK($(ik.spl.t), $(ik.(ik.spl.t)))"
-    return print(io, str)
-end
-
-function get_ks(ik::InterpK)
-    return ik.(ik.spl.t)
-end
-
 function k_f_interp(logk)
-    # Lin interp in log space
-    # spll = LinearInterpolation(logk, Tstops, extrapolation=ExtrapolationType.Linear)
-    # spl(T) = exp(spll(T))*fit_mul_interp[1]
-    # # spl = LinearInterpolation(exp.(logk).*fit_un_interp, Tstops, extrapolation=ExtrapolationType.Linear)
-    return InterpK(logk)
+    return InterpK(logk, [-45.0, -38, -32, -28]u"°C" .|> u"K", k0)
 end
 function obj_interp(x,p)
     ks = x[5:8]
@@ -438,6 +408,7 @@ plot(pl1, pl2, pl8, layout=(3,1), size=(600, 600), legend=:outerright)
 end
 savefig(plotsdir("suc128_T.svg"))
 
+Tstops = MC1_params18.k_f.spl.t
 kstops18 = get_ks(MC1_params18.k_f)
 kstops128 = get_ks(MC1_params128.k_f)
 klogs18 = log.(ustrip.(u"s^-1", kstops18))
@@ -450,25 +421,15 @@ plot!(Tstops, MC8_params.k_f.(Tstops), yscale=:log10)
 
 # ------------------------
 # MYEGA temparature dependence of viscosity
-struct MYEGA_k
-    k0
-    K
-    C
-end
-MYEGA_k(a) = MYEGA_k(a...)
-(mk::MYEGA_k)(T) = mk.k0*exp((-mk.K/T)*exp(mk.C/T))
-function k_myega(T, p)
-    return MYEGA_k(p)(T)
-end
 
-myega_un = (u"s^-1", u"K", u"K")
-myega_mult = (1e10u"s^-1", 1e3u"K", 2e2u"K")
+myega_scale = (1e10u"s^-1", 1e3u"K", 2e2u"K")
+k_f_myega(vec) = MYEGA_k(exp.(vec).*myega_scale)
 p0_myega = [1.0, 1, 1]
 function obj_kin_myega(p, _)
     if p[1] < 0 #|| p[2] < 100 #|| p[3] < 100 
         return NaN
     end
-    mk = MYEGA_k(p.*myega_mult)
+    mk = k_f_myega(p)
     ks = mk.(Tstops)
     logks = log.(ustrip.(u"s^-1", ks))
     return sum(abs2.(logks .- klogs128))
@@ -477,9 +438,8 @@ objf_myega = OptimizationFunction(obj_kin_myega, AutoForwardDiff())
 objf_myega(p0_myega, nothing)
 
 opt_kin_myega = solve(OP(objf_myega, p0_myega, lb=fill(0.0, 3), ub=fill(Inf, 3)), alg)
-myega_p = (opt_kin_myega.u .* myega_mult)
 
-mk = MYEGA_k(myega_p)
+mk = k_f_myega(opt_kin_myega.u)
 mk2 = MYEGA_k(1.25e13u"s^-1", 1.6e3u"K", 5.1e2u"K")
 plot(Tcheck,  mk.(Tcheck))
 plot!(Tcheck,  mk2.(Tcheck))
@@ -502,28 +462,6 @@ plot!(fitdat8)
 plot(pl1, pl2, pl3)
 end
 
-fit_un_myega = (u"cm^-1", u"cm^5", u"m^0.5", u"m/s", u"s^-1", u"K", u"K")
-fit_mult_myega = (myega_params1.N(0), myega_params1.S(0), myega_params1.C, myega_params1.Rs, myega_p...)
-# function gen_sol_constNS_myega(fitprm, po; verbose=false)
-#     new_params = deepcopy(po)
-#     # fitprm = exp.(fitprmlog)
-#     @reset new_params.N = RampedVariable(fitprm[1]*fit_mult_myega[1])
-#     @reset new_params.S = RampedVariable(fitprm[2]*fit_mult_myega[2])
-#     @reset new_params.C  = fitprm[3]*fit_mult_myega[3]
-#     @reset new_params.Rs = fitprm[4]*fit_mult_myega[4]
-#     @reset new_params.k_f = MYEGA_k(fitprm[5:7].*fit_mult_myega[5:7])
-#     verbose && @info "fitprm" fitprm new_params
-#     prob = ODEProblem(new_params, tspan=1000.0)
-#     sol = solve(prob, Rodas3(autodiff=true))
-#     return sol
-# end
-# function gennsol_constNS_myega(fitprm, pos)
-#     sols = map(pos) do po
-#         gen_sol_constNS_myega(fitprm, po)
-#     end
-#     return sols
-# end
-k_f_myega(vec) = MYEGA_k(exp.(vec).*myega_mult)
 function objnmyega(fitprm, pfs; verbose=false)
     pos, fitdats = pfs
     # verbose && @info "fitprm" fitprm
@@ -585,81 +523,56 @@ end
 savefig(plotsdir("suc18_myega_train_T.svg"))
 
 # -------------------------------------
-# playground temparature dependence of viscosity
-struct Play_k
-    k0
-    kf
-    K
-    C
+# sigmoid temparature dependence of viscosity
+const sigm_scale = (1e-15u"s^-1", 1e-9u"s^-1", 0.8u"K", 239u"K")
+function k_f_sigm(vec)
+    p123 = exp.(vec[1:3] .-1).*sigm_scale[1:3]
+    p4 = vec[4]*u"K" + sigm_scale[4]
+    Sigmoid_k(p123..., p4)
 end
-Play_k(a) = Play_k(a...)
-function (pk::Play_k)(T)
-    rat = pk.k0/pk.kf
-    x = (T-pk.K)/pk.C
-    # return k0/(tanh(-x)+1) # This has the right behavior...
-    return pk.k0*(exp(x) + exp(-x))/((1+rat)*exp(-x)+rat*exp(x)) # but this way it can avoid numerical issues
-end
-function k_play(T, p)
-    return Play_k(p)(T)
-end
-play_un = (u"s^-1", u"s^-1", u"K", u"K")
-play_mult = (1e-15u"s^-1", 1e-9u"s^-1", 240u"K", 0.8u"K")
-p0_play = fill(1.0, 4)
-# p0_play = [1e-17, 1e-10, 230, 0.8]
-plot(Tcheck,  Play_k(exp.(p0_play .-1) .* play_mult).(Tcheck), yscale=:log10)
+p0_sigm = fill(1.0, 4)
+plot(Tcheck,  k_f_sigm(p0_sigm).(Tcheck), yscale=:log10)
 scatter!(Tstops,  kstops18, yscale=:log10)
 scatter!(Tstops,  kstops128, yscale=:log10)
 
-function err_kin_play(p,_)
-    # if p[1] < 0 || p[2] < 0 #|| p[3] < 100 
-    #     return NaN
-    # end
-    ks = k_play.(Tstops, [exp.(p .- 1).*play_mult])
-    # @info "check" ks kstops18
+function err_kin_sigm(p,_)
+    ks = k_f_sigm(p).(Tstops)
     err = log.(ustrip.(u"s^-1", ks)) - klogs128
-    # sum(abs2, err)
 end
-# objf_play = OptimizationFunction(obj_kin_play, AutoForwardDiff())
-# obj_kin_play(p0_play,nothing)
-opt_play = solve(NLSP(err_kin_play, p0_play), LevenbergMarquardt(), show_trace=Val(true))
-pk = Play_k(exp.(opt_play.u .-1) .* play_mult)
-pkt = Play_k(exp.(p0_play .-1) .* play_mult)
+# objf_sigm = OptimizationFunction(obj_kin_sigm, AutoForwardDiff())
+# obj_kin_sigm(p0_sigm,nothing)
+opt_sigm = solve(NLSP(err_kin_sigm, p0_sigm), LevenbergMarquardt(), show_trace=Val(true))
+pk = k_f_sigm(opt_sigm.u)
+pkt = k_f_sigm(p0_sigm)
 plot(Tcheck,  pk.(Tcheck))
 plot!(Tcheck,  pkt.(Tcheck))
 scatter!(Tstops,  kstops18, yscale=:log10)
 scatter!(Tstops,  kstops128, yscale=:log10)
 
-play_params1 = @set MC1_params128.k_f = Play_k(exp.(opt_play.u.-1).*play_mult)
-play_params2 = @set MC2_params128.k_f = Play_k(exp.(opt_play.u.-1).*play_mult)
-play_params8 = @set MC8_params128.k_f = Play_k(exp.(opt_play.u.-1).*play_mult)
-sol1_play = solve(ODEProblem(play_params1), Rodas3())
-sol2_play = solve(ODEProblem(play_params2), Rodas3())
-sol8_play = solve(ODEProblem(play_params8), Rodas3())
-poreevolplot(sol1_play)
-poreevolplot!(sol2_play)
-poreevolplot!(sol8_play)
+sigm_params1 = @set MC1_params128.k_f = k_f_sigm(opt_sigm.u)
+sigm_params2 = @set MC2_params128.k_f = k_f_sigm(opt_sigm.u)
+sigm_params8 = @set MC8_params128.k_f = k_f_sigm(opt_sigm.u)
+sol1_sigm = solve(ODEProblem(sigm_params1), Rodas3())
+sol2_sigm = solve(ODEProblem(sigm_params2), Rodas3())
+sol8_sigm = solve(ODEProblem(sigm_params8), Rodas3())
+poreevolplot(sol1_sigm)
+poreevolplot!(sol2_sigm)
+poreevolplot!(sol8_sigm)
 
 begin
 blankplot_hrC()
-modconvtplot!(sol1_play, sol1_MC1)
+modconvtplot!(sol1_sigm, sol1_MC1)
 plot!(fitdat1)
 end
 begin
 blankplot_hrC()
-modconvtplot!(sol8_play, sol8_MC8)
+modconvtplot!(sol8_sigm, sol8_MC8)
 plot!(fitdat8)
 end
 
-k_f_play(vec) = Play_k(exp.(vec .- 1).*play_mult)
-function objnplay(fitprm, pfs; verbose=false)
+function objnsigm(fitprm, pfs; verbose=false)
     pos, fitdats = pfs
-    # verbose && @info "fitprm" fitprm
-#     Tact = exp(fitprmlog[7] - 1)*fit_mult_play[7]
-#     if Tact < 225u"K" || Tact > 250u"K"
-#         verbose && @info "temperature unreasonable" exp(fitprmlog[7])
-#         return NaN 
-#     end
-    sols = gennsol_constNS(fitprm, pos, k_f_play)
+    sols = gennsol_constNS(fitprm, pos, k_f_sigm)
     if any([sol.retcode != ReturnCode.Terminated for sol in sols])
         if verbose
             for sol in sols 
@@ -668,8 +581,6 @@ function objnplay(fitprm, pfs; verbose=false)
                 end
             end
         end
-        # verbose && @info "unfinished drying" [sol for 
-        # return NaN
     end
     objs = map(sols, fitdats) do sol, fitdat
         obj_expT(sol, fitdat, tweight=0)
@@ -677,27 +588,25 @@ function objnplay(fitprm, pfs; verbose=false)
     verbose && @info "obj" objs fitprm 
     return sum(objs)
 end
-objnf_play = OptimizationFunction(objnplay, AutoForwardDiff())
+objnf_sigm = OptimizationFunction(objnsigm, AutoForwardDiff())
 
-lb_play = vcat(fill(0.0, 4), fill(-2, 4))
-lb_play[7] = log(225u"K"/play_mult[3]) + 1
-ub_play = vcat(fill(Inf, 4), fill( 3, 4))
-ub_play[7] = log(250u"K"/play_mult[3]) + 1
-lb_play
-ub_play
+lb_sigm = vcat(fill(0.0, 4), fill(-2, 4))
+lb_sigm[7] = -30
+ub_sigm = vcat(fill(Inf, 4), fill( 3, 4))
+ub_sigm[7] = 30
 
-p0_playfit = vcat(fill(1.0, 4), fill(1.0, 4))
+p0_sigmfit = vcat(fill(1.0, 4), fill(1.0, 4))
 
-opt18play = solve(OP(objnf_play, p0_playfit, pass18, lb=lb_play, ub=ub_play), alg, maxiters=50, time_limit=15)
-# opt18play = solve(OP(objnf_play, p0_playfitlog, pass18), alg, g_tol = 1e-2, maxiters = 50, time_limit=15, show_trace=true)
-opt128play = solve(OP(objnf_play, p0_playfit, pass128, lb=lb_play, ub=ub_play), alg, maxiters = 50, time_limit=15)
+opt18sigm = solve(OP(objnf_sigm, p0_sigmfit, pass18, lb=lb_sigm, ub=ub_sigm), alg, maxiters=50, time_limit=15)
+# opt18sigm = solve(OP(objnf_sigm, p0_sigmfitlog, pass18), alg, g_tol = 1e-2, maxiters = 50, time_limit=15, show_trace=true)
+opt128sigm = solve(OP(objnf_sigm, p0_sigmfit, pass128, lb=lb_sigm, ub=ub_sigm), alg, maxiters = 50, time_limit=15)
 
-sol1_play18, sol2_play18, sol8_play18 = gennsol_constNS(opt18play.u, (MC1_params128, MC2_params128, MC8_params128), k_f_play);
-sol1_play128, sol2_play128, sol8_play128 = gennsol_constNS(opt128play.u, (MC1_params128, MC2_params128, MC8_params128), k_f_play);
-# poreevolplot( sol1_play)
-poreevolplot( sol1_play18)
-poreevolplot!(sol2_play18)
-poreevolplot!(sol8_play18)
+sol1_sigm18, sol2_sigm18, sol8_sigm18 = gennsol_constNS(opt18sigm.u, (MC1_params128, MC2_params128, MC8_params128), k_f_sigm);
+sol1_sigm128, sol2_sigm128, sol8_sigm128 = gennsol_constNS(opt128sigm.u, (MC1_params128, MC2_params128, MC8_params128), k_f_sigm);
+# poreevolplot( sol1_sigm)
+poreevolplot( sol1_sigm18)
+poreevolplot!(sol2_sigm18)
+poreevolplot!(sol8_sigm18)
 
 begin
 pl1 = blankplot_hrC(legend=:bottomright)
@@ -705,21 +614,21 @@ markers = [:circle :utriangle :square]
 @df dat1 exptfplot!(:t, :T1, :T2, :T3, markershape=markers)
 plot!(title="Tsh = $(Tsh1(Inf*u"s")|>u"°C")")
 plot!(xlim=(0, 120), ylim=(-36, -31), )
-modconvtplot!(sol1_play128, sol1_Rp128, labels=["MC" "Pikal"], markeralpha=0)
+modconvtplot!(sol1_sigm128, sol1_Rp128, labels=["MC" "Pikal"], markeralpha=0)
 pl2 = blankplot_hrC(legend=:bottomright)
 @df dat2 exptfplot!(:t, :T1, :T2, :T3, markershape=markers)
-modconvtplot!(sol2_play128, sol2_Rp128, labels=["MC" "Pikal"], markeralpha=0)
+modconvtplot!(sol2_sigm128, sol2_Rp128, labels=["MC" "Pikal"], markeralpha=0)
 plot!(xlim=(0, 120), ylim=(-38, -31), )
 plot!(title="Tsh = $(Tsh2(Inf*u"s")|>u"°C")")
 
 pl8 = blankplot_hrC(legend=:bottomright)
 @df dat8 exptfplot!(:t, :T1, :T2, :T3, markershape=markers)
-modconvtplot!(sol8_play128, sol8_Rp128, labels=["MC" "Pikal"], markeralpha=0)
+modconvtplot!(sol8_sigm128, sol8_Rp128, labels=["MC" "Pikal"], markeralpha=0)
 plot!(xlim=(0, 20), ylim=(-40, -20))
 plot!(title="Tsh = $(Tsh8(Inf*u"s")|>u"°C")")
 plot(pl2, pl1, pl8, layout=(3,1), size=(600, 600), legend=:outerright)
 end
-savefig(plotsdir("suc128_play_T.svg"))
+savefig(plotsdir("suc128_sigm_T.svg"))
 
 begin
 plot(u"°C", u"s^-1", legend=:bottomright, xlabel="T", ylabel="k\\  ", unitformat=latexsquareunitlabel)
@@ -730,9 +639,9 @@ kineticplot!(MC1_params128,  c=1, marker=markers[3], label="Interp fit to 1&2&8"
 kineticplot!(myega_params1,   c=2, marker=markers[1], label="MYEGA fit to interpolation")
 kineticplot!(sol1_myega18,   c=2, marker=markers[2], label="MYEGA fit to 1&8")
 kineticplot!(sol1_myega128,   c=2, marker=markers[3], label="MYEGA fit to 1&2&8")
-kineticplot!(play_params1  , c=3, marker=markers[1], label="Tanh fit to interpolation")
-kineticplot!(sol1_play18  , c=3, marker=markers[2], label="Tanh fit to 1&8")
-kineticplot!(sol1_play128  , c=3, marker=markers[3], label="Tanh fit to 1&2&8")
+kineticplot!(sigm_params1  , c=3, marker=markers[1], label="Tanh fit to interpolation")
+kineticplot!(sol1_sigm18  , c=3, marker=markers[2], label="Tanh fit to 1&8")
+kineticplot!(sol1_sigm128  , c=3, marker=markers[3], label="Tanh fit to 1&2&8")
 end
 savefig(plotsdir("kinetic.svg"))
 
@@ -750,9 +659,9 @@ begin
 # colors = [:red :blue :purple :brown]
 plot!(palette=:default)
 rpattr = (seriestype=:samplemarkers, linestyle=:dash)
-poreevolplot(sol1_play128, label="PBM 1&8, Cycle 1", c=1, marker=:circle)
-poreevolplot!(sol2_play128, label="PBM 1&8, Cycle 2", c=2, marker=:square)
-poreevolplot!(sol8_play128, label="PBM 1&8, Cycle 8", c=3, marker=:utriangle)
+poreevolplot(sol1_sigm128, label="PBM 1&2&8, Cycle 1", c=1, marker=:circle)
+poreevolplot!(sol2_sigm128, label="PBM 1&2&8, Cycle 2", c=2, marker=:square)
+poreevolplot!(sol8_sigm128, label="PBM 1&2&8, Cycle 8", c=3, marker=:utriangle)
 plot!(l, Rp1, subplot=4, label="3PP 1"; c=4, marker=:circle, rpattr...)
 plot!(l, Rp2, subplot=4, label="3PP 2"; c=4, marker=:square, rpattr...)
 plot!(l, Rp8, subplot=4, label="3PP 8"; c=4, marker=:utriangle, rpattr...)
@@ -764,8 +673,8 @@ savefig(plotsdir("suc128_pores.svg"))
 # # -------------------- 
 # # Assume a beta distribution and see results
 # gr()
-# betaplot(sol1_play128, legend=:topright, legend_columns=1)
-# # betaplot(sol8_play128, ylim=(1e-10, 1e35), xscale=:log10, yscale=:log10, legend=:bottomleft, legend_columns=1)
+# betaplot(sol1_sigm128, legend=:topright, legend_columns=1)
+# # betaplot(sol8_sigm128, ylim=(1e-10, 1e35), xscale=:log10, yscale=:log10, legend=:bottomleft, legend_columns=1)
 # plot!(xlabel="Pore volume [mm³]", ylabel="Probability Density")
 # savefig(plotsdir("changingdist_linear.png"))
 
@@ -781,9 +690,9 @@ function namefitparam_arb(sol, label)
         k_f = po.k_f,
     )
 end
-fits_sol = [sol1_MC1, sol8_MC8, sol1_MC18, sol1_MC128, sol1_myega128, sol1_play128]
+fits_sol = [sol1_MC1, sol8_MC8, sol1_MC18, sol1_MC128, sol1_myega128, sol1_sigm128]
 fits_lab = ["1", "8", "1&8", "1&2&8", "MYEGA 1&2&8", "Tanh 1&2&8"]
-# fits_play = Optim.minimizer.([opt12play, opt18play, opt128play]) 
+# fits_sigm = Optim.minimizer.([opt12sigm, opt18sigm, opt128sigm]) 
 rep = Table(map(namefitparam_arb, fits_sol, fits_lab))
 
 # safesave(datadir("exp_pro", "fit12.html"), pretty_table(HTML, report, header = ["Fit", "N", "S", "k0", "E", "C", "Rs"]))
@@ -826,16 +735,16 @@ begin
 pl1 = blankplot_hrC(legend=:bottomright)
 @df dat1 exptfplot!(:t, :T1, :T2, :T3, markershape=markers)
 plot!(xlim=(0, 70), ylim=(-36, -31), )
-modconvtplot!(sol1_play128, sol1_Rp128, labels=["PBM 1&8" "3PP 1&2&8"], markeralpha=0)
+modconvtplot!(sol1_sigm128, sol1_Rp128, labels=["PBM 1&8" "3PP 1&2&8"], markeralpha=0)
 plot!(title="Tsh = $(Tsh1(Inf*u"s")|>u"°C")", xlabel="")
 pl2 = blankplot_hrC(legend=:bottomright)
 @df dat2 exptfplot!(:t, :T1, :T2, :T3, markershape=markers)
 plot!(xlim=(0, 70), ylim=(-36, -31), )
-modconvtplot!(sol2_play128, sol2_Rp128, labels=["PBM 1&8" "3PP 1&2&8"], markeralpha=0)
+modconvtplot!(sol2_sigm128, sol2_Rp128, labels=["PBM 1&8" "3PP 1&2&8"], markeralpha=0)
 plot!(title="Tsh = $(Tsh1(Inf*u"s")|>u"°C")", xlabel="")
 pl8 = blankplot_hrC(legend=:bottomright)
 @df dat8 exptfplot!(:t, :T1, :T2, :T3, markershape=markers)
-modconvtplot!(sol8_play128, sol8_Rp128, labels=["PBM 1&2&8" "3PP 1&2&8"], markeralpha=0)
+modconvtplot!(sol8_sigm128, sol8_Rp128, labels=["PBM 1&2&8" "3PP 1&2&8"], markeralpha=0)
 plot!(xlim=(0, 30), ylim=(-32, -26))
 plot!(title="Tsh = $(Tsh8(Inf*u"s")|>u"°C")", )
 plot(pl1, pl2, pl8, layout=(3,1), size=(600, 600), legend=:outerright)
@@ -866,18 +775,18 @@ savefig(plotsdir("suc128train_35val_T.svg"))
 begin
 pl1 = blankplot_lRp(ylims=(0, 12), legend=:topleft)
 plot!(title="Cycle 1, Tsh = $(Tsh1(Inf*u"s")|>u"°C")")
-pbmtdlas!(sol1_play128, dat1, Rp1_params.Rp, labels=["PBM 1&8" "3PP 1" "TDLAS"])
+pbmtdlas!(sol1_sigm128, dat1, Rp1_params.Rp, labels=["PBM 1&8" "3PP 1" "TDLAS"])
 plot!(xlabel="")
 pl2 = blankplot_lRp(ylims=(0, 12), legend=:topleft,)
 plot!(title="Cycle 2, Tsh = $(Tsh2(Inf*u"s")|>u"°C")")
-pbmtdlas!(sol2_play128, dat2, Rp2_params.Rp, labels=["PBM 1&8" "3PP 2" "TDLAS"])
+pbmtdlas!(sol2_sigm128, dat2, Rp2_params.Rp, labels=["PBM 1&8" "3PP 2" "TDLAS"])
 pl5 = blankplot_lRp(ylims=(0, 12), legend=:topleft,)
 plot!(title="Cycle 5, Tsh = $(Tsh5(Inf*u"s")|>u"°C")")
 pbmtdlas!(sol5_PBM128, filter(x->x.Rp>0u"m/s", dat5), Rp5, labels=["PBM 1&8" "3PP 5" "TDLAS"])
 plot!(ylabel="")
 pl8 = blankplot_lRp(ylims=(0, 12), legend=:topleft,)
 plot!(title="Cycle 8, Tsh = $(Tsh8(Inf*u"s")|>u"°C")")
-pbmtdlas!(sol8_play128, dat8, Rp8_params.Rp, labels=["PBM 1&8" "3PP 8" "TDLAS"])
+pbmtdlas!(sol8_sigm128, dat8, Rp8_params.Rp, labels=["PBM 1&8" "3PP 8" "TDLAS"])
 plot!(xlabel="", ylabel="")
 plot(pl1, pl8, pl2, pl5, layout=(2,2), size=(600,500))
 end
@@ -906,9 +815,9 @@ end
 savefig(plotsdir("suc128_myega_val35_T.svg"))
 
 
-err_expT(sol1_MC128, fitdat1)
 # -------------------------
 # Turing
+# https://turinglang.org/docs/tutorials/10-bayesian-differential-equations/
 using Turing
 
 # # TODO: because the name "downsampled" does not show up in function argument,
@@ -941,4 +850,11 @@ case1_ns = turing_NS(fitdat1, MC1_params128)
     
 @time sample(case1_ns, NUTS(), MCMCSerial(), 20, 2)
 
+@time sample(case1_ns, NUTS(), MCMCSerial(), 20, 2)
 
+@time sample(case1_ns, NUTS(), MCMCSerial(), 400, 10)
+
+# If Turing is annoying, could try DynamicHMC.jl.
+# https://www.tamaspapp.eu/DynamicHMC.jl/dev/worked_example/
+
+# Or, put together an MWE where a function that compares the fit, and submit as a topic on Discourse
