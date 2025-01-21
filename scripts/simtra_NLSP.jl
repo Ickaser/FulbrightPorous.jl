@@ -232,17 +232,15 @@ function gen_sol_constNS_arb(fitprmlog, po; verbose=false)
     @reset new_params.R0 = fitprm[4]*fit_un_arb[4]
     # Linear interpolant
 
-    # kstops = fitprm[5:8]*fit_un_arb[3]
-    # spl = LinearInterpolation(kstops, Tstops, extrapolate=true)
     # Lin interp in log space
     klogs = fitprmlog[5:8]
     # klogs = log.(fitprm[5:8])
     # klogs = fitprm[5:8]
-    spll = LinearInterpolation(klogs, Tstops, extrapolate=true)
+    spll = LinearInterpolation(klogs, Tstops, extrapolation=ExtrapolationType.Linear)
     spl(T) = exp(spll(T))*fit_un_arb[5]
     # spl = T->exp(spll(T))*fit_un_arb[5]
     # PCHIP interp
-    # spl = PCHIPInterpolation(fitprm[5:8]*fit_un_arb[5], Tstops, extrapolate = true)
+    # spl = PCHIPInterpolation(fitprm[5:8]*fit_un_arb[5], Tstops, extrapolation=ExtrapolationType.Linear)
     @reset new_params.k_f = spl
     prob = ODEProblem(new_params)
     sol = solve(prob, Rodas3())

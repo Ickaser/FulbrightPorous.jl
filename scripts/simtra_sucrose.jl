@@ -308,12 +308,12 @@ struct InterpK{itype<:DataInterpolations.AbstractInterpolation}
 end
 (ik::InterpK)(T) = exp(ik.spl(T))*fit_mul_interp[1]
 function InterpK(klog::AbstractVector, T)
-    return InterpK(LinearInterpolation(klog, T, extrapolate=true))
+    return InterpK(LinearInterpolation(klog, T, extrapolation=ExtrapolationType.Linear))
 end
 function InterpK(klog::AbstractVector)
     T = [-45.0, -38, -32, -28]u"°C" .|> u"K"
     return InterpK(klog, T)
-    # return InterpK(LinearInterpolation(klog, T_stops, extrapolate=true))
+    # return InterpK(LinearInterpolation(klog, T_stops,extrapolation=ExtrapolationType.Linear))
 end
 function Base.show(io::IO, ik::InterpK)
     str = "InterpK($(ik.spl.t), $(ik.(ik.spl.t)))"
@@ -326,9 +326,9 @@ end
 
 function k_f_interp(logk)
     # Lin interp in log space
-    # spll = LinearInterpolation(logk, Tstops, extrapolate=true)
+    # spll = LinearInterpolation(logk, Tstops, extrapolation=ExtrapolationType.Linear)
     # spl(T) = exp(spll(T))*fit_mul_interp[1]
-    # # spl = LinearInterpolation(exp.(logk).*fit_un_interp, Tstops, extrapolate=true)
+    # # spl = LinearInterpolation(exp.(logk).*fit_un_interp, Tstops, extrapolation=ExtrapolationType.Linear)
     return InterpK(logk)
 end
 function obj_interp(x,p)
