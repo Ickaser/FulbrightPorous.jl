@@ -827,8 +827,8 @@ using Turing
 @model function turing_NS(fitdat, param)
 
     # σT ~ InverseGamma
-    Nfac ~ truncated(Normal(0.0, 2.0); lower=-6, upper=6)
-    Sfac ~ truncated(Normal(0.0, 2.0); lower=-6, upper=6)
+    Nfac ~ truncated(Normal(0.0, 2.0); lower=-8, upper=8)
+    Sfac ~ truncated(Normal(0.0, 2.0); lower=-8, upper=8)
 
     newpo = @set param.N = RampedVariable(exp(Nfac)*fit_scl_porous[1])
     @reset newpo.S = RampedVariable(exp(Sfac)*fit_scl_porous[2])
@@ -848,13 +848,16 @@ end
 
 case1_ns = turing_NS(fitdat1, MC1_params128)
     
-@time sample(case1_ns, NUTS(), MCMCSerial(), 20, 2)
+@time sample(case1_ns, NUTS(), MCMCSerial(), 20, 1)
 
-@time sample(case1_ns, NUTS(), MCMCSerial(), 20, 2)
+samp = @time sample(case1_ns, NUTS(), MCMCSerial(), 200, 2)
 
-@time sample(case1_ns, NUTS(), MCMCSerial(), 400, 10)
+plot(samp)
+
+Ns = exp.(reshape(samp[:Nfac], :))*fit_scl_porous[1]
+Ss = exp.(reshape(samp[:Sfac], :))*fit_scl_porous[2]
+prob = reshape(samp[:log_density], :)
+scatter(Ns, Ss, marker_z=prob, scale=:log10, )
 
 # If Turing is annoying, could try DynamicHMC.jl.
 # https://www.tamaspapp.eu/DynamicHMC.jl/dev/worked_example/
-
-# Or, put together an MWE where a function that compares the fit, and submit as a topic on Discourse
