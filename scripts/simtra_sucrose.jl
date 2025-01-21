@@ -911,27 +911,34 @@ err_expT(sol1_MC128, fitdat1)
 # Turing
 using Turing
 
+# # TODO: because the name "downsampled" does not show up in function argument,
+# # Turing thinks that it is a parameter to be inferred.
+# # Need logic that takes the fit data and solution,
+# # then returns something that lets me compare solution to the values of `fitdat`
 @model function turing_NS(fitdat, param)
 
-    Nfac ~ truncated(Normal(0.0, 2.0); lower=-10, upper=10)
-    Sfac ~ truncated(Normal(0.0, 2.0); lower=-10, upper=10)
+    # σT ~ InverseGamma
+    Nfac ~ truncated(Normal(0.0, 2.0); lower=-6, upper=6)
+    Sfac ~ truncated(Normal(0.0, 2.0); lower=-6, upper=6)
 
-    newpo = @set param.N = RampedVariable(exp(Nfac)*fit_mul_porous[1])
-    @reset newpo.S = RampedVariable(exp(Sfac)*fit_mul_porous[2])
+    newpo = @set param.N = RampedVariable(exp(Nfac)*fit_scl_porous[1])
+    @reset newpo.S = RampedVariable(exp(Sfac)*fit_scl_porous[2])
     sol = solve(ODEProblem(newpo), Rodas3())
 
-    errs = err_expT(sol, fitdat)
-    ntot = length(errs)
-    skip = ntot ÷ 100 # Want roughly 100 data points to not overwhelm things
-    downsampled = errs[1:skip:end-1]
-    for i in eachindex(downsampled)
-        downsampled[i] ~ Normal(0.0, 1.0)
-    end
-    errs[end] ~ Normal(0.0, 10.0)
+    sqerr = obj_expT(sol, fitdat, tweight=0)
+    Turing.@addlogprob! -sqerr
+    # errs = err_expT(sol, fitdat)
+    # ntot = length(errs)
+    # skip = ntot ÷ 100 # Want roughly 100 data points to not overwhelm things
+    # downsampled = errs[1:skip:end-1]
+    # for i in eachindex(downsampled)
+    #     downsampled[i] ~ Normal(0.0, 1.0)
+    # end
+    # errs[end] ~ Normal(0.0, 10.0)
 end
 
 case1_ns = turing_NS(fitdat1, MC1_params128)
     
-sample(case1_ns, NUTS(;adtype=AutoForwardDiff()), 10; progress=true)
+@time sample(case1_ns, NUTS(), MCMCSerial(), 20, 2)
 
 
