@@ -1,7 +1,7 @@
 using DrWatson
 @quickactivate :FulbrightPores
-using SavitzkyGolay
 
+using SavitzkyGolay
 const OP = OptimizationProblem
 const NLSP = NonlinearLeastSquaresProblem
 const BFGS = Optim.BFGS
@@ -242,13 +242,12 @@ Rp8_params = sol8_Rp8.prob.p
 
 # typical diameter: 50 μm
 d_typical = 50u"μm"
-# typical total volume: 
 V_typical = 4/3*π*d_typical^3
-N_typical = fillvol/V_typical
+N_typical = 1/V_typical
 
 # Good guesses for Knudsen
-N = RampedVariable(N_typical / hf0)
-S = RampedVariable(V_typical^2*N_typical/hf0)
+N = RampedVariable(N_typical)
+S = RampedVariable(V_typical^2*N_typical)
 C = 2e-1u"m^0.5"
 Rs = 0.5u"cm^2*Torr*hr/g"
 
@@ -261,7 +260,7 @@ Rs = 0.5u"cm^2*Torr*hr/g"
 k0 = 1e-14u"1/s"
 
 pb_mc = (
-    (Rp_g, hf0, c_solid, ρ_solution),
+    (hf0, c_solid, ρ_solution),
     (K_shf, A_v, A_p),
     (pch1, Tsh1),
     (ConstPhysProp(k0), C, N, S, Rs)
@@ -306,7 +305,7 @@ function obj_interp(x,p)
     if ~(ks[1] <= ks[2] <= ks[3] <= ks[4])
         return NaN
     end
-    sol, _ = gen_sol_constNS_arb(x, p[1], k_f_interp)
+    sol = gen_sol_constNS_arb(x, p[1], k_f_interp)
     return obj_expT(sol, p[2], tweight=0)
 end
 function obj_ninterp(fitprm, pfs; verbose=false)
@@ -827,8 +826,10 @@ using Turing
 @model function turing_NS(fitdat, param)
 
     # σT ~ InverseGamma
-    Nfac ~ truncated(Normal(0.0, 2.0); lower=-8, upper=8)
-    Sfac ~ truncated(Normal(0.0, 2.0); lower=-8, upper=8)
+    # Nfac ~ truncated(Normal(0.0, 2.0); lower=-8, upper=8)
+    # Sfac ~ truncated(Normal(0.0, 2.0); lower=-8, upper=8)
+    Nfac ~ truncated(Uniform(-8, 8))
+    Sfac ~ truncated(Uniform(-8, 8))
 
     newpo = @set param.N = RampedVariable(exp(Nfac)*fit_scl_porous[1])
     @reset newpo.S = RampedVariable(exp(Sfac)*fit_scl_porous[2])
@@ -850,14 +851,14 @@ case1_ns = turing_NS(fitdat1, MC1_params128)
     
 @time sample(case1_ns, NUTS(), MCMCSerial(), 20, 1)
 
-samp = @time sample(case1_ns, NUTS(), MCMCSerial(), 200, 2)
+samp = @time sample(case1_ns, NUTS(), MCMCSerial(), 1000, 10)
 
 plot(samp)
 
-Ns = exp.(reshape(samp[:Nfac], :))*fit_scl_porous[1]
-Ss = exp.(reshape(samp[:Sfac], :))*fit_scl_porous[2]
-prob = reshape(samp[:log_density], :)
-scatter(Ns, Ss, marker_z=prob, scale=:log10, )
+# Ns = exp.(reshape(samp[:Nfac], :))*fit_scl_porous[1]
+# Ss = exp.(reshape(samp[:Sfac], :))*fit_scl_porous[2]
+# prob = reshape(samp[:log_density], :)
+# scatter(Ns, Ss, marker_z=prob, scale=:log10, )
 
 # If Turing is annoying, could try DynamicHMC.jl.
 # https://www.tamaspapp.eu/DynamicHMC.jl/dev/worked_example/

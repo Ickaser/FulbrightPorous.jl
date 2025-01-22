@@ -11,7 +11,7 @@ export R, ΔHsub, Mw, η
 """
 function lyo_mc_dae!(du, u, params, t)
 
-    _, hf0, c_solid, ρ_solution = params[1]
+    hf0, c_solid, ρ_solution = params[1]
     Kshf, Av, Ap, = params[2]
     pch, Tsh = params[3] 
     k_f, C, N, S, Rs = params[4] 
@@ -47,8 +47,8 @@ function lyo_mc_dae!(du, u, params, t)
     Qsub = uconvert(u"W", dmdt*ΔHsub)
 
     dhf_dt = min(0u"cm/hr", dmdt/(ρ_solution-c_solid)/Ap) # Cap dhf_dt at 0: no desublimation
-    dμ0_dt = -k/2*μ0^2 - N(hd)*dhf_dt
-    dμ2_dt = k*μ1^2 - S(hd)*dhf_dt # dhf_dt < 0 for drying proceeding
+    dμ0_dt = -k/2*μ0^2 - N(hd)*Ap*dhf_dt
+    dμ2_dt = k*μ1^2 - S(hd)*Ap*dhf_dt # dhf_dt < 0 for drying proceeding
 
     du[1] = ustrip(u"cm/hr", dhf_dt)
     du[2] = ustrip(u"W", Qsub + Qshf)
@@ -82,10 +82,10 @@ The unitless time is taken to be in hours, so derivatives are given in unitless 
 `params` has the form:
 ```
 params = (
-    (_, hf0, c_solid, ρ_solution),
+    (hf0, c_solid, ρ_solution),
     (Kshf, Av, Ap),
     (pch, Tsh) ,
-    (k_f, C, N, S, R0)  
+    (k_f, C, N, S, Rx)  
 )
 ```
 where those listed following are callables returning `Quantity`s, and the rest are `Quantity`s.
@@ -98,21 +98,20 @@ See [`RpFormFit`](@ref LyoPronto.RpFormFit) and [`RampedVariable`](@ref LyoPront
 """
 lyo_mc_dae_f = ODEFunction(lyo_mc_dae!, mass_matrix=lyo_mc_mm)
 
-struct ParamObjMC{T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14}
-    _::T1
-    hf0::T2
-    c_solid::T3
-    ρ_solution::T4
-    Kshf::T5
-    Av::T6
-    Ap::T7
-    pch::T8
-    Tsh::T9
-    k_f::T10
-    C::T11
-    N::T12
-    S::T13
-    Rs::T14
+struct ParamObjMC{T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13}
+    hf0::T1
+    c_solid::T2
+    ρ_solution::T3
+    Kshf::T4
+    Av::T5
+    Ap::T6
+    pch::T7
+    Tsh::T8
+    k_f::T9
+    C::T10
+    N::T11
+    S::T12
+    Rs::T13
 end
 function ParamObjMC(tuptup)
     return ParamObjMC(tuptup[1]..., tuptup[2]...,
@@ -122,7 +121,7 @@ Base.size(po::ParamObjMC) = (4,)
 Base.length(po::ParamObjMC) = 14
 function Base.getindex(po::ParamObjMC, i)
     if i == 1
-        return (po._, po.hf0, po.c_solid, po.ρ_solution)
+        return (po.hf0, po.c_solid, po.ρ_solution)
     elseif i == 2
         return (po.Kshf, po.Av, po.Ap)
     elseif i == 3
@@ -134,7 +133,7 @@ function Base.getindex(po::ParamObjMC, i)
     end
 end
 function Base.show(io::IO, po::ParamObjMC) 
-    str = "ParamObjMC( $(po._), 
+    str = "ParamObjMC( 
     $(po.hf0), 
     $(po.c_solid), 
     $(po.ρ_solution), 
