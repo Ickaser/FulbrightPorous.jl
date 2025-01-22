@@ -31,8 +31,8 @@ basefit1 = mcfits[(Sigmoid_k, 1, (1,2,8))]
 
     newpo = @set param.N = ConstPhysProp(exp(Nfac)*param.N(0))
     @reset newpo.S = ConstPhysProp(exp(Sfac)*param.S(0))
-    @reset newpo.C = ConstPhysProp(exp(Cfac)*param.C)
-    @reset newpo.Rs = ConstPhysProp(exp(Rfac)*param.Rs)
+    @reset newpo.C = exp(Cfac)*param.C
+    @reset newpo.Rs = exp(Rfac)*param.Rs
     sol = solve(ODEProblem(newpo), Rodas3())
 
     sqerr = obj_expT(sol, fitdat, tweight=0)
