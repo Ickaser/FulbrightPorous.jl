@@ -103,6 +103,7 @@ plot!(pch3)
 Tsh3 = RampedVariable(uconvert.(u"K", [-40, -25]u"°C"), 0.5u"K/minute")
 @df dat3 plot(:t, :Tsh, xlim=(0, 2))
 plot!(Tsh3)
+fitdat3 = @df dat3 PrimaryDryFit(:t, (filter(!isnan, :T1), filter(!isnan, :T2), :T3[:t.<45u"hr"]))
 
 # -----------------
 # Cycle 5
@@ -116,6 +117,8 @@ plot!(pch5)
 Tsh5 = RampedVariable(uconvert.(u"K", [-40, -40, -20]u"°C"), [1u"K/minute", 0.5u"K/minute"], [12u"minute"])
 @df dat5 plot(:t, :Tsh_i, xlim=(0, 2))
 plot!(Tsh5)
+
+fitdat5 = @df dat5 PrimaryDryFit(:t, (filter(!isnan, :T1), filter(!isnan, :T3), :T2[:t.<40u"hr"]))
 
 
 # -----------------
@@ -173,6 +176,12 @@ pop2 = deepcopy(pop1)
 pop8 = deepcopy(pop1)
 @reset pop8.pch = pch8
 @reset pop8.Tsh = Tsh8
+pop5 = deepcopy(Rp1_params128)
+@reset pop5.pch = pch5
+@reset pop5.Tsh = Tsh5
+pop3 = deepcopy(Rp1_params128)
+@reset pop3.pch = pch3
+@reset pop3.Tsh = Tsh3
 
 const Rp_scale = (0.5u"cm^2*Torr*hr/g", 60u"cm*Torr*hr/g", 10u"1/cm")
 function gen_sol_Rp(a123, po)
@@ -211,6 +220,8 @@ obj_npf = OptimizationFunction(objn_Rp, AutoForwardDiff())
 @time opt_Rp1 = solve(OP(obj_Rpf, fill(1.0, 3), (pop1, fitdat1)),alg, g_tol = 1e-3)
 opt2p = solve(OP(obj_Rpf, opt_Rp1.u, (pop2, fitdat2)), alg; g_tol=1e-3)
 opt8p = solve(OP(obj_Rpf, opt_Rp1.u, (pop8, fitdat8)), alg; g_tol=1e-3)
+opt3p = solve(OP(obj_Rpf, opt_Rp1.u, (pop3, fitdat3)), alg, g_tol = 1e-3)
+opt5p = solve(OP(obj_Rpf, opt_Rp1.u, (pop5, fitdat5)), alg, g_tol = 1e-3)
 
 sol1_Rp1 = gen_sol_Rp(opt_Rp1.u, pop1);
 sol2_Rp2 = gen_sol_Rp(opt2p.u, pop2);
@@ -629,10 +640,65 @@ plot(pl2, pl1, pl8, layout=(3,1), size=(600, 600), legend=:outerright)
 end
 savefig(plotsdir("suc128_sigm_T.svg"))
 
+mc_fits = Dict{Tuple,ParamObjMC}(
+    (InterpK, 1, (1,)) => MC1_params1,
+    (InterpK, 8, (8,)) => MC8_params,
+    (InterpK, 1, (1, 8)) => MC1_params18,
+    (InterpK, 8, (1, 8)) => MC8_params18,
+    (InterpK, 1, (1, 2, 8)) => MC1_params128,
+    (InterpK, 2, (1, 2, 8)) => MC2_params128,
+    (InterpK, 8, (1, 2, 8)) => MC8_params128,
+    (MYEGA_k, 1, (1, 8)) => sol1_myega18.prob.p,
+    (MYEGA_k, 1, (1, 2, 8)) => sol1_myega128.prob.p,
+    (MYEGA_k, 2, (1, 2, 8)) => sol2_myega128.prob.p,
+    (MYEGA_k, 8, (1, 2, 8)) => sol8_myega128.prob.p,
+    (Sigmoid_k, 1, (1, 8)) => sol1_sigm18.prob.p,
+    (Sigmoid_k, 1, (1, 2, 8)) => sol1_sigm128.prob.p,
+    (Sigmoid_k, 2, (1, 2, 8)) => sol2_sigm128.prob.p,
+    (Sigmoid_k, 8, (1, 2, 8)) => sol8_sigm128.prob.p,
+)
+
+pikal_params = Dict(
+    (1, (1,)) => Rp1_params,
+    (2, (2,)) => Rp2_params,
+    (8, (8,)) => Rp8_params,
+    (1, (1,8)) => Rp1_params18,
+    (1, (1,2,8)) => Rp1_params128,
+)
+
+Rp1 = Rp1_params.Rp
+Rp2 = Rp2_params.Rp
+Rp8 = Rp8_params.Rp
+Rp18 = Rp1_params18.Rp
+Rp128 = Rp1_params128.Rp
+Rp3 = gen_sol_Rp(opt3p.u, pop3).prob.p.Rp
+Rp5 = gen_sol_Rp(opt5p.u, pop5).prob.p.Rp
+
+pikal_rps = Dict(
+    (1,) => Rp1,
+    (2,) => Rp2,
+    (8,) => Rp8,
+    (1,8) => Rp18,
+    (1,2,8) => Rp128,
+    (3,) => Rp3,
+    (5,) => Rp5,
+)
+
+fitdats = Dict(
+    1 => fitdat1,
+    2 => fitdat2,
+    3 => fitdat3,
+    5 => fitdat5,
+    8 => fitdat8
+)
+
+safesave(datadir("exp_pro", "simtra_sucrose_fitdata.jld2"), @strdict fitdats)
+safesave(datadir("exp_pro", "simtra_sucrose_fitresults.jld2"), @strdict mc_fits pikal_params pikal_rps)
+
 begin
 plot(u"°C", u"s^-1", legend=:bottomright, xlabel="T", ylabel="k\\  ", unitformat=latexsquareunitlabel)
-# kineticplot!(MC1_params,    T=Tcheck, label="Interp fit to case 1")
-kineticplot!(MC8_params,     label="Interp fit to case 8")
+# kineticplot!(MC1_params,  c  label="Interp fit to case 1")
+# kineticplot!(MC8_params,     label="Interp fit to case 8")
 kineticplot!(MC1_params18,   c=1, marker=markers[2], label="Interp fit to 1&8")
 kineticplot!(MC1_params128,  c=1, marker=markers[3], label="Interp fit to 1&2&8")
 kineticplot!(myega_params1,   c=2, marker=markers[1], label="MYEGA fit to interpolation")
@@ -646,13 +712,7 @@ savefig(plotsdir("kinetic.svg"))
 
 
 
-
 l = range(0u"cm", hf0, length=50)
-Rp1 = Rp1_params.Rp.(l)
-Rp2 = Rp2_params.Rp.(l)
-Rp8 = Rp8_params.Rp.(l)
-Rp18 = Rp1_params18.Rp.(l)
-
 default(:markersize, 7)
 begin
 # colors = [:red :blue :purple :brown]
@@ -661,9 +721,9 @@ rpattr = (seriestype=:samplemarkers, linestyle=:dash)
 poreevolplot(sol1_sigm128, label="PBM 1&2&8, Cycle 1", c=1, marker=:circle)
 poreevolplot!(sol2_sigm128, label="PBM 1&2&8, Cycle 2", c=2, marker=:square)
 poreevolplot!(sol8_sigm128, label="PBM 1&2&8, Cycle 8", c=3, marker=:utriangle)
-plot!(l, Rp1, subplot=4, label="3PP 1"; c=4, marker=:circle, rpattr...)
-plot!(l, Rp2, subplot=4, label="3PP 2"; c=4, marker=:square, rpattr...)
-plot!(l, Rp8, subplot=4, label="3PP 8"; c=4, marker=:utriangle, rpattr...)
+plot!(l, Rp1.(l), subplot=4, label="3PP 1"; c=4, marker=:circle, rpattr...)
+plot!(l, Rp2.(l), subplot=4, label="3PP 2"; c=4, marker=:square, rpattr...)
+plot!(l, Rp8.(l), subplot=4, label="3PP 8"; c=4, marker=:utriangle, rpattr...)
 # plot!(l, Rp18, subplot=4, label="3PP 1&8"; c=4, marker=:diamond, rpattr...)
 plot!(size=(800, 400))
 end
@@ -702,32 +762,20 @@ safesave(datadir("exp_pro", "fit_arb.html"), pretty_table(HTML, rep, header = ["
 # Validation
 
 
-pop3 = deepcopy(Rp1_params128)
-@reset pop3.pch = pch3
-@reset pop3.Tsh = Tsh3
 sol3_Rp128 = solve(ODEProblem(pop3), Rodas3());
 po_PBM3 = deepcopy(MC1_params128)
 @reset po_PBM3.pch = pch3
 @reset po_PBM3.Tsh = Tsh3
 sol3_PBM128 = solve(ODEProblem(po_PBM3), Rodas3());
 
-fitdat3 = @df dat3 PrimaryDryFit(:t, (filter(!isnan, :T1), filter(!isnan, :T2), :T3[:t.<45u"hr"]))
-opt3p = solve(OP(obj_Rpf, opt_Rp1.u, (pop3, fitdat3)), alg, g_tol = 1e-3)
-Rp3 = gen_sol_Rp(opt3p.u, pop3).prob.p.Rp
 
-pop5 = deepcopy(Rp1_params128)
-@reset pop5.pch = pch5
-@reset pop5.Tsh = Tsh5
 sol5_Rp128 = solve(ODEProblem(pop5), Rodas3());
 po_PBM5 = deepcopy(MC1_params128)
 @reset po_PBM5.pch = pch5
 @reset po_PBM5.Tsh = Tsh5
 sol5_PBM128 = solve(ODEProblem(po_PBM5), Rodas3());
 
-fitdat5 = @df dat5 PrimaryDryFit(:t, (filter(!isnan, :T1), filter(!isnan, :T3), :T2[:t.<40u"hr"]))
 plot(fitdat5)
-opt5p = solve(OP(obj_Rpf, opt_Rp1.u, (pop5, fitdat5)), alg, g_tol = 1e-3)
-Rp5 = gen_sol_Rp(opt5p.u, pop5).prob.p.Rp
 
 # Training plot
 begin
@@ -813,52 +861,3 @@ plot(pl3, pl5, layout=(2,1), size=(600, 400), legend=:outerright)
 end
 savefig(plotsdir("suc128_myega_val35_T.svg"))
 
-
-# -------------------------
-# Turing
-# https://turinglang.org/docs/tutorials/10-bayesian-differential-equations/
-using Turing
-
-# # TODO: because the name "downsampled" does not show up in function argument,
-# # Turing thinks that it is a parameter to be inferred.
-# # Need logic that takes the fit data and solution,
-# # then returns something that lets me compare solution to the values of `fitdat`
-@model function turing_NS(fitdat, param)
-
-    # σT ~ InverseGamma
-    # Nfac ~ truncated(Normal(0.0, 2.0); lower=-8, upper=8)
-    # Sfac ~ truncated(Normal(0.0, 2.0); lower=-8, upper=8)
-    Nfac ~ truncated(Uniform(-8, 8))
-    Sfac ~ truncated(Uniform(-8, 8))
-
-    newpo = @set param.N = RampedVariable(exp(Nfac)*fit_scl_porous[1])
-    @reset newpo.S = RampedVariable(exp(Sfac)*fit_scl_porous[2])
-    sol = solve(ODEProblem(newpo), Rodas3())
-
-    sqerr = obj_expT(sol, fitdat, tweight=0)
-    Turing.@addlogprob! -sqerr
-    # errs = err_expT(sol, fitdat)
-    # ntot = length(errs)
-    # skip = ntot ÷ 100 # Want roughly 100 data points to not overwhelm things
-    # downsampled = errs[1:skip:end-1]
-    # for i in eachindex(downsampled)
-    #     downsampled[i] ~ Normal(0.0, 1.0)
-    # end
-    # errs[end] ~ Normal(0.0, 10.0)
-end
-
-case1_ns = turing_NS(fitdat1, MC1_params128)
-    
-@time sample(case1_ns, NUTS(), MCMCSerial(), 20, 1)
-
-samp = @time sample(case1_ns, NUTS(), MCMCSerial(), 1000, 10)
-
-plot(samp)
-
-# Ns = exp.(reshape(samp[:Nfac], :))*fit_scl_porous[1]
-# Ss = exp.(reshape(samp[:Sfac], :))*fit_scl_porous[2]
-# prob = reshape(samp[:log_density], :)
-# scatter(Ns, Ss, marker_z=prob, scale=:log10, )
-
-# If Turing is annoying, could try DynamicHMC.jl.
-# https://www.tamaspapp.eu/DynamicHMC.jl/dev/worked_example/
