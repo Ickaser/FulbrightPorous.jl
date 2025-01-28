@@ -73,7 +73,7 @@ S = RampedVariable(1e-1u"cm^5")
 # R0 = 0.1u"cm^2*Torr*hr/g"
 
 μ2_0 = (100u"μm")^6
-u0_mc = ustrip.([u"cm", u"K", NoUnits, u"cm^6"], [h_f0, T_f0, 1.0e2, μ2_0])
+u0_mc = ustrip.([u"cm", u"K", NoUnits, u"mm^6"], [h_f0, T_f0, 1.0e2, μ2_0])
 
 params_bunch_mc = Vector{Any}([
     (Rp, h_f0, c_solid, ρ_solution),
@@ -96,7 +96,7 @@ savefig(plotsdir("quicktest_T.svg"))
 function calc_Rp(hf, Tf, μ0, μ2)
     hd = (h_f0-hf*u"cm")
     Tf *= u"K"
-    μ2 *= u"cm^6"
+    μ2 *= u"mm^6"
     ϕ = (ρ_solution - c_solid)/ρ_solution
     μ1 = hd*ϕ*A_p
     # μ32 = μ0^(-1//8)*μ1^(3//4)*μ2^(3//8)

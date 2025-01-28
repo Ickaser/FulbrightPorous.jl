@@ -12,7 +12,7 @@ blankplot_lRp(;kwargs...) = plot(u"cm", u"cm^2*Torr*hr/g", xlabel=L"h_d", ylabel
     t = sol.t*u"hr"
     hf = sol[1,:]*u"cm"
     μ0 = sol[3,:]
-    μ2 = sol[4,:]*u"cm^6" .|> u"mm^6"
+    μ2 = sol[4,:]*u"mm^6" .|> u"mm^6"
     po = sol.prob.p
     hd = (po.hf0 .- hf) .|> u"cm"
     ϕ = (po.ρ_solution - po.c_solid)/po.ρ_solution
@@ -154,7 +154,7 @@ using Distributions
     for ti in ts
         hf = sol(ti, idxs=1)*u"cm"
         μ0 = sol(ti, idxs=3)
-        μ2 = sol(ti, idxs=4)*u"cm^6" .|> u"mm^6"
+        μ2 = sol(ti, idxs=4)*u"mm^6" .|> u"mm^6"
         po = sol.prob.p
         hd = (po.hf0 .- hf) .|> u"cm"
         ϕ = (po.ρ_solution - po.c_solid)/po.ρ_solution

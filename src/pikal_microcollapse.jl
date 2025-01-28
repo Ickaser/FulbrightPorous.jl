@@ -20,7 +20,7 @@ function lyo_mc_dae!(du, u, params, t)
     hf = u[1]*u"cm"
     Tf = u[2]*u"K"
     μ0 = u[3]
-    μ2 = u[4]*u"cm^6"
+    μ2 = u[4]*u"mm^6"
 
     # exit hatch for bad parameter guesses
     if Tf < 0u"K"
@@ -34,7 +34,7 @@ function lyo_mc_dae!(du, u, params, t)
     Qshf = Av*Kshf(pch(td))*(Tsh(td) - Tf)
     Tsub = Tf - Qshf/k_ice/Ap*hf
 
-    if μ1 < 0u"cm^3" || μ0 < 0.0 || μ2 <= 0u"cm^6"
+    if μ1 < 0u"cm^3" || μ0 < 0.0 || μ2 <= 0u"mm^6"
         Rp = 0u"m/s" # No pores to resist flow
     else
         # μ32 = μ0^(-1//8)*μ1^(3//4)*μ2^(3//8)
@@ -53,7 +53,7 @@ function lyo_mc_dae!(du, u, params, t)
     du[1] = ustrip(u"cm/hr", dhf_dt)
     du[2] = ustrip(u"W", Qsub + Qshf)
     du[3] = ustrip(u"hr^-1", dμ0_dt)
-    du[4] = ustrip(u"cm^6/hr", dμ2_dt)
+    du[4] = ustrip(u"mm^6/hr", dμ2_dt)
 
     return Rsp
 end
@@ -76,8 +76,8 @@ The DAE system which is the Pikal model plus pore moment evolution (3 ODEs, one 
 is here treated as a constant-mass-matrix implicit ODE system.
 The implementation is in [`lyo_mc_dae!`](@ref)
 
-The initial conditions `u0 = [h_f, Tf, μ0, μ2]` should be unitless, but are internally assigned to be in `[cm, K, NoUnits, cm^6]`.
-The unitless time is taken to be in hours, so derivatives are given in unitless `[cm/hr, K/hr, 1/hr, cm^6/hr]`.
+The initial conditions `u0 = [h_f, Tf, μ0, μ2]` should be unitless, but are internally assigned to be in `[cm, K, NoUnits, mm^6]`.
+The unitless time is taken to be in hours, so derivatives are given in unitless `[cm/hr, K/hr, 1/hr, mm^6/hr]`.
 
 `params` has the form:
 ```
@@ -156,7 +156,7 @@ function ODEProblem(po::ParamObjMC; u0=nothing, tspan=nothing)
         tspan = (0.0, 200.0)
     end
     if isnothing(u0)
-        u0 = ustrip.([u"cm", u"K", u"cm^6", NoUnits], [po.hf0, po.Tsh(0u"s"), 0.0u"cm^6", 0.0])
+        u0 = ustrip.([u"cm", u"K", u"mm^6", NoUnits], [po.hf0, po.Tsh(0u"s"), 0.0u"mm^6", 0.0])
     end
     tstops = [0.0]
     for control in [po.Tsh, po.pch]
@@ -166,6 +166,7 @@ function ODEProblem(po::ParamObjMC; u0=nothing, tspan=nothing)
             tstops = vcat(tstops, ustrip.(u"hr", control.t))
         end
     end
+    sort!(tstops)
     return ODEProblem(lyo_mc_dae_f, u0, tspan, po; 
         tstops=tstops, callback=end_drying_callback)
 end
