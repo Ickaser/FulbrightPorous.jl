@@ -1,7 +1,6 @@
 using DrWatson
 @quickactivate :FulbrightPores
 
-using SavitzkyGolay
 const OP = OptimizationProblem
 const NLSP = NonlinearLeastSquaresProblem
 const BFGS = Optim.BFGS
@@ -178,45 +177,17 @@ pop8 = deepcopy(pop1)
 @reset pop8.pch = pch8
 @reset pop8.Tsh = Tsh8
 
-const Rp_scale = (0.5u"cm^2*Torr*hr/g", 60u"cm*Torr*hr/g", 10u"1/cm")
-function gen_sol_Rp(a123, po)
-    new_params = @set po.Rp = RpFormFit((a123.*Rp_scale)...)
-    prob = ODEProblem(new_params; tspan=(0.0, 1000.0))
-    sol = solve(prob, Rodas3())
-    return sol
-end
-function obj_Rp(x, p)
-    if any(x .< 0)
-        return NaN
-    end
-    sol = gen_sol_Rp(x, p[1])
-    return obj_expT(sol, p[2], tweight=1e-4)
-end
 obj_Rpf = OptimizationFunction(obj_Rp, AutoForwardDiff())
-@time obj_Rpf(fill(1.0, 3), (pop8, fitdat8))
+@time obj_Rpf(fill(0.0, 3), (pop8, fitdat8))
 
-function gennsol_Rp(fitprm, pos)
-    return [gen_sol_Rp(fitprm, po) for po in pos]
-end
-function objn_Rp(fitprm, pfs)
-    if any(fitprm .< 0)
-        return NaN
-    end
-    pos, fitdats = pfs
-    sols = gennsol_Rp(fitprm, pos)
-    objs = map(sols, fitdats) do sol, fitdat
-        obj_expT(sol, fitdat, tweight=1e-3)
-    end
-    return sum(objs)
-end
 obj_npf = OptimizationFunction(objn_Rp, AutoForwardDiff())
 # @time ForwardDiff.gradient(x->obj_Rpf(x, (pop8, fitdat8)), [0.8, 90, 1])
 
-@time opt_Rp1 = solve(OP(obj_Rpf, fill(1.0, 3), (pop1, fitdat1)),alg, g_tol = 1e-3)
-opt2p = solve(OP(obj_Rpf, opt_Rp1.u, (pop2, fitdat2)), alg; g_tol=1e-3)
-opt8p = solve(OP(obj_Rpf, opt_Rp1.u, (pop8, fitdat8)), alg; g_tol=1e-3)
+@time opt1p = solve(OP(obj_Rpf, fill(1.0, 3), (pop1, fitdat1)),alg, g_tol = 1e-3)
+opt2p = solve(OP(obj_Rpf, opt1p.u, (pop2, fitdat2)), alg; g_tol=1e-3)
+opt8p = solve(OP(obj_Rpf, opt1p.u, (pop8, fitdat8)), alg; g_tol=1e-3)
 
-sol1_Rp1 = gen_sol_Rp(opt_Rp1.u, pop1);
+sol1_Rp1 = gen_sol_Rp(opt1p.u, pop1);
 sol2_Rp2 = gen_sol_Rp(opt2p.u, pop2);
 sol8_Rp8 = gen_sol_Rp(opt8p.u, pop8);
 # plot(u"hr", u"°C", xlim=(0, 60), ylim=(-40, -30))
@@ -227,8 +198,8 @@ plot!(fitdat1)
 
 pass18p =  ((pop1, pop2), (fitdat1, fitdat2));
 pass128p = ((pop1, pop2, pop8), (fitdat1, fitdat2, fitdat8))
-@time opt18p = solve(OP(obj_npf, opt_Rp1.u, pass18p), alg; g_tol=1e-2, show_trace=true)
-@time opt128p = solve(OP(obj_npf, opt_Rp1.u, pass128p), alg; g_tol=1e-2)
+@time opt18p = solve(OP(obj_npf, opt1p.u, pass18p), alg; g_tol=1e-2, show_trace=true)
+@time opt128p = solve(OP(obj_npf, opt1p.u, pass128p), alg; g_tol=1e-2)
 
 sol1_Rp18 = gen_sol_Rp(opt18p.u, pop1);
 sol2_Rp18 = gen_sol_Rp(opt18p.u, pop2);
@@ -248,27 +219,19 @@ pop5 = deepcopy(Rp1_params128)
 pop3 = deepcopy(Rp1_params128)
 @reset pop3.pch = pch3
 @reset pop3.Tsh = Tsh3
-opt3p = solve(OP(obj_Rpf, opt_Rp1.u, (pop3, fitdat3)), alg, g_tol = 1e-3)
-opt5p = solve(OP(obj_Rpf, opt_Rp1.u, (pop5, fitdat5)), alg, g_tol = 1e-3)
+opt3p = solve(OP(obj_Rpf, opt1p.u, (pop3, fitdat3)), alg, g_tol = 1e-3)
+opt5p = solve(OP(obj_Rpf, opt1p.u, (pop5, fitdat5)), alg, g_tol = 1e-3)
 # -------------- Set up parameters
 
 # typical diameter: 50 μm
 d_typical = 50u"μm"
 V_typical = 4/3*π*d_typical^3
 N_typical = 1/V_typical
-
 # Good guesses for Knudsen
-N = RampedVariable(N_typical)
-S = RampedVariable(V_typical^2*N_typical)
+N = ConstPhysProp(N_typical)
+S = ConstPhysProp(V_typical) # = V_typ^2*N_typ
 C = 2e-1u"m^0.5"
 Rs = 0.5u"cm^2*Torr*hr/g"
-
-# Good guesses for viscous
-# N = RampedVariable(N_typical / hf0) 
-# S = RampedVariable(1e0u"cm^5")
-# C = 2e2u"m"
-# Rs = 0.01u"cm^2*Torr*hr/g"
-
 k0 = 1e-14u"1/s"
 
 pb_mc = (
@@ -285,59 +248,31 @@ pomc8 = deepcopy(pomc1)
 @reset pomc8.pch = pch8
 @reset pomc8.Tsh = Tsh8
 
-# const fit_un_scale = (u"cm^-1", u"cm^5", u"m^0.5", u"m/s", fill(u"s^-1", 4)...)
-const fit_scl_porous = (N(0), S(0), C, Rs)
-function gen_sol_constNS_arb(fitprm, po, k_f_gen; verbose=false)
-    new_params = deepcopy(po)
-    # fitprm = exp.(fitprmlog) # Constrain all to be positive by taking exp
-    verbose && @info "fitprm" fitprm
-    @reset new_params.N = RampedVariable(fitprm[1]*fit_scl_porous[1])
-    @reset new_params.S = RampedVariable(fitprm[2]*fit_scl_porous[2])
-    @reset new_params.C  = fitprm[3]*fit_scl_porous[3]
-    @reset new_params.Rs = fitprm[4]*fit_scl_porous[4]
-    @reset new_params.k_f = k_f_gen(fitprm[5:end])
-    prob = ODEProblem(new_params; tspan=(0.0, 1000.0))
-    sol = solve(prob, Rodas3())
-    return sol
-end
-function gennsol_constNS(fitprm, pos, k_f_gen)
-    sols = map(pos) do po
-        gen_sol_constNS_arb(fitprm, po, k_f_gen)
-    end
-    return sols
-end
-
 # -----------------------------
 # Fit k by interpolating at four values
-function k_f_interp(logk)
+function k_f_interp_suc(logk)
     return InterpK(logk, [-45.0, -38, -32, -28]u"°C" .|> u"K", k0)
 end
-function obj_interp(x,p)
-    ks = x[5:8]
-    if ~(ks[1] <= ks[2] <= ks[3] <= ks[4])
-        return NaN
-    end
-    sol = gen_sol_constNS_arb(x, p[1], k_f_interp)
-    return obj_expT(sol, p[2], tweight=0)
-end
-function obj_ninterp(fitprm, pfs; verbose=false)
-    pos, fitdats = pfs
+# function obj_interp(x,p)
+#     ks = x[5:8]
+#     if ~(ks[1] <= ks[2] <= ks[3] <= ks[4])
+#         return NaN
+#     end
+#     return objn_mc(x, (p..., k_f_interp_suc))
+# end
+function obj_ninterp(fitprm, pf; verbose=false)
     if ~(fitprm[5] < fitprm[6] < fitprm[7] < fitprm[8])
         return NaN
     end
-    sols = gennsol_constNS(fitprm, pos, k_f_interp)
-    objs = map(sols, fitdats) do sol, fitdat
-        obj_expT(sol, fitdat, tweight=1e-3)
-    end
-    return sum(objs)
+    return objn_mc(fitprm, (pf..., k_f_interp_suc), verbose=verbose)
 end
-objf_interp = OptimizationFunction(obj_interp, AutoForwardDiff())
+# objf_interp = OptimizationFunction(obj_interp, AutoForwardDiff())
 objnf_interp = OptimizationFunction(obj_ninterp, AutoForwardDiff())
 lb_MC = vcat(fill(0.0, 4), fill(-20., 4))
 ub_MC = vcat(fill(Inf, 4), fill(20., 4))
 
 interp_guess = [1.0, 1.0, 1.0, 1.0, -1, 1, 3, 12]
-@time opt_MC1 = solve(OP(objf_interp, interp_guess, (pomc1, fitdat1), lb=lb_MC, ub=ub_MC), alg;show_trace=true, g_tol = 1e-2, maxtime=10)
+@time opt_MC1 = solve(OP(objnf_interp, interp_guess, (pomc1, fitdat1), lb=lb_MC, ub=ub_MC), alg;show_trace=true, g_tol = 1e-2, maxtime=10)
 
 sol1_MC1 = gen_sol_constNS_arb(opt_MC1.u, pomc1, k_f_interp);
 MC1_params1 = sol1_MC1.prob.p
@@ -350,7 +285,7 @@ end
 savefig(plotsdir("suc1_T.svg"))
 
 
-@time opt_MC8 = solve(OP(objf_interp, opt_MC1.u, (pomc8, fitdat8), lb=lb_MC, ub=ub_MC), alg; show_trace=true, g_tol=1e-2)
+@time opt_MC8 = solve(OP(objnf_interp, opt_MC1.u, (pomc8, fitdat8), lb=lb_MC, ub=ub_MC), alg; show_trace=true, g_tol=1e-2)
 
 sol8_MC8 = gen_sol_constNS_arb(opt_MC8.u, pomc8, k_f_interp);
 MC8_params = sol8_MC8.prob.p
@@ -473,28 +408,8 @@ plot!(fitdat8)
 plot(pl1, pl2, pl3)
 end
 
-function objnmyega(fitprm, pfs; verbose=false)
-    pos, fitdats = pfs
-    # verbose && @info "fitprm" fitprm
-    sols = gennsol_constNS(fitprm, pos, k_f_myega)
-    if any([sol.retcode != ReturnCode.Terminated for sol in sols])
-        if verbose
-            for sol in sols 
-                if sol.retcode != ReturnCode.Terminated
-                    @info "unfinished drying" sol[1,end] fitprm 
-                end
-            end
-        end
-        # verbose && @info "unfinished drying" [sol for 
-        # return NaN
-    end
-    objs = map(sols, fitdats) do sol, fitdat
-        obj_expT(sol, fitdat, tweight=0)
-    end
-    verbose && @info "obj" objs fitprm 
-    return sum(objs)
-end
-objnf_myega = OptimizationFunction(objnmyega, AutoForwardDiff())
+objn_myega(fitprm, pf) = objn_mc(fitprm, (pf..., k_f_myega))
+objnf_myega = OptimizationFunction(objn_myega, AutoForwardDiff())
 p0_myegafit = vcat(fill(1.0, 4), fill(1.0, 3))
 
 pass128 = ([MC1_params128, MC2_params128, MC8_params128], [fitdat1, fitdat2, fitdat8]);
@@ -581,25 +496,8 @@ modconvtplot!(sol8_sigm, sol8_MC8)
 plot!(fitdat8)
 end
 
-function objnsigm(fitprm, pfs; verbose=false)
-    pos, fitdats = pfs
-    sols = gennsol_constNS(fitprm, pos, k_f_sigm)
-    if any([sol.retcode != ReturnCode.Terminated for sol in sols])
-        if verbose
-            for sol in sols 
-                if sol.retcode != ReturnCode.Terminated
-                    @info "unfinished drying" sol[1,end] fitprm 
-                end
-            end
-        end
-    end
-    objs = map(sols, fitdats) do sol, fitdat
-        obj_expT(sol, fitdat, tweight=0)
-    end
-    verbose && @info "obj" objs fitprm 
-    return sum(objs)
-end
-objnf_sigm = OptimizationFunction(objnsigm, AutoForwardDiff())
+objn_sigm(fitprm, pf) = objn_mc(fitprm, (pf..., k_f_sigm))
+objnf_sigm = OptimizationFunction(objn_sigm, AutoForwardDiff())
 
 lb_sigm = vcat(fill(0.0, 4), fill(-2, 4))
 lb_sigm[7] = -30

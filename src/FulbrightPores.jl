@@ -19,11 +19,13 @@ import LyoPronto: ODEProblem
 @reexport using Accessors
 @reexport using DataInterpolations
 @reexport using UnitfulLatexify, Latexify
+@reexport using SavitzkyGolay
 
 
 
 include("pikal_microcollapse.jl")
 include("kinetic_models.jl")
+include("fitting.jl")
 include("simtra_rename.jl")
 include("recipes.jl")
 
