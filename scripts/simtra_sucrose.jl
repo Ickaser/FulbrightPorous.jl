@@ -50,9 +50,9 @@ Tsh1 = RampedVariable(uconvert.(u"K", [-40, -40, -25]u"°C"), [1u"K/minute", 0.5
 @df dat1 plot(:t, :Tsh, xlim=(0, 2))
 plot!(Tsh1)
 
-fitdat1 = PrimaryDryFit(collect(dat1.t), (
-    collect(filter(x->(!isnan(x) && x<-32.5u"°C"), dat1.T1)),
-    collect(filter(!isnan, dat1.T2[dat1.t .< 60u"hr"])),
+fitdat1 = PrimaryDryFit(dat1.t, (
+    filter(x->(!isnan(x) && x<-32.5u"°C"), dat1.T1),
+    filter(!isnan, dat1.T2[dat1.t .< 60u"hr"]),
     # collect(filter(!isnan, dat1.T3)),
     ),
     t_end1
@@ -80,10 +80,10 @@ pch2 = RampedVariable(100u"mTorr")
 plot!(pch2)
 tendplot!(t_end2)
 
-fitdat2 = @df dat2 PrimaryDryFit(collect(:t), (
+fitdat2 = @df dat2 PrimaryDryFit(:t, (
     # collect(filter(!isnan, :T1)),
-    collect(filter(!isnan, :T2[:t .< 85u"hr"])),
-    collect(filter(!isnan, :T3)),),
+    filter(!isnan, :T2[:t .< 85u"hr"]),
+    filter(!isnan, :T3),),
     t_end2)
 plot(fitdat2)
 
@@ -140,13 +140,14 @@ Tsh8 = RampedVariable(uconvert.(u"K", [-40, -40, -10]u"°C"), [1u"K/minute", 0.5
 @df dat8 plot(:t, :Tsh_i, xlim=(0, 2))
 plot!(Tsh8)
 
-fitdat8 = @df dat8 PrimaryDryFit(collect(:t), (
-    collect(filter(!isnan, :T1)),
-    collect(filter(!isnan, :T2[:t .< 17u"hr"])),
-    collect(filter(!isnan, :T3[:t .< 17u"hr"])),),
+fitdat8 = @df dat8 PrimaryDryFit(:t, (
+    filter(!isnan, :T1),
+    filter(!isnan, :T2[:t .< 17u"hr"]),
+    filter(!isnan, :T3[:t .< 17u"hr"]),),
     t_end8)
 plot(fitdat8)
 
+@info "All data loaded"
 
 # -------------
 # Parameter setup
@@ -176,12 +177,6 @@ pop2 = deepcopy(pop1)
 pop8 = deepcopy(pop1)
 @reset pop8.pch = pch8
 @reset pop8.Tsh = Tsh8
-pop5 = deepcopy(Rp1_params128)
-@reset pop5.pch = pch5
-@reset pop5.Tsh = Tsh5
-pop3 = deepcopy(Rp1_params128)
-@reset pop3.pch = pch3
-@reset pop3.Tsh = Tsh3
 
 const Rp_scale = (0.5u"cm^2*Torr*hr/g", 60u"cm*Torr*hr/g", 10u"1/cm")
 function gen_sol_Rp(a123, po)
@@ -220,8 +215,6 @@ obj_npf = OptimizationFunction(objn_Rp, AutoForwardDiff())
 @time opt_Rp1 = solve(OP(obj_Rpf, fill(1.0, 3), (pop1, fitdat1)),alg, g_tol = 1e-3)
 opt2p = solve(OP(obj_Rpf, opt_Rp1.u, (pop2, fitdat2)), alg; g_tol=1e-3)
 opt8p = solve(OP(obj_Rpf, opt_Rp1.u, (pop8, fitdat8)), alg; g_tol=1e-3)
-opt3p = solve(OP(obj_Rpf, opt_Rp1.u, (pop3, fitdat3)), alg, g_tol = 1e-3)
-opt5p = solve(OP(obj_Rpf, opt_Rp1.u, (pop5, fitdat5)), alg, g_tol = 1e-3)
 
 sol1_Rp1 = gen_sol_Rp(opt_Rp1.u, pop1);
 sol2_Rp2 = gen_sol_Rp(opt2p.u, pop2);
@@ -232,8 +225,8 @@ modconvtplot!(sol1_Rp1)
 # @df dat1 exptfplot!(:t, :T1, :T2, :T3)
 plot!(fitdat1)
 
-pass18p =  ([pop1, pop2], [fitdat1, fitdat2]);
-pass128p = ([pop1, pop2, pop8], [fitdat1, fitdat2, fitdat8])
+pass18p =  ((pop1, pop2), (fitdat1, fitdat2));
+pass128p = ((pop1, pop2, pop8), (fitdat1, fitdat2, fitdat8))
 @time opt18p = solve(OP(obj_npf, opt_Rp1.u, pass18p), alg; g_tol=1e-2, show_trace=true)
 @time opt128p = solve(OP(obj_npf, opt_Rp1.u, pass128p), alg; g_tol=1e-2)
 
@@ -249,6 +242,14 @@ Rp1_params = sol1_Rp1.prob.p
 Rp2_params = sol2_Rp2.prob.p
 Rp8_params = sol8_Rp8.prob.p
 
+pop5 = deepcopy(Rp1_params128)
+@reset pop5.pch = pch5
+@reset pop5.Tsh = Tsh5
+pop3 = deepcopy(Rp1_params128)
+@reset pop3.pch = pch3
+@reset pop3.Tsh = Tsh3
+opt3p = solve(OP(obj_Rpf, opt_Rp1.u, (pop3, fitdat3)), alg, g_tol = 1e-3)
+opt5p = solve(OP(obj_Rpf, opt_Rp1.u, (pop5, fitdat5)), alg, g_tol = 1e-3)
 # -------------- Set up parameters
 
 # typical diameter: 50 μm
@@ -363,9 +364,9 @@ savefig(plotsdir("suc8_T.svg"))
 
 g18mc = (opt_MC8.u .+ opt_MC1.u)/2
 # opt18mc = optimize(obj18mc, g18mc, NelderMead(), Optim.Options(g_tol = 1e-3))
-@time opt18mc = solve(OP(objnf_interp, g18mc, ([pomc1, pomc8], [fitdat1, fitdat8]), lb=lb_MC, ub=ub_MC), alg, g_tol=1e-3)
+@time opt18mc = solve(OP(objnf_interp, g18mc, ((pomc1, pomc8), (fitdat1, fitdat8)), lb=lb_MC, ub=ub_MC), alg, g_tol=1e-3)
 # opt128mc = optimize(obj128mc, g128mc, NelderMead(), Optim.Options(g_tol = 1e-3))
-@time opt128mc = solve(OP(objnf_interp, g18mc, ([pomc1, pomc2, pomc8], [fitdat1, fitdat2, fitdat8]), lb=lb_MC, ub=ub_MC), alg, g_tol=1e-3)
+@time opt128mc = solve(OP(objnf_interp, g18mc, ((pomc1, pomc2, pomc8), (fitdat1, fitdat2, fitdat8)), lb=lb_MC, ub=ub_MC), alg, g_tol=1e-3)
 
 sol1_MC18  = gen_sol_constNS_arb(opt18mc.u, pomc1, k_f_interp);
 sol2_MC18  = gen_sol_constNS_arb(opt18mc.u, pomc2, k_f_interp);
