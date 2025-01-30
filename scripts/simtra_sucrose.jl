@@ -145,13 +145,13 @@ Rp_g = RpFormFit(0.8u"cm^2*Torr*hr/g", 14u"cm*Torr*hr/g", 1u"1/cm")
 c_solid = 0.04u"g/mL"
 ρ_solution = 1u"g/mL"
 
-pb_pikal = Vector{Any}([
+pb_pikal = ParamObjPikal([
     (Rp_g, hf0, c_solid, ρ_solution),
     (K_shf, A_v, A_p),
     (pch1, Tsh1),
 ])
 
-pop1 = ParamObjPikal(pb_pikal)
+pop1 = pb_pikal
 pop2 = deepcopy(pop1)
 @reset pop2.pch = pch2
 @reset pop2.Tsh = Tsh2
