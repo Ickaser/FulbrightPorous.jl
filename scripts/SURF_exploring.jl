@@ -9,7 +9,7 @@ man_cases = ["2024-06-06-11_MFD_AH.csv",
 
 function readdat(case)
     tab = CSV.read(datadir("exp_raw", "SURF2024", case), Table, header=8)
-    tab = map(row -> microfd_columnrename(row, tab[1].CycleTime), tab)
+    tab = map(row -> microfd_SURF_columnrename(row, tab[1].CycleTime), tab)
     for i in 2:length(tab)
         if tab.t[i] < tab.t[i-1]
             tab.t[i:end] .+= 24u"hr"

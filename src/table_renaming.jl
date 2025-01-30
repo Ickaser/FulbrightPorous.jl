@@ -18,7 +18,7 @@ function simtra_rename(row)
     return nt
 end
 
-function microfd_columnrename(row, t0 = nothing)
+function microfd_SURF_columnrename(row, t0 = nothing)
     # nt = (tstamp = DateTime(row.Timestamp, dateformat"mm/dd/yyyy H:M:S"),
     if !isnothing(t0)
         t = uconvert(u"hr", row.CycleTime - t0)
