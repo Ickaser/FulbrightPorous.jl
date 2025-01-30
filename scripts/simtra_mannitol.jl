@@ -1,10 +1,12 @@
 @quickactivate :FulbrightPores
 
 const OP = OptimizationProblem
-const NLSP = NonlinearLeastSquaresProblem
-const BFGS = Optim.BFGS
 using LineSearches
-alg = BFGS(linesearch=LineSearches.BackTracking())
-const LP = LyoPronto
+alg = Optim.BFGS(linesearch=LineSearches.BackTracking())
 pythonplot()
 
+
+# ------------------
+# Load Kv function
+# Computed in scripts/kv.jl, because it is used elsewhere too
+@unpack K_shf = load(datadir("exp_pro", "simtra_kv.jld2"))

@@ -2,32 +2,14 @@ using DrWatson
 @quickactivate :FulbrightPores
 
 const OP = OptimizationProblem
-const NLSP = NonlinearLeastSquaresProblem
-const BFGS = Optim.BFGS
 using LineSearches
-alg = BFGS(linesearch=LineSearches.BackTracking())
-const LP = LyoPronto
+alg = Optim.BFGS(linesearch=LineSearches.BackTracking())
 pythonplot()
 
 # ------------------
-# Kv fitting to FIg 7
-
-pKvdat = [ 50.0 4.18; 75.0 5.25;
-100. 6.21; 125. 7.08; 150. 7.81;
-175. 8.53; 200. 9.09; 250. 10.0; ] # WebPlotDigitized from Fig 7 of IntJPharm
-pd = pKvdat[:,1]*u"mTorr"
-Kvd = pKvdat[:,2]*u"J/hr/cm^2/K"
-function fitKv(KKK) 
-    Kc, Kp, Kd = KKK .* (u"W/m^2/K", u"W/m^2/K/Torr", u"1/Torr")
-    Kv = RpFormFit(Kc, Kp, Kd)
-    err = @. ustrip(u"W/m^2/K", Kv(pd) - Kvd)
-    # return sum(abs2.(err)), Kv
-    return err, Kv
-end
-optKv = solve(NLSP((x,p)->fitKv(x)[1], [10.0, 100, 1]), LevenbergMarquardt())
-K_shf = fitKv(optKv.u)[2]
-plot(pd, K_shf.(pd))
-scatter!(pd, Kvd)
+# Load Kv function
+# Computed in scripts/kv.jl, because it is used elsewhere too
+@unpack K_shf = load(datadir("exp_pro", "simtra_kv.jld2"))
 
 # --------------------------
 # Cycle 1
