@@ -11,9 +11,9 @@ function gen_sol_Rp(a123, po)
     sol = solve(prob, Rodas3())
     return sol
 end
-function obj_Rp(x, p; tweight=1e-4)
+function obj_Rp(x, p; tweight=1e-4, verbose=false)
     sol = gen_sol_Rp(x, p[1])
-    return obj_expT(sol, p[2], tweight=tweight)
+    return obj_expT(sol, p[2], tweight=tweight, verbose=verbose)
 end
 gennsol_Rp(fitprm, pos) = [gen_sol_Rp(fitprm, po) for po in pos]
 function objn_Rp(fitprm, pfs; tweight=1e-3)

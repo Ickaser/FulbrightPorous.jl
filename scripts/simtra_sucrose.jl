@@ -151,13 +151,15 @@ pb_pikal = ParamObjPikal([
     (pch1, Tsh1),
 ])
 
+function new_Tp(po, Tsh, pch)
+    po_n = deepcopy(po)
+    @reset po_n.pch = pch
+    @reset po_n.Tsh = Tsh
+    return po_n
+end
 pop1 = pb_pikal
-pop2 = deepcopy(pop1)
-@reset pop2.pch = pch2
-@reset pop2.Tsh = Tsh2
-pop8 = deepcopy(pop1)
-@reset pop8.pch = pch8
-@reset pop8.Tsh = Tsh8
+pop2 = new_Tp(pop1, pch2, Tsh2)
+pop8 = new_Tp(pop1, pch8, Tsh8)
 
 obj_Rpf = OptimizationFunction(obj_Rp, AutoForwardDiff())
 @time obj_Rpf(fill(0.0, 3), (pop8, fitdat8))
@@ -195,12 +197,8 @@ Rp1_params = sol1_Rp1.prob.p
 Rp2_params = sol2_Rp2.prob.p
 Rp8_params = sol8_Rp8.prob.p
 
-pop5 = deepcopy(Rp1_params128)
-@reset pop5.pch = pch5
-@reset pop5.Tsh = Tsh5
-pop3 = deepcopy(Rp1_params128)
-@reset pop3.pch = pch3
-@reset pop3.Tsh = Tsh3
+pop5 = new_Tp(Rp1_params128, Tsh5, pch5)
+pop5 = new_Tp(Rp1_params128, Tsh3, pch3)
 opt3p = solve(OP(obj_Rpf, opt1p.u, (pop3, fitdat3)), alg, g_tol = 1e-3)
 opt5p = solve(OP(obj_Rpf, opt1p.u, (pop5, fitdat5)), alg, g_tol = 1e-3)
 # -------------- Set up parameters
@@ -222,13 +220,9 @@ pb_mc = (
     (pch1, Tsh1),
     (ConstPhysProp(k0), C, N, S, Rs)
 )
-pomc1 = ParamObjMC(pb_mc)
-pomc2 = deepcopy(pomc1)
-@reset pomc2.pch = pch2
-@reset pomc2.Tsh = Tsh2
-pomc8 = deepcopy(pomc1)
-@reset pomc8.pch = pch8
-@reset pomc8.Tsh = Tsh8
+pomc1 = pb_mc
+pomc2 = new_Tp(pomc1, pch2, Tsh2)
+pomc8 = new_Tp(pomc1, pch8, Tsh8)
 
 # -----------------------------
 # Fit k by interpolating at four values
@@ -644,16 +638,12 @@ safesave(datadir("exp_pro", "fit_arb.html"), pretty_table(HTML, rep, header = ["
 
 
 sol3_Rp128 = solve(ODEProblem(pop3), Rodas3());
-po_PBM3 = deepcopy(MC1_params128)
-@reset po_PBM3.pch = pch3
-@reset po_PBM3.Tsh = Tsh3
+po_PBM3 = new_Tp(MC1_params128, Tsh3, pch3)
 sol3_PBM128 = solve(ODEProblem(po_PBM3), Rodas3());
 
 
 sol5_Rp128 = solve(ODEProblem(pop5), Rodas3());
-po_PBM5 = deepcopy(MC1_params128)
-@reset po_PBM5.pch = pch5
-@reset po_PBM5.Tsh = Tsh5
+po_PBM5 = new_Tp(MC1_params128, Tsh5, pch5)
 sol5_PBM128 = solve(ODEProblem(po_PBM5), Rodas3());
 
 plot(fitdat5)
