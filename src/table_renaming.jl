@@ -1,4 +1,5 @@
 export simtra_rename
+export microfd_fulbright_columnrename, microfd_SURF_columnrename
  
 repmissing(x) = ismissing(x) ? NaN : x
 function simtra_rename(row)
@@ -40,6 +41,35 @@ function microfd_SURF_columnrename(row, t0 = nothing)
           T1 = row.TP1*u"°C",
           T2 = row.TP2*u"°C",
           T3 = row.TP4*u"°C", # Not a mistake: quirk of experimental apparatus that connection TP3 was more annoying than TP4
+          # if a column has names with whitespace 
+          # or special characters in it, do this:
+          # mfr = row.var"Mass Flow Rate"
+    )
+    return nt
+end
+function microfd_fulbright_columnrename(row, t0 = nothing)
+    # nt = (tstamp = DateTime(row.Timestamp, dateformat"mm/dd/yyyy H:M:S"),
+    if !isnothing(t0)
+        t = uconvert(u"hr", row.CycleTime - t0)
+        if t < 0u"hr"
+            t += 24u"hr"
+        end
+    else
+        t = nothing
+    end
+    nt = (tstamp = row.CycleTime,
+          t = t,
+          phase = row.Phase,
+          step = row.Step,
+          pch_sp = row.VacSetPT*u"mTorr",
+          pch_pir = row.VacPirani*u"mTorr",
+          pch_cm = row.VacCPM*u"mTorr",
+          Tsh_sp = row.ShelfSetPT*u"°C",
+          Tsh_i = row.ShelfInlet*u"°C",
+          T1 = row.TP1*u"°C",
+          T2 = row.TP2*u"°C",
+          T3 = row.TP3*u"°C", 
+          T4 = row.TP4*u"°C", 
           # if a column has names with whitespace 
           # or special characters in it, do this:
           # mfr = row.var"Mass Flow Rate"
