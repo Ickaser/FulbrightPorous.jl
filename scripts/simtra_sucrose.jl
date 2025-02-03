@@ -2,6 +2,7 @@ using DrWatson
 @quickactivate :FulbrightPores
 
 const OP = OptimizationProblem
+const NLSP = NonlinearLeastSquaresProblem
 using LineSearches
 alg = Optim.BFGS(linesearch=LineSearches.BackTracking())
 pythonplot()
@@ -158,8 +159,10 @@ function new_Tp(po, Tsh, pch)
     return po_n
 end
 pop1 = pb_pikal
-pop2 = new_Tp(pop1, pch2, Tsh2)
-pop8 = new_Tp(pop1, pch8, Tsh8)
+pop2 = new_Tp(pop1, Tsh2, pch2)
+pop8 = new_Tp(pop1, Tsh8, pch8)
+pop5 = new_Tp(pop1, Tsh5, pch5)
+pop3 = new_Tp(pop1, Tsh3, pch3)
 
 obj_Rpf = OptimizationFunction(obj_Rp, AutoForwardDiff())
 @time obj_Rpf(fill(0.0, 3), (pop8, fitdat8))
@@ -197,8 +200,6 @@ Rp1_params = sol1_Rp1.prob.p
 Rp2_params = sol2_Rp2.prob.p
 Rp8_params = sol8_Rp8.prob.p
 
-pop5 = new_Tp(Rp1_params128, Tsh5, pch5)
-pop5 = new_Tp(Rp1_params128, Tsh3, pch3)
 opt3p = solve(OP(obj_Rpf, opt1p.u, (pop3, fitdat3)), alg, g_tol = 1e-3)
 opt5p = solve(OP(obj_Rpf, opt1p.u, (pop5, fitdat5)), alg, g_tol = 1e-3)
 # -------------- Set up parameters
@@ -214,19 +215,19 @@ C = 2e-1u"m^0.5"
 Rs = 0.5u"cm^2*Torr*hr/g"
 k0 = 1e-14u"1/s"
 
-pb_mc = (
+pb_mc = ParamObjMC([
     (hf0, c_solid, ρ_solution),
     (K_shf, A_v, A_p),
     (pch1, Tsh1),
     (ConstPhysProp(k0), C, N, S, Rs)
-)
+])
 pomc1 = pb_mc
-pomc2 = new_Tp(pomc1, pch2, Tsh2)
-pomc8 = new_Tp(pomc1, pch8, Tsh8)
+pomc2 = new_Tp(pomc1, Tsh2, pch2)
+pomc8 = new_Tp(pomc1, Tsh8, pch8)
 
 # -----------------------------
 # Fit k by interpolating at four values
-function k_f_interp_suc(logk)
+function k_f_interp(logk)
     return InterpK(logk, [-45.0, -38, -32, -28]u"°C" .|> u"K", k0)
 end
 # function obj_interp(x,p)
@@ -234,13 +235,13 @@ end
 #     if ~(ks[1] <= ks[2] <= ks[3] <= ks[4])
 #         return NaN
 #     end
-#     return objn_mc(x, (p..., k_f_interp_suc))
+#     return objn_mc(x, (p..., k_f_interp))
 # end
 function obj_ninterp(fitprm, pf; verbose=false)
     if ~(fitprm[5] < fitprm[6] < fitprm[7] < fitprm[8])
         return NaN
     end
-    return objn_mc(fitprm, (pf..., k_f_interp_suc), verbose=verbose)
+    return objn_mc(fitprm, (pf..., k_f_interp), verbose=verbose)
 end
 # objf_interp = OptimizationFunction(obj_interp, AutoForwardDiff())
 objnf_interp = OptimizationFunction(obj_ninterp, AutoForwardDiff())
@@ -250,7 +251,7 @@ ub_MC = vcat(fill(Inf, 4), fill(20., 4))
 interp_guess = [1.0, 1.0, 1.0, 1.0, -1, 1, 3, 12]
 @time opt_MC1 = solve(OP(objnf_interp, interp_guess, (pomc1, fitdat1), lb=lb_MC, ub=ub_MC), alg;show_trace=true, g_tol = 1e-2, maxtime=10)
 
-sol1_MC1 = gen_sol_constNS_arb(opt_MC1.u, pomc1, k_f_interp);
+sol1_MC1 = gen_sol_mc_arb(opt_MC1.u, pomc1, k_f_interp);
 MC1_params1 = sol1_MC1.prob.p
 
 begin
@@ -263,7 +264,7 @@ savefig(plotsdir("suc1_T.svg"))
 
 @time opt_MC8 = solve(OP(objnf_interp, opt_MC1.u, (pomc8, fitdat8), lb=lb_MC, ub=ub_MC), alg; show_trace=true, g_tol=1e-2)
 
-sol8_MC8 = gen_sol_constNS_arb(opt_MC8.u, pomc8, k_f_interp);
+sol8_MC8 = gen_sol_mc_arb(opt_MC8.u, pomc8, k_f_interp);
 MC8_params = sol8_MC8.prob.p
 begin
 blankplot_hrC(xlim=(0, 45), ylim=(-32, -26), legend=:bottomright)
@@ -279,16 +280,16 @@ g18mc = (opt_MC8.u .+ opt_MC1.u)/2
 # opt128mc = optimize(obj128mc, g128mc, NelderMead(), Optim.Options(g_tol = 1e-3))
 @time opt128mc = solve(OP(objnf_interp, g18mc, ((pomc1, pomc2, pomc8), (fitdat1, fitdat2, fitdat8)), lb=lb_MC, ub=ub_MC), alg, g_tol=1e-3)
 
-sol1_MC18  = gen_sol_constNS_arb(opt18mc.u, pomc1, k_f_interp);
-sol2_MC18  = gen_sol_constNS_arb(opt18mc.u, pomc2, k_f_interp);
-sol8_MC18  = gen_sol_constNS_arb(opt18mc.u, pomc8, k_f_interp);
+sol1_MC18  = gen_sol_mc_arb(opt18mc.u, pomc1, k_f_interp);
+sol2_MC18  = gen_sol_mc_arb(opt18mc.u, pomc2, k_f_interp);
+sol8_MC18  = gen_sol_mc_arb(opt18mc.u, pomc8, k_f_interp);
 MC1_params18 = sol1_MC18.prob.p
 MC2_params18 = sol2_MC18.prob.p
 MC8_params18 = sol8_MC18.prob.p
 
-sol1_MC128  = gen_sol_constNS_arb(opt128mc.u, pomc1, k_f_interp);
-sol2_MC128  = gen_sol_constNS_arb(opt128mc.u, pomc2, k_f_interp);
-sol8_MC128  = gen_sol_constNS_arb(opt128mc.u, pomc8, k_f_interp);
+sol1_MC128  = gen_sol_mc_arb(opt128mc.u, pomc1, k_f_interp);
+sol2_MC128  = gen_sol_mc_arb(opt128mc.u, pomc2, k_f_interp);
+sol8_MC128  = gen_sol_mc_arb(opt128mc.u, pomc8, k_f_interp);
 MC1_params128 = sol1_MC128.prob.p
 MC2_params128 = sol2_MC128.prob.p
 MC8_params128 = sol8_MC128.prob.p
@@ -399,12 +400,12 @@ ub_myega = vcat(fill(30, 4), fill( 20., 3))
 @time opt18myega = solve(OP(objnf_myega, p0_myegafit, pass18, lb=lb_myega, ub=ub_myega), alg, g_tol=1e-2, maxiters=200)
 @time opt128myega = solve(OP(objnf_myega, p0_myegafit, pass128, lb=lb_myega, ub=ub_myega), alg, g_tol=1e-2, maxiters=200)
 
-sol1_myega18  = gen_sol_constNS_arb(opt18myega.u, MC1_params18, k_f_myega);
-sol2_myega18  = gen_sol_constNS_arb(opt18myega.u, MC2_params18, k_f_myega);
-sol8_myega18  = gen_sol_constNS_arb(opt18myega.u, MC8_params18, k_f_myega);
-sol1_myega128 = gen_sol_constNS_arb(opt128myega.u, MC1_params18, k_f_myega);
-sol2_myega128 = gen_sol_constNS_arb(opt128myega.u, MC2_params18, k_f_myega);
-sol8_myega128 = gen_sol_constNS_arb(opt128myega.u, MC8_params18, k_f_myega);
+sol1_myega18  = gen_sol_mc_arb(opt18myega.u, MC1_params18, k_f_myega);
+sol2_myega18  = gen_sol_mc_arb(opt18myega.u, MC2_params18, k_f_myega);
+sol8_myega18  = gen_sol_mc_arb(opt18myega.u, MC8_params18, k_f_myega);
+sol1_myega128 = gen_sol_mc_arb(opt128myega.u, MC1_params18, k_f_myega);
+sol2_myega128 = gen_sol_mc_arb(opt128myega.u, MC2_params18, k_f_myega);
+sol8_myega128 = gen_sol_mc_arb(opt128myega.u, MC8_params18, k_f_myega);
 
 begin
 markers = [:square :circle :utriangle]
@@ -475,10 +476,10 @@ end
 objn_sigm(fitprm, pf) = objn_mc(fitprm, (pf..., k_f_sigm))
 objnf_sigm = OptimizationFunction(objn_sigm, AutoForwardDiff())
 
-lb_sigm = vcat(fill(0.0, 4), fill(-2, 4))
-lb_sigm[7] = -30
-ub_sigm = vcat(fill(Inf, 4), fill( 3, 4))
-ub_sigm[7] = 30
+lb_sigm = vcat(fill(0.0, 4), fill(-10, 4))
+lb_sigm[8] = -30
+ub_sigm = vcat(fill(Inf, 4), fill( 10, 4))
+ub_sigm[8] = 30
 
 p0_sigmfit = vcat(fill(1.0, 4), fill(1.0, 4))
 
@@ -486,8 +487,8 @@ opt18sigm = solve(OP(objnf_sigm, p0_sigmfit, pass18, lb=lb_sigm, ub=ub_sigm), al
 # opt18sigm = solve(OP(objnf_sigm, p0_sigmfitlog, pass18), alg, g_tol = 1e-2, maxiters = 50, time_limit=15, show_trace=true)
 opt128sigm = solve(OP(objnf_sigm, p0_sigmfit, pass128, lb=lb_sigm, ub=ub_sigm), alg, maxiters = 50, time_limit=15)
 
-sol1_sigm18, sol2_sigm18, sol8_sigm18 = gennsol_constNS(opt18sigm.u, (MC1_params128, MC2_params128, MC8_params128), k_f_sigm);
-sol1_sigm128, sol2_sigm128, sol8_sigm128 = gennsol_constNS(opt128sigm.u, (MC1_params128, MC2_params128, MC8_params128), k_f_sigm);
+sol1_sigm18, sol2_sigm18, sol8_sigm18 = gennsol_mc(opt18sigm.u, (MC1_params128, MC2_params128, MC8_params128), k_f_sigm);
+sol1_sigm128, sol2_sigm128, sol8_sigm128 = gennsol_mc(opt128sigm.u, (MC1_params128, MC2_params128, MC8_params128), k_f_sigm);
 # poreevolplot( sol1_sigm)
 poreevolplot( sol1_sigm18)
 poreevolplot!(sol2_sigm18)
@@ -714,9 +715,9 @@ savefig(plotsdir("suc128_Rp_val.svg"))
 # Inspect with MYEGA fit instead of tanh, since seems better-conditioned
 
 
-sol2_myega128 = gen_sol_constNS_arb(opt128myega.u, MC2_params18, k_f_myega);
-sol3_myega128 = gen_sol_constNS_arb(opt128myega.u, po_PBM3, k_f_myega);
-sol5_myega128 = gen_sol_constNS_arb(opt128myega.u, po_PBM5, k_f_myega);
+sol2_myega128 = gen_sol_mc_arb(opt128myega.u, MC2_params18, k_f_myega);
+sol3_myega128 = gen_sol_mc_arb(opt128myega.u, po_PBM3, k_f_myega);
+sol5_myega128 = gen_sol_mc_arb(opt128myega.u, po_PBM5, k_f_myega);
 begin
 pl3 = blankplot_hrC(legend=:bottomright)
 @df dat3 exptfplot!(:t, :T1, :T2, :T3, markershape=markers)
