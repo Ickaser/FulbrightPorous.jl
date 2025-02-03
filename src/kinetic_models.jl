@@ -50,7 +50,7 @@ end
 Sigmoid_k(a) = Sigmoid_k(a...)
 function (pk::Sigmoid_k)(T)
     rat = pk.k0/pk.kf
-    x = (T-pk.K)/pk.C
+    x = (T-pk.C)/pk.K
     # return k0/(tanh(-x)+1) # This has the right behavior...
     return pk.k0*(exp(x) + exp(-x))/((1+rat)*exp(-x)+rat*exp(x)) # but this way it can avoid numerical issues
 end

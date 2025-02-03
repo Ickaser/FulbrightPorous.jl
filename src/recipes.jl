@@ -86,9 +86,9 @@ end
 
 @userplot PBMTDLAS
 @recipe function f(pt::PBMTDLAS)
-    sol, dat, Rpp = pt.args
-    l, Rp_mc = calc_lRp(sol)
-    ld = calc_l(dat, sol.prob.p.hf0)
+    pbmsol, dat, Rpp = pt.args
+    l, Rp_mc = calc_lRp(pbmsol)
+    ld = calc_l(dat, pbmsol.prob.p.hf0)
     Rpd = dat.Rp
     Rp_pikal = Rpp.(ld)
     # unitformat --> :square
@@ -108,7 +108,9 @@ end
     end
     @series begin
         c --> 3
-        seriestype := :line
+        seriestype := :samplemarkers
+        marker --> :o
+        step --> length(Rpd) ÷ 20
         label --> "TDLAS"
         return ld, Rpd
     end
@@ -123,6 +125,8 @@ end
         kf = prm.k_f
     elseif prm isa ODESolution
         kf = prm.prob.p.k_f
+    else
+        error("Kinetic plot expects either a ParamObjMC or ODESolution")
     end
     if kf isa DataInterpolations.AbstractInterpolation
         @series begin
