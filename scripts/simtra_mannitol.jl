@@ -168,6 +168,7 @@ end
 # -----------------
 # Parameter setup
 
+begin
 rad_i = 1.1u"cm"
 rad_o = 1.2u"cm"
 A_p = π*rad_i^2
@@ -195,12 +196,13 @@ pop1 = ParamObjPikal([
     (K_shf, A_v, A_p),
     (pch1, Tsh1),
 ])
-pomc1 = (
+pomc1 = ParamObjMC([
     (hf0, c_solid, ρ_solution),
     (K_shf, A_v, A_p),
     (pch1, Tsh1),
     (ConstPhysProp(k0), C, N, S, Rs)
-)
+])
+end
 
 function new_Tp(po, Tsh, pch)
     po_n = deepcopy(po)
@@ -213,14 +215,18 @@ pop2 = new_Tp(pop1, Tsh2, pch2)
 pop3 = new_Tp(pop1, Tsh3, pch3)
 pop6 = new_Tp(pop1, Tsh6, pch6)
 pop7 = new_Tp(pop1, Tsh7, pch7)
+pomc2 = new_Tp(pomc1, Tsh2, pch2)
+pomc3 = new_Tp(pomc1, Tsh3, pch3)
+pomc6 = new_Tp(pomc1, Tsh6, pch6)
+pomc7 = new_Tp(pomc1, Tsh7, pch7)
 
 begin
 pl_all = blankplot_hrC()
-plot!(fitdat1, c=1, label="1")
-plot!(fitdat2, c=2, label="2")
-plot!(fitdat3, c=3, label="3")
-plot!(fitdat6, c=4, label="6")
-plot!(fitdat7, c=5, label="7")
+plot!(fitdat1, c=1, labsuffix=" 1")
+plot!(fitdat2, c=2, labsuffix=" 2")
+plot!(fitdat3, c=3, labsuffix=" 3")
+plot!(fitdat6, c=4, labsuffix=" 6")
+plot!(fitdat7, c=5, labsuffix=" 7")
 end
 
 # On this basis, let's try using 1 and 3 to train and 2,6,7 to validate
@@ -232,29 +238,28 @@ obj_Rpf = OptimizationFunction(obj_Rp, AutoForwardDiff())
 @time obj_Rpf(fill(0.0, 3), (pop1, fitdat1))
 
 obj_npf = OptimizationFunction(objn_Rp, AutoForwardDiff())
-# @time ForwardDiff.gradient(x->obj_Rpf(x, (pop8, fitdat8)), [0.8, 90, 1])
 
-cases = Table([(name="1", po=pop1, fitdat=fitdat1, dat=dat1),
-         (name="2", po=pop2, fitdat=fitdat2, dat=dat2),
-         (name="3", po=pop3, fitdat=fitdat3, dat=dat3),
-         (name="6", po=pop6, fitdat=fitdat6, dat=dat6),
-         (name="7", po=pop7, fitdat=fitdat7, dat=dat7)])
+cases = Table([ (name="1", pop=pop1, pomc=pomc1, fitdat=fitdat1, dat=dat1),
+                (name="2", pop=pop2, pomc=pomc2, fitdat=fitdat2, dat=dat2),
+                (name="3", pop=pop3, pomc=pomc3, fitdat=fitdat3, dat=dat3),
+                (name="6", pop=pop6, pomc=pomc6, fitdat=fitdat6, dat=dat6),
+                (name="7", pop=pop7, pomc=pomc7, fitdat=fitdat7, dat=dat7)])
 
 single_Rps = map(cases) do case
-    (;name, po, fitdat, dat) = case
-    opt = solve(OP(obj_Rpf, [0.0, 0, -5], (po, fitdat)), alg, g_tol=1e-3)
-    sol = gen_sol_Rp(opt.u, po)
+    (;name, pop, fitdat, dat) = case
+    opt = solve(OP(obj_Rpf, [0.0, 0, -5], (pop, fitdat)), alg, g_tol=1e-3)
+    sol = gen_sol_Rp(opt.u, pop)
     @info "analyis" name opt sol
     Rp = sol.prob.p.Rp
-    return (opt=opt, sol=sol, Rp=Rp)
+    return (opt=opt, sol_p=sol, Rp=Rp)
 end
 
-cases_res = Table(cases, single_Rps)
+cases_Rps = Table(cases, single_Rps)
 
-pls = map(cases_res) do case 
+pls = map(cases_Rps) do case 
     plT = blankplot_hrC()
     plot!(case.fitdat)
-    modconvtplot!(case.sol)
+    modconvtplot!(case.sol_p)
     return plT
 end
 plot(pls..., layout=(5,1), size=(500, 1000))
@@ -262,21 +267,103 @@ plot(pls..., layout=(5,1), size=(500, 1000))
 lr = range(0u"cm", hf0, length=50)
 begin
 sts = Table((c=[1,2,3,4,5], marker=[:o, :square, :ltriangle, :utriangle, :diamond]))
-# pl_Rp = plot(u"cm", u"cm^2*hr*Torr/g", ylabel="Rp", xlabel="l")
-# for (case, st) in zip(cases_res, sts)
-pls = map(cases_res, sts) do case, st
-    pl_Rp = plot(u"cm", u"cm^2*hr*Torr/g", ylabel="Rp", xlabel="l")
-    Tsh = case.po.Tsh(Inf*u"s") |> u"°C"
-    plot!(lr, case.Rp.(lr), c=st.c, label="$(case.name) fit $(Tsh)")
-    ld = FulbrightPores.calc_l(case.dat, case.po.hf0)
-    plot!(ld, case.dat.Rp, c=st.c, marker=st.marker, lw=1, seriestype=:samplemarkers, step=100, label="TDLAS $(case.name)")
-    plot!(ylim=(0, 20), legend=:topleft)
+pl_Rp = plot(u"cm", u"cm^2*hr*Torr/g", ylabel="Rp", xlabel="l", color_palette = palette(:magma, 5))
+for (case, st) in zip(sort(cases_Rps, by=x->x.pop.Tsh(Inf*u"s")), sts)
+# pls = map(cases_Rps, sts) do case, st
+    # pl_Rp = plot(u"cm", u"cm^2*hr*Torr/g", ylabel="Rp", xlabel="l")
+    Tsh = case.pop.Tsh(Inf*u"s") |> u"°C"
+    plot!(lr, case.Rp.(lr), c=st.c, label="$(case.name) fit; Tsh=$(Tsh)")
+    ld = FulbrightPores.calc_l(case.dat, case.pop.hf0)
+    plot!(ld, case.dat.Rp, c=st.c, marker=st.marker, markersize=7, la=0.5, lw=1, seriestype=:samplemarkers, step=100, label="$(case.name) TDLAS")
+    plot!(ylim=(0, 15), legend=:topleft)
 end
-plot(pls..., layout=(3,2), size=(800,800))
+# plot(pls..., layout=(3,2), size=(800,800))
+pl_Rp
 end
+savefig(plotsdir("simtra_mannitol_plainRp.svg"))
+savefig(plotsdir("simtra_mannitol_plainRp.pdf"))
 
-cases_res.Rp
+cases_Rps.Rp
 
 # -------------------------------
 # Fit to MC model
-# 
+# Fit to 1 and 3, validate on 2, 6, 7
+
+function make_mcpass(casenums)
+    subdat = filter(x->x.name∈casenums, cases)
+    (subdat.pomc, subdat.fitdat)
+end
+
+pass13 = make_mcpass(["1", "3"])
+pass16 = make_mcpass(["1", "6"])
+pass136 = make_mcpass(["1", "3", "6"])
+pass17 = make_mcpass(["1", "7"])
+
+sigm_scale = (1e-15u"s^-1", 1e-13u"s^-1", 0.8u"K", 239u"K")
+function k_f_sigm(vec)
+    p123 = exp.(vec[1:3] .-1).*sigm_scale[1:3]
+    p4 = vec[4]*u"K" + sigm_scale[4]
+    Sigmoid_k(p123..., p4)
+end
+
+objn_sigm(fitprm, pf) = objn_mc(fitprm, (pf..., k_f_sigm), tweight=1e-1)
+objnf_sigm = OptimizationFunction(objn_sigm, AutoForwardDiff())
+
+lb_sigm = vcat(fill(0.0, 4), fill(-6, 4))
+lb_sigm[8] = -30
+ub_sigm = vcat(fill(Inf, 4), fill( 6, 4))
+ub_sigm[8] = 30
+
+# opt13sigm = solve(OP(objnf_sigm, fill(1.0, 8), pass13), alg, maxiters=50, time_limit=15)
+opt13sigm = solve(OP(objnf_sigm, fill(1.0, 8), pass13, lb=lb_sigm, ub=ub_sigm), alg, maxiters=50, time_limit=15)
+opt16sigm = solve(OP(objnf_sigm, fill(1.0, 8), pass16, lb=lb_sigm, ub=ub_sigm), alg, maxiters=50, time_limit=15)
+opt136sigm = solve(OP(objnf_sigm, fill(1.0, 8), pass136, lb=lb_sigm, ub=ub_sigm), alg, maxiters=50, time_limit=15)
+@profview solve(OP(objnf_sigm, fill(1.0, 8), pass136, lb=lb_sigm, ub=ub_sigm), alg, maxiters=50, time_limit=15)
+
+# cases
+function gen_pbmsols(opt)
+    map(cases) do case
+        sol = gen_sol_mc_arb(opt.u, case.pomc, k_f_sigm)
+        return (sol_mc=sol,k_f=sol.prob.p.k_f)
+    end
+end
+sols_sigm13 = gen_pbmsols(opt13sigm) 
+sols_sigm16 = gen_pbmsols(opt16sigm) 
+sols_sigm136 = gen_pbmsols(opt136sigm) 
+
+cases_both = Table(cases, single_Rps, sols_sigm136)
+
+begin
+pls_T = map(cases_both) do case
+    pl = blankplot_hrC(legend=:outerright, title=case.name)
+    plot!(case.fitdat)
+    modconvtplot!(case.sol_mc, case.sol_p, linealpha=0.7, markeralpha=0, labels=["PBM 1&3&6" "3PP $(case.name)"])
+    return pl
+end
+# plot!(pls_T[5], legend=:bottomright)
+plot(pls_T..., layout=(3,2), size=(800, 600))
+end
+savefig(plotsdir("simtra_mannitol_T.svg"))
+savefig(plotsdir("simtra_mannitol_T.pdf"))
+
+# begin
+# pl = blankplot_hrC()
+# modconvtplot!(sol1_mc13, sol3_mc13)
+# plot!(fitdat1, c=1, labsuffix=" 1")
+# plot!(fitdat3, c=3, labsuffix=" 3")
+# end
+
+begin
+pls = map(cases_both) do case
+    pl = blankplot_lRp(ylim=(0, 15), legend=:bottomright, title=case.name)
+    pbmtdlas!(case.sol_mc, case.dat, case.Rp, labels=["PBM 1&3&6" "3PP $(case.name)" "TDLAS $(case.name)"])
+end
+plot(pls..., layout=(3,2), size=(800, 600))
+end
+savefig(plotsdir("simtra_mannitol_Rp.svg"))
+savefig(plotsdir("simtra_mannitol_Rp.pdf"))
+
+kineticplot(sols_sigm136[1].sol_mc, T=range(230u"K", 250u"K", length=101))
+# for case in cases_both
+
+
