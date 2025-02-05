@@ -266,9 +266,9 @@ plot(pls..., layout=(5,1), size=(500, 1000))
 
 lr = range(0u"cm", hf0, length=50)
 begin
-sts = Table((c=[1,2,3,4,5], marker=[:o, :square, :ltriangle, :utriangle, :diamond]))
-pl_Rp = plot(u"cm", u"cm^2*hr*Torr/g", ylabel="Rp", xlabel="l", color_palette = palette(:magma, 5))
-for (case, st) in zip(sort(cases_Rps, by=x->x.pop.Tsh(Inf*u"s")), sts)
+sts = Table((c=2:6, marker=[:o, :square, :ltriangle, :utriangle, :diamond]))
+pl_Rp = plot(u"cm", u"cm^2*hr*Torr/g", ylabel="Rp", xlabel="l", color_palette = palette(:magma, 7))
+for (case, st) in zip(sort(cases_Rps, by=x->maximum(x.fitdat.Tfs[2])), sts)
 # pls = map(cases_Rps, sts) do case, st
     # pl_Rp = plot(u"cm", u"cm^2*hr*Torr/g", ylabel="Rp", xlabel="l")
     Tsh = case.pop.Tsh(Inf*u"s") |> u"°C"
@@ -290,54 +290,66 @@ cases_Rps.Rp
 # Fit to 1 and 3, validate on 2, 6, 7
 
 function make_mcpass(casenums)
-    subdat = filter(x->x.name∈casenums, cases)
+    subdat = filter(x->parse(Int, x.name)∈casenums, cases)
     (subdat.pomc, subdat.fitdat)
 end
 
-pass13 = make_mcpass(["1", "3"])
-pass16 = make_mcpass(["1", "6"])
-pass136 = make_mcpass(["1", "3", "6"])
-pass17 = make_mcpass(["1", "7"])
+pass13 = make_mcpass([1, 2])
+pass123 = make_mcpass([1, 2, 3])
+pass16 = make_mcpass([1, 6])
+pass136 = make_mcpass([1, 3, 6])
+pass17 = make_mcpass([1, 7])
 
-sigm_scale = (1e-15u"s^-1", 1e-13u"s^-1", 0.8u"K", 239u"K")
+myega_scale = (1e10u"s^-1", 1.6e3u"K", 1e2u"K")
+k_f_myega(vec) = MYEGA_k((exp.(vec).*myega_scale))
+objn_myega(fitprm, pf) = objn_mc(fitprm, (pf..., k_f_myega), tweight=1e-1)
+objnf_myega = OptimizationFunction(objn_myega, AutoForwardDiff())
+lb_myega = vcat(fill(0.0, 4), fill(-100, 3))
+ub_myega = vcat(fill(Inf, 4), fill( 100, 3))
+
 function k_f_sigm(vec)
     p123 = exp.(vec[1:3] .-1).*sigm_scale[1:3]
     p4 = vec[4]*u"K" + sigm_scale[4]
     Sigmoid_k(p123..., p4)
 end
-
 objn_sigm(fitprm, pf) = objn_mc(fitprm, (pf..., k_f_sigm), tweight=1e-1)
 objnf_sigm = OptimizationFunction(objn_sigm, AutoForwardDiff())
-
-lb_sigm = vcat(fill(0.0, 4), fill(-6, 4))
-lb_sigm[8] = -30
-ub_sigm = vcat(fill(Inf, 4), fill( 6, 4))
-ub_sigm[8] = 30
+lb_sigm = vcat(fill(0.0, 4), fill(-30, 4))
+# lb_sigm[8] = -30
+ub_sigm = vcat(fill(Inf, 4), fill( 30, 4))
+# ub_sigm[8] = 30
 
 # opt13sigm = solve(OP(objnf_sigm, fill(1.0, 8), pass13), alg, maxiters=50, time_limit=15)
 opt13sigm = solve(OP(objnf_sigm, fill(1.0, 8), pass13, lb=lb_sigm, ub=ub_sigm), alg, maxiters=50, time_limit=15)
 opt16sigm = solve(OP(objnf_sigm, fill(1.0, 8), pass16, lb=lb_sigm, ub=ub_sigm), alg, maxiters=50, time_limit=15)
+opt123sigm = solve(OP(objnf_sigm, fill(0.1, 8), pass123, lb=lb_sigm, ub=ub_sigm), alg, maxiters=50, time_limit=15)
 opt136sigm = solve(OP(objnf_sigm, fill(1.0, 8), pass136, lb=lb_sigm, ub=ub_sigm), alg, maxiters=50, time_limit=15)
-@profview solve(OP(objnf_sigm, fill(1.0, 8), pass136, lb=lb_sigm, ub=ub_sigm), alg, maxiters=50, time_limit=15)
+# @profview solve(OP(objnf_sigm, fill(1.0, 8), pass136, lb=lb_sigm, ub=ub_sigm), alg, maxiters=50, time_limit=15)
+opt123myega = solve(OP(objnf_myega, fill(0.1, 7), pass123, lb=lb_myega, ub=ub_myega), alg, maxiters=50, time_limit=15)
+opt136myega = solve(OP(objnf_myega, fill(1.0, 7), pass136, lb=lb_myega, ub=ub_myega), alg, maxiters=50, time_limit=15)
+
+fits = Table((opt=[opt13sigm, opt16sigm, opt123sigm, opt136sigm, opt123myega, opt136myega], 
+              k_type=[k_f_sigm, k_f_sigm, k_f_sigm, k_f_sigm, k_f_myega, k_f_myega],
+              cases=[(1,3),  (1,6),  (1,2,3),  (1,3,6),  (1,2,3),  (1,3,6)]))
+fits = Table(fits, (kf= map(x->x.k_type(x.opt[5:end]), fits),))
 
 # cases
-function gen_pbmsols(opt)
+function gen_pbmsols(opt, k_f_gen)
     map(cases) do case
-        sol = gen_sol_mc_arb(opt.u, case.pomc, k_f_sigm)
+        sol = gen_sol_mc_arb(opt.u, case.pomc, k_f_gen)
         return (sol_mc=sol,k_f=sol.prob.p.k_f)
     end
 end
-sols_sigm13 = gen_pbmsols(opt13sigm) 
-sols_sigm16 = gen_pbmsols(opt16sigm) 
-sols_sigm136 = gen_pbmsols(opt136sigm) 
 
-cases_both = Table(cases, single_Rps, sols_sigm136)
+cases_both = Table(cases, single_Rps, gen_pbmsols(opt123myega, k_f_myega))
+# cases_both = Table(cases, single_Rps, gen_pbmsols(opt123sigm, k_f_sigm))
 
 begin
+pythonplot()
 pls_T = map(cases_both) do case
     pl = blankplot_hrC(legend=:outerright, title=case.name)
     plot!(case.fitdat)
-    modconvtplot!(case.sol_mc, case.sol_p, linealpha=0.7, markeralpha=0, labels=["PBM 1&3&6" "3PP $(case.name)"])
+    modconvtplot!(case.sol_mc, case.sol_p, linealpha=0.7, markeralpha=0, labels=["PBM: M 1&2&3" "3PP $(case.name)"])
     return pl
 end
 # plot!(pls_T[5], legend=:bottomright)
@@ -345,6 +357,18 @@ plot(pls_T..., layout=(3,2), size=(800, 600))
 end
 savefig(plotsdir("simtra_mannitol_T.svg"))
 savefig(plotsdir("simtra_mannitol_T.pdf"))
+
+begin
+gr()
+plk = plot(u"°C", u"s^-1", ylabel="k", xlabel="T")
+for fit in fits
+    symb = fit.k_type == k_f_sigm ? :circle : :square
+    c = findfirst([fit.cases] .== [(1,2,3), (1,3,6), (1,3), (1,6)]) 
+    kineticplot!(fit.kf, T=range(230u"K", 265u"K", length=101), label="$(fit.cases), $(fit.k_type)", c=c, marker=symb)
+end
+plot!(legend=:outerright, ylim=(1e-25, 1e-8))
+end
+savefig(plotsdir("man_kinetic.svg"))
 
 # begin
 # pl = blankplot_hrC()
@@ -356,7 +380,7 @@ savefig(plotsdir("simtra_mannitol_T.pdf"))
 begin
 pls = map(cases_both) do case
     pl = blankplot_lRp(ylim=(0, 15), legend=:bottomright, title=case.name)
-    pbmtdlas!(case.sol_mc, case.dat, case.Rp, labels=["PBM 1&3&6" "3PP $(case.name)" "TDLAS $(case.name)"])
+    pbmtdlas!(case.sol_mc, case.dat, case.Rp, labels=["PBM 1&2&3" "3PP $(case.name)" "TDLAS $(case.name)"])
 end
 plot(pls..., layout=(3,2), size=(800, 600))
 end
@@ -366,4 +390,12 @@ savefig(plotsdir("simtra_mannitol_Rp.pdf"))
 kineticplot(sols_sigm136[1].sol_mc, T=range(230u"K", 250u"K", length=101))
 # for case in cases_both
 
+begin
 
+poreevolplot( cases_both[1].sol_mc, label="1", c=2, palette=palette(:magma, 7))
+poreevolplot!(cases_both[2].sol_mc, label="2", c=5)
+poreevolplot!(cases_both[3].sol_mc, label="3", c=3)
+poreevolplot!(cases_both[4].sol_mc, label="6", c=6)
+poreevolplot!(cases_both[5].sol_mc, label="7", c=4)
+end
+savefig(plotsdir("man_pores.svg"))
