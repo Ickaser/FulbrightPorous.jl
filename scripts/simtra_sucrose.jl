@@ -345,22 +345,24 @@ plot!(Tstops, MC8_params.k_f.(Tstops), yscale=:log10)
 # ------------------------
 # MYEGA temparature dependence of viscosity
 
-myega_scale = (1e10u"s^-1", 1e3u"K", 2e2u"K")
-k_f_myega(vec) = MYEGA_k(exp.(vec).*myega_scale)
-p0_myega = [1.0, 1, 1]
+myega_scale = (1e10u"s^-1", 1.6e3u"K", 1e2u"K")
+k_f_myega(vec) = MYEGA_k((exp.(vec).*myega_scale))
+p0_myega = fill(0.1, 3)
 function obj_kin_myega(p, _)
-    if p[1] < 0 #|| p[2] < 100 #|| p[3] < 100 
-        return NaN
-    end
+    # if p[1] < 0 #|| p[2] < 100 #|| p[3] < 100 
+    #     return NaN
+    # end
     mk = k_f_myega(p)
     ks = mk.(Tstops)
     logks = log.(ustrip.(u"s^-1", ks))
-    return sum(abs2.(logks .- klogs128))
+    @info "check" p mk logks klogs128 sum(abs2, logks .- klogs128)
+    return sum(abs2, logks .- klogs128)
 end
 objf_myega = OptimizationFunction(obj_kin_myega, AutoForwardDiff())
 objf_myega(p0_myega, nothing)
 
-opt_kin_myega = solve(OP(objf_myega, p0_myega, lb=fill(0.0, 3), ub=fill(Inf, 3)), alg)
+# opt_kin_myega = solve(OP(objf_myega, p0_myega, lb=fill(0.0, 3), ub=fill(Inf, 3)), alg)
+opt_kin_myega = solve(OP(objf_myega, p0_myega), alg)
 
 mk = k_f_myega(opt_kin_myega.u)
 mk2 = MYEGA_k(1.25e13u"s^-1", 1.6e3u"K", 5.1e2u"K")
@@ -393,8 +395,8 @@ pass128 = ([MC1_params128, MC2_params128, MC8_params128], [fitdat1, fitdat2, fit
 pass18 = ([MC1_params128, MC8_params128], [fitdat1, fitdat8]);
 @time objnf_myega(p0_myegafit, pass128)
 
-lb_myega = vcat(fill(0.0, 4), fill(-20., 3))
-ub_myega = vcat(fill(30, 4), fill( 20., 3))
+lb_myega = vcat(fill(0.0, 4), fill(-100., 3))
+ub_myega = vcat(fill(30, 4), fill( 100., 3))
 
 # Needs a maxiters, because the gradients have wildly different dimensions
 @time opt18myega = solve(OP(objnf_myega, p0_myegafit, pass18, lb=lb_myega, ub=ub_myega), alg, g_tol=1e-2, maxiters=200)
@@ -407,23 +409,29 @@ sol1_myega128 = gen_sol_mc_arb(opt128myega.u, MC1_params18, k_f_myega);
 sol2_myega128 = gen_sol_mc_arb(opt128myega.u, MC2_params18, k_f_myega);
 sol8_myega128 = gen_sol_mc_arb(opt128myega.u, MC8_params18, k_f_myega);
 
+objn_mc(opt128myega.u, (pass128..., k_f_myega), verbose=true)
 begin
 markers = [:square :circle :utriangle]
 pl1 = blankplot_hrC(legend=:bottomright)
 @df dat1 exptfplot!(:t, :T1, :T2, :T3, markershape=markers)
 plot!(title="Cycle 1, Tsh = $(Tsh1(Inf*u"s")|>u"°C")")
 plot!(xlim=(0, 100), ylim=(-36, -31), )
-modconvtplot!(sol1_myega, sol1_Rp18, labels=["MC" "Pikal"], markeralpha=0)
+modconvtplot!(sol1_myega128, sol1_Rp128, labels=["MC" "Pikal"], markeralpha=0)
+pl2 = blankplot_hrC(legend=:bottomright)
+@df dat2 exptfplot!(:t, :T1, :T2, :T3, markershape=markers)
+plot!(title="Cycle 2, Tsh = $(Tsh2(Inf*u"s")|>u"°C")")
+plot!(xlim=(0, 100), ylim=(-36, -31), )
+modconvtplot!(sol2_myega128, sol2_Rp128, labels=["MC" "Pikal"], markeralpha=0)
 
 pl8 = blankplot_hrC(legend=:bottomright)
 @df dat8 exptfplot!(:t, :T1, :T2, :T3, markershape=markers)
 # plot!(fitdat8)
-modconvtplot!(sol8_myega, sol8_Rp18, labels=["MC" "Pikal"], markeralpha=0)
+modconvtplot!(sol8_myega128, sol8_Rp128, labels=["MC" "Pikal"], markeralpha=0)
 plot!(xlim=(0, 45), ylim=(-32, -26))
 plot!(title="Tsh = $(Tsh8(Inf*u"s")|>u"°C")")
-plot(pl1, pl8, layout=(2,1), size=(600, 500), legend=:outerright)
+plot(pl1, pl2, pl8, layout=(3,1), size=(800, 500), legend=:outerright)
 end
-savefig(plotsdir("suc18_myega_train_T.svg"))
+savefig(plotsdir("suc128_myega_train_T.svg"))
 
 # -------------------------------------
 # sigmoid temparature dependence of viscosity
@@ -572,6 +580,7 @@ safesave(datadir("exp_pro", "simtra_sucrose_fitdata.jld2"), @strdict fitdats)
 safesave(datadir("exp_pro", "simtra_sucrose_fitresults.jld2"), @strdict mc_fits pikal_params pikal_rps)
 
 begin
+    gr()
 plot(u"°C", u"s^-1", legend=:bottomright, xlabel="T", ylabel="k\\  ", unitformat=latexsquareunitlabel)
 # kineticplot!(MC1_params,  c  label="Interp fit to case 1")
 # kineticplot!(MC8_params,     label="Interp fit to case 8")
@@ -584,17 +593,19 @@ kineticplot!(sigm_params1  , c=3, marker=markers[1], label="Tanh fit to interpol
 kineticplot!(sol1_sigm18  , c=3, marker=markers[2], label="Tanh fit to 1&8")
 kineticplot!(sol1_sigm128  , c=3, marker=markers[3], label="Tanh fit to 1&2&8")
 end
-savefig(plotsdir("kinetic.svg"))
+savefig(plotsdir("suc_kinetic.svg"))
+pythonplot()
 
 
 
+pythonplot()
 l = range(0u"cm", hf0, length=50)
 default(:markersize, 7)
 begin
 # colors = [:red :blue :purple :brown]
 plot!(palette=:default)
 rpattr = (seriestype=:samplemarkers, linestyle=:dash)
-poreevolplot(sol1_sigm128, label="PBM 1&2&8, Cycle 1", c=1, marker=:circle)
+poreevolplot( sol1_sigm128, label="PBM 1&2&8, Cycle 1", c=1, marker=:circle)
 poreevolplot!(sol2_sigm128, label="PBM 1&2&8, Cycle 2", c=2, marker=:square)
 poreevolplot!(sol8_sigm128, label="PBM 1&2&8, Cycle 8", c=3, marker=:utriangle)
 plot!(l, Rp1.(l), subplot=4, label="3PP 1"; c=4, marker=:circle, rpattr...)
