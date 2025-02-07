@@ -6,7 +6,7 @@ using Turing
 # ----------------
 ## Load fit results for my cases
 fitdats = load(datadir("exp_pro", "simtra_sucrose_fitdata.jld2"))["fitdats"]
-fits = load(datadir("exp_pro", "simtra_sucrose_fitresults.jld2"))
+fits = load(datadir("exp_pro", "simtra_sucrose_fitresults.jld2"));
 mcfits = fits["mc_fits"]
 
 fitdat1 = fitdats[1]
@@ -23,9 +23,11 @@ myega_scale = (basek.k0, basek.K, basek.C)
 
 k_f_myega_nolog(vec) = MYEGA_k(vec.*myega_scale)
 
+baseprob = ODEProblem(basefit1, tspan=(0.0, 1000.0))
+
 # -------------------------
 
-@model function myega_likelihood(params, fitdats)
+@model function myega_likelihood(param, fitdat)
 
     magfac = 10 # Make the squared error more important than priors
 
@@ -44,22 +46,25 @@ k_f_myega_nolog(vec) = MYEGA_k(vec.*myega_scale)
 
     # k_args = exp10.([kfac, Kfac, θfac]) .* fit_guess[5:7]
 
-    # newpo = @set param.N = ConstPhysProp(exp10(Nfac)*fit_guess[1])
-    # @reset newpo.S = ConstPhysProp(exp10(Sfac)*fit_guess[2])
-    # @reset newpo.C = exp10(Cfac)*fit_guess[3]
-    # @reset newpo.Rs = exp10(Rfac)*fit_guess[4]
-    # @reset newpo.k_f = MYEGA_k(k_args)
-    # sol = solve(ODEProblem(newpo, tspan=400.0), Rodas3(), saveat=ustrip.(u"hr", fitdat.t))
+    newpo = @set param.N = ConstPhysProp(fitprm[1]*porous_scale[1])
+    @reset newpo.S = ConstPhysProp(fitprm[2]*porous_scale[2])
+    @reset newpo.C = fitprm[3]*porous_scale[3]
+    @reset newpo.Rs = fitprm[4]*porous_scale[4]
+    @reset newpo.k_f = k_f_myega_nolog(fitprm[5:end])
 
-    # sqerr = obj_expT(sol, fitdat, tweight=0) * magfac
-    sqerr = magfac * objn_mc(fitprm, (params, fitdats, k_f_myega_nolog), tweight=1e-1) 
+    newprob = remake(baseprob, p=newpo)
+    
+    sol = solve(newprob, Rodas3(), saveat=ustrip.(u"hr", fitdat.t))
 
-    # if !isnan(sqerr)
-    Turing.@addlogprob! -sqerr
-    # else
+    sqerr = magfac * obj_expT(sol, fitdat, tweight=1.0) 
+    # sqerr = magfac * objn_mc(fitprm, (params, fitdats, k_f_myega_nolog), tweight=1e-1) 
+
+    if !isnan(sqerr)
+        Turing.@addlogprob! -sqerr
+    else
     #     # @info "check" newpo.N.val newpo.S.val newpo.C.val newpo.Rs.val sol.t[end] sol[1,end]
-    #     Turing.@addlogprob! -Inf
-    # end
+        Turing.@addlogprob! -Inf
+    end
     # fitdat.t_end ~ MvNormal(sol.t[end], 
     # t_relerr = (sol.t[end]*u"hr" - fitdat.t_end)/fitdat.t_end
     # t_sqerr = t_relerr^2 * magfac
@@ -67,18 +72,21 @@ k_f_myega_nolog(vec) = MYEGA_k(vec.*myega_scale)
 end
 
 case1_params = myega_likelihood(basefit1, fitdat1)
-case128_params = myega_likelihood(pos128, fits128)
+# case128_params = myega_likelihood(pos128, fits128)
     
-# smallalg = NUTS(30, 0.65)
-smallsamp = @time sample(case1_params, NUTS(), MCMCSerial(), 20, 1)
-smallsamp = @time sample(case1_params, NUTS(), MCMCThreads(), 20, 4)
-# @profview sample(case1_ns, alg, MCMCSerial(), 20, 1)
+smallalg = NUTS(10, 0.65; init_ϵ=0.01)
+smallsamp = @time sample(case1_params, smallalg, MCMCSerial(), 20, 1)
+# smallsamp128 = @time sample(case128_params, smallalg, MCMCThreads(), 20, 4)
+# @profview sample(case1_params, smallalg, MCMCSerial(), 20, 1)
 plot(smallsamp)
 
-alg = NUTS(50, 0.65)
-samp = @time sample(case1_params, alg, MCMCThreads(), 300, 4)
-
+alg = NUTS(75, 0.65; init_ϵ=0.01)
+samp = @time sample(case1_params, alg, MCMCThreads(), 500, 4)
 safesave(datadir("exp_pro", "case1_myega_sampling.jld2"), Dict("samp" => samp, "smallsamp" => smallsamp))
+# samp128 = @time sample(case128_params, alg, MCMCThreads(), 300, 4)
+
+# safesave(datadir("exp_pro", "case1_myega_sampling.jld2"), Dict("samp" => samp, "smallsamp" => smallsamp))
+# safesave(datadir("exp_pro", "case128_myega_sampling.jld2"), @strdict smallsamp smallsamp128 samp )
 
 # samp = load(datadir("exp_pro", "case1_sampling.jld2"))["samp"]
 
@@ -104,14 +112,16 @@ table = sort(table, by=x->x.logprob)
 
 # Corner-plot style logic?
 vars = [:N, :S, :C, :Rs, :k0, :K, :θ]
-for i in eachindex(vars)
+pl = plot(layout=(6,6))
+for i in eachindex(vars)[begin:end-1]
     for j in i+1:length(vars)
+        plot!(subplot=6*(i-1)+j-1, getproperty(table, vars[i]), getproperty(table, vars[j]))
     end
 end
 
 begin
-pl1 = plot(u"mL^-1", u"mL", xlabel="N", ylabel="S")
-@df table scatter!(:N, :S, marker_z=:logprob, scale=:log10, colorbar_title="log density")
+# pl1 = plot(u"mL^-1", u"mL", xlabel="N", ylabel="S")
+@df table scatter(:Rs, :k0, marker_z=:logprob, scale=:log10, colorbar_title="log density")
 end
 
 # cutoff = [length(table.logprob)÷20] # 95%
