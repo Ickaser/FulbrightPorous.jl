@@ -41,41 +41,42 @@ end
 # S_typical = V_typical^2*N_typical = V_typical
 
 const fit_scl_porous = (2e6u"cm^-3", 5e-7u"cm^3", 2e-1u"m^0.5", 0.1u"cm^2*Torr*hr/g")
-function gen_sol_mc_arb(fitprm, po, k_f_gen; verbose=false)
+function gen_sol_mc_arb(fitprm, po, k_f_gen; verbose=false, fit_scl=fit_scl_porous)
     new_params = deepcopy(po)
     # fitprm = exp.(fitprmlog) # Constrain all to be positive by taking exp
     verbose && @info "fitprm" fitprm
-    @reset new_params.N = ConstPhysProp(fitprm[1]*fit_scl_porous[1])
-    @reset new_params.S = ConstPhysProp(fitprm[2]*fit_scl_porous[2])
-    @reset new_params.C  = fitprm[3]*fit_scl_porous[3]
-    @reset new_params.Rs = fitprm[4]*fit_scl_porous[4]
+    @reset new_params.N = ConstPhysProp(fitprm[1]*fit_scl[1])
+    @reset new_params.S = ConstPhysProp(fitprm[2]*fit_scl[2])
+    @reset new_params.C  = fitprm[3]*fit_scl[3]
+    @reset new_params.Rs = fitprm[4]*fit_scl[4]
     @reset new_params.k_f = k_f_gen(fitprm[5:end])
     prob = ODEProblem(new_params; tspan=(0.0, 1000.0))
     sol = solve(prob, Rodas3())
     return sol
 end
-function gen_sol_mc_arb(fitprm, po, fitdat, k_f_gen; verbose=false)
+function gen_sol_mc_arb(fitprm, po, fitdat, k_f_gen; 
+                        verbose=false, fit_scl = fit_scl_porous)
     new_params = deepcopy(po)
     # fitprm = exp.(fitprmlog) # Constrain all to be positive by taking exp
     verbose && @info "fitprm" fitprm
-    @reset new_params.N = ConstPhysProp(fitprm[1]*fit_scl_porous[1])
-    @reset new_params.S = ConstPhysProp(fitprm[2]*fit_scl_porous[2])
-    @reset new_params.C  = fitprm[3]*fit_scl_porous[3]
-    @reset new_params.Rs = fitprm[4]*fit_scl_porous[4]
+    @reset new_params.N = ConstPhysProp(fitprm[1]*fit_scl[1])
+    @reset new_params.S = ConstPhysProp(fitprm[2]*fit_scl[2])
+    @reset new_params.C  = fitprm[3]*fit_scl[3]
+    @reset new_params.Rs = fitprm[4]*fit_scl[4]
     @reset new_params.k_f = k_f_gen(fitprm[5:end])
     prob = ODEProblem(new_params; tspan=(0.0, 1000.0))
     sol = solve(prob, Rodas3(); saveat=ustrip.(u"hr", fitdat.t))
     return sol
 end
-function gennsol_mc(fitprm, pos, k_f_gen)
+function gennsol_mc(fitprm, pos, k_f_gen; kwargs...)
     sols = map(pos) do po
-        gen_sol_mc_arb(fitprm, po, k_f_gen)
+        gen_sol_mc_arb(fitprm, po, k_f_gen; kwargs...)
     end
     return sols
 end
-function gennsol_mc(fitprm, pos, fitdats, k_f_gen)
+function gennsol_mc(fitprm, pos, fitdats, k_f_gen; kwargs...)
     sols = map(pos, fitdats) do po, fitdat
-        gen_sol_mc_arb(fitprm, po, fitdat, k_f_gen)
+        gen_sol_mc_arb(fitprm, po, fitdat, k_f_gen; kwargs...)
     end
     return sols
 end
