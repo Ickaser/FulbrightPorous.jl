@@ -35,18 +35,18 @@ function lyo_mc_dae!(du, u, params, t)
     Tsub = Tf - Qshf/k_ice/Ap*hf
 
     if μ1 < 0u"cm^3" || μ0 < 0.0 || μ2 <= 0u"mm^6"
-        Rp = 0u"m/s" # No pores to resist flow
+        Rp = 0.0u"m/s" # No pores to resist flow
     else
         # μ32 = μ0^(-1//8)*μ1^(3//4)*μ2^(3//8)
         # Rp = R0 + C * sqrt(R*Tf/Mw) * μ1*hd/μ32/ϕ # Knudsen
-        Rp = C*sqrt(R*Tf/Mw)/ϕ*hd * sqrt(sqrt(sqrt(μ1^2*μ0/μ2^3))) # Knudsen, rewritten to avoid runtime dispatch
+        Rp = C*sqrt(R*Tf/Mw)/ϕ*hd * sqrt(sqrt(sqrt(μ1^2*μ0/μ2^3))) |> u"m/s" # Knudsen, rewritten to avoid runtime dispatch
         # Rp = R0 + C*η*R*Tf/Mw/((calc_psub(Tsub)+pch(td))/2) * μ1*hd/μ2/ϕ # Viscous
     end
     Rsp = Rs + Rp
     dmdt = - Ap*(calc_psub(Tsub)-pch(td))/Rsp
     Qsub = uconvert(u"W", dmdt*ΔHsub)
 
-    dhf_dt = min(0u"cm/hr", dmdt/(ρ_solution-c_solid)/Ap) # Cap dhf_dt at 0: no desublimation
+    dhf_dt = min(0.0u"cm/hr", dmdt/(ρ_solution-c_solid)/Ap ) # Cap dhf_dt at 0: no desublimation
     dμ0_dt = -k/2*μ0^2 - N(hd)*Ap*dhf_dt
     dμ2_dt = k*μ1^2 - S(hd)*Ap*dhf_dt # dhf_dt < 0 for drying proceeding
 
