@@ -167,6 +167,6 @@ function ODEProblem(po::ParamObjMC; u0=nothing, tspan=nothing)
         end
     end
     sort!(tstops)
-    return ODEProblem(lyo_mc_dae_f, u0, tspan, po; 
+    return ODEProblem{true}(lyo_mc_dae_f, u0, tspan, po; 
         tstops=tstops, callback=end_drying_callback)
 end
