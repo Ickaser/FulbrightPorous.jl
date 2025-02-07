@@ -355,7 +355,6 @@ function obj_kin_myega(p, _)
     mk = k_f_myega(p)
     ks = mk.(Tstops)
     logks = log.(ustrip.(u"s^-1", ks))
-    @info "check" p mk logks klogs128 sum(abs2, logks .- klogs128)
     return sum(abs2, logks .- klogs128)
 end
 objf_myega = OptimizationFunction(obj_kin_myega, AutoForwardDiff())
