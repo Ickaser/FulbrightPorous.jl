@@ -2,8 +2,7 @@
 
 const OP = OptimizationProblem
 using LineSearches
-alg = Optim.BFGS(linesearch=LineSearches.BackTracking())
-pythonplot()
+optalg = Optim.BFGS(linesearch=LineSearches.BackTracking())
 
 # ------------------
 # Load Kv function
@@ -247,7 +246,7 @@ cases = Table([ (name="1", pop=pop1, pomc=pomc1, fitdat=fitdat1, dat=dat1),
 
 single_Rps = map(cases) do case
     (;name, pop, fitdat, dat) = case
-    opt = solve(OP(obj_Rpf, [0.0, 0, -5], (pop, fitdat)), alg, g_tol=1e-3)
+    opt = solve(OP(obj_Rpf, [0.0, 0, -5], (pop, fitdat)), optalg, g_tol=1e-3)
     sol = gen_sol_Rp(opt.u, pop)
     @info "analyis" name opt sol
     Rp = sol.prob.p.Rp
@@ -319,14 +318,14 @@ lb_sigm = vcat(fill(0.0, 4), fill(-30, 4))
 ub_sigm = vcat(fill(Inf, 4), fill( 30, 4))
 # ub_sigm[8] = 30
 
-# opt13sigm = solve(OP(objnf_sigm, fill(1.0, 8), pass13), alg, maxiters=50, time_limit=15)
-opt13sigm = solve(OP(objnf_sigm, fill(1.0, 8), pass13, lb=lb_sigm, ub=ub_sigm), alg, maxiters=50, time_limit=15)
-opt16sigm = solve(OP(objnf_sigm, fill(1.0, 8), pass16, lb=lb_sigm, ub=ub_sigm), alg, maxiters=50, time_limit=15)
-opt123sigm = solve(OP(objnf_sigm, fill(0.1, 8), pass123, lb=lb_sigm, ub=ub_sigm), alg, maxiters=50, time_limit=15)
-opt136sigm = solve(OP(objnf_sigm, fill(1.0, 8), pass136, lb=lb_sigm, ub=ub_sigm), alg, maxiters=50, time_limit=15)
-# @profview solve(OP(objnf_sigm, fill(1.0, 8), pass136, lb=lb_sigm, ub=ub_sigm), alg, maxiters=50, time_limit=15)
-opt123myega = solve(OP(objnf_myega, fill(0.1, 7), pass123, lb=lb_myega, ub=ub_myega), alg, maxiters=50, time_limit=15)
-opt136myega = solve(OP(objnf_myega, fill(1.0, 7), pass136, lb=lb_myega, ub=ub_myega), alg, maxiters=50, time_limit=15)
+# opt13sigm = solve(OP(objnf_sigm, fill(1.0, 8), pass13), optalg, maxiters=50, time_limit=15)
+opt13sigm = solve(OP(objnf_sigm, fill(1.0, 8), pass13, lb=lb_sigm, ub=ub_sigm), optalg, maxiters=50, time_limit=15)
+opt16sigm = solve(OP(objnf_sigm, fill(1.0, 8), pass16, lb=lb_sigm, ub=ub_sigm), optalg, maxiters=50, time_limit=15)
+opt123sigm = solve(OP(objnf_sigm, fill(0.1, 8), pass123, lb=lb_sigm, ub=ub_sigm), optalg, maxiters=50, time_limit=15)
+opt136sigm = solve(OP(objnf_sigm, fill(1.0, 8), pass136, lb=lb_sigm, ub=ub_sigm), optalg, maxiters=50, time_limit=15)
+# @profview solve(OP(objnf_sigm, fill(1.0, 8), pass136, lb=lb_sigm, ub=ub_sigm), optalg, maxiters=50, time_limit=15)
+opt123myega = solve(OP(objnf_myega, fill(0.1, 7), pass123, lb=lb_myega, ub=ub_myega), optalg, maxiters=50, time_limit=15)
+opt136myega = solve(OP(objnf_myega, fill(1.0, 7), pass136, lb=lb_myega, ub=ub_myega), optalg, maxiters=50, time_limit=15)
 
 fits = Table((opt=[opt13sigm, opt16sigm, opt123sigm, opt136sigm, opt123myega, opt136myega], 
               k_type=[k_f_sigm, k_f_sigm, k_f_sigm, k_f_sigm, k_f_myega, k_f_myega],
