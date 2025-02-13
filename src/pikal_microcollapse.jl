@@ -151,22 +151,14 @@ function Base.show(io::IO, po::ParamObjMC)
     return print(io, str)
 end
 
-function ODEProblem(po::ParamObjMC; u0=nothing, tspan=nothing)
-    if isnothing(tspan)
-        tspan = (0.0, 200.0)
-    end
-    if isnothing(u0)
-        u0 = ustrip.([u"cm", u"K", u"mm^6", NoUnits], [po.hf0, po.Tsh(0u"s"), 0.0u"mm^6", 0.0])
-    end
-    tstops = [0.0]
-    for control in [po.Tsh, po.pch]
-        if control isa RampedVariable && !isnothing(control.timestops)
-            tstops = vcat(tstops, ustrip.(u"hr", control.timestops))
-        elseif control isa LinearInterpolation
-            tstops = vcat(tstops, ustrip.(u"hr", control.t))
-        end
-    end
-    sort!(tstops)
+function LyoPronto.calc_u0(po::ParamObjMC)
+    # ustrip.([u"cm", u"K", u"mm^6", NoUnits], [po.hf0, float(po.Tsh(0u"s")), 0.0u"mm^6", 0.0])
+    [ustrip(u"cm", po.hf0), ustrip(u"K", float(po.Tsh(0u"s"))), 0.0, 0.0]
+end
+LyoPronto.get_tstops(po::ParamObjMC) = LyoPronto._get_tstops((po.Tsh, po.pch))
+
+function ODEProblem(po::ParamObjMC; u0=calc_u0(po), tspan=(0.0, 200.0))
+    tstops = LyoPronto.get_tstops(po)
     return ODEProblem{true}(lyo_mc_dae_f, u0, tspan, po; 
         tstops=tstops, callback=end_drying_callback)
 end
