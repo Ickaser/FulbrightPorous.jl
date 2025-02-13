@@ -7,8 +7,12 @@ export blankplot_lRp
 blankplot_lRp(;kwargs...) = plot(u"cm", u"cm^2*Torr*hr/g", xlabel=L"h_d", ylabel=L"R_p", unitformat=(x,y)->"$x [$(latexify(y))]";kwargs...)
 
 @userplot PoreEvolPlot
-@recipe function f(pep::PoreEvolPlot)
+@recipe function f(pep::PoreEvolPlot, kind=:moms)
     sol = pep.args[1]
+    if ~(kind ∈ [:moms, :stats])
+        @warn "kind should be either :moms or :stats, defaulting to :moms" kind
+        kind = :moms
+    end
     t = sol.t*u"hr"
     hf = sol[1,:]*u"cm"
     μ0 = sol[3,:]
@@ -26,26 +30,40 @@ blankplot_lRp(;kwargs...) = plot(u"cm", u"cm^2*Torr*hr/g", xlabel=L"h_d", ylabel
     layout --> @layout [[a ; b; c;] d]
     @series begin
         subplot --> 1
-        ylabel --> "number\nof pores" #*", number of pores"
         xlabel --> ""
         legend --> :none
         xformatter -->  _->""
+        if kind == :stats
+            ylabel --> "number\nof pores" #*", number of pores"
+        elseif kind == :moms
+            ylabel --> "μ0"
+        end
         return hd, μ0
     end
     @series begin
         subplot --> 2
-        ylabel --> "typical \npore size\n" #*", total pore volume"
         xlabel --> ""
         legend --> :none
         xformatter -->  _->""
-        return hd, mean
+        if kind == :stats
+            ylabel --> "typical \npore size\n" #*", total pore volume"
+            return hd, mean
+        elseif kind == :moms
+            ylabel --> "μ1" 
+            return hd, μ1
+        end
     end
     @series begin
         subplot --> 3
-        ylabel --> "pore size \nvariance\n" #*", pore size second moment"
         xlabel --> "Dry layer thickness"
         legend --> :none
-        return hd, var
+        if kind == :stats
+            ylabel --> "pore size \nvariance\n" #*", pore size second moment"
+            return hd, var
+        elseif kind == :moms
+            ylabel --> "μ2"
+            return hd, μ2
+        end
     end
     @series begin
         subplot --> 4
