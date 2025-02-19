@@ -2,7 +2,7 @@
 
 julia_version = "1.11.1"
 manifest_format = "2.0"
-project_hash = "83f69ab1d0fe83f957efe4e575bc171ad1a55193"
+project_hash = "7a074e1591dffd5dc2295d8c709463c363b69258"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "fb97701c117c8162e84dfcf80215caa904aef44f"
@@ -1605,7 +1605,7 @@ uuid = "6f1432cf-f94c-5a45-995e-cdbf5db27b0b"
 version = "3.1.0"
 
 [[deps.LyoPronto]]
-deps = ["Accessors", "CSV", "ColorTypes", "DataInterpolations", "DiffEqCallbacks", "Optim", "OrdinaryDiffEqNonlinearSolve", "OrdinaryDiffEqRosenbrock", "PrecompileTools", "RecipesBase", "Reexport", "Roots", "SavitzkyGolay", "SpecialFunctions", "UnPack", "Unitful"]
+deps = ["Accessors", "CSV", "ColorTypes", "DataInterpolations", "DiffEqCallbacks", "OrdinaryDiffEqNonlinearSolve", "OrdinaryDiffEqRosenbrock", "PrecompileTools", "RecipesBase", "Reexport", "Roots", "SpecialFunctions", "UnPack", "Unitful"]
 path = "C:\\Users\\iwheeler\\.julia\\dev\\LyoPronto"
 uuid = "86014da0-a5b3-40a4-ad76-3e66dfc3e269"
 version = "0.1.1"
@@ -2838,6 +2838,17 @@ version = "0.4.84"
     LazyArrays = "5078a376-72f3-5289-bfd5-ec5146d43c02"
     OnlineStatsBase = "925886fa-5bf2-5e8e-b522-a9147a512338"
     Referenceables = "42d2dcc6-99eb-4e98-b66c-637b7d73030e"
+
+[[deps.TransformVariables]]
+deps = ["ArgCheck", "DocStringExtensions", "ForwardDiff", "LinearAlgebra", "LogExpFunctions", "Random", "StaticArrays"]
+git-tree-sha1 = "a3f06a3a66603dd69312ba4f77a45520df310895"
+uuid = "84d833dd-6860-57f9-a1a7-6da5db126cff"
+version = "0.8.13"
+weakdeps = ["ChangesOfVariables", "InverseFunctions"]
+
+    [deps.TransformVariables.extensions]
+    ChangesOfVariablesExt = "ChangesOfVariables"
+    InverseFunctionsExt = "InverseFunctions"
 
 [[deps.TriangularSolve]]
 deps = ["CloseOpenIntervals", "IfElse", "LayoutPointers", "LinearAlgebra", "LoopVectorization", "Polyester", "Static", "VectorizationBase"]
