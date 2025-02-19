@@ -306,6 +306,7 @@ objnf_myega = OptimizationFunction(objn_myega, AutoForwardDiff())
 lb_myega = vcat(fill(0.0, 4), fill(-100, 3))
 ub_myega = vcat(fill(Inf, 4), fill( 100, 3))
 
+sigm_scale = (1e-15u"s^-1", 1e-9u"s^-1", 0.8u"K", 239u"K")
 function k_f_sigm(vec)
     p123 = exp.(vec[1:3] .-1).*sigm_scale[1:3]
     p4 = vec[4]*u"K" + sigm_scale[4]
