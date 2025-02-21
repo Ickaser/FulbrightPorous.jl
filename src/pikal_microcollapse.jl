@@ -96,7 +96,7 @@ See [`RpFormFit`](@ref LyoPronto.RpFormFit) and [`RampedVariable`](@ref LyoPront
 - `Tsh(t)`, `pch(t)` return shelf temperature and chamber pressure respectively at time `t`.
 - `k_f(T)` returns the rate constant for pore coalescence at temperature `T`.
 """
-lyo_mc_dae_f = ODEFunction(lyo_mc_dae!, mass_matrix=lyo_mc_mm)
+const lyo_mc_dae_f = ODEFunction(lyo_mc_dae!, mass_matrix=lyo_mc_mm)
 
 struct ParamObjMC{T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13}
     hf0::T1
