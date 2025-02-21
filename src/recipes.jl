@@ -7,9 +7,9 @@ export blankplot_lRp
 blankplot_lRp(;kwargs...) = plot(u"cm", u"cm^2*Torr*hr/g", xlabel=L"h_d", ylabel=L"R_p", unitformat=(x,y)->"$x [$(latexify(y))]";kwargs...)
 
 @userplot PoreEvolPlot
-@recipe function f(pep::PoreEvolPlot, kind=:moms)
+@recipe function f(pep::PoreEvolPlot; kind=:moms)
     sol = pep.args[1]
-    if ~(kind ∈ [:moms, :stats])
+    if kind != :moms && kind != :stats
         @warn "kind should be either :moms or :stats, defaulting to :moms" kind
         kind = :moms
     end
