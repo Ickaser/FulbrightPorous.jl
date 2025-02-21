@@ -247,7 +247,7 @@ pls_T = map(cases_both) do case
     pl = blankplot_hrC(legend=:outerright, title=case.name)
     plot!(case.fitdat)
     modconvtplot!(case.sol_mc, case.sol_p, linealpha=0.7, markeralpha=0, labels=["PBM: M 1&2&3" "3PP $(case.name)"])
-    plot!(xlim=(0, 16), ylim=(-50, -30))
+    plot!(xlim=(0, 16), ylim=(-50, -28))
     return pl
 end
 # plot!(pls_T[5], legend=:bottomright)
@@ -258,18 +258,16 @@ savefig(plotsdir("fulbright_sucrose_T.pdf"))
 
 l = range(0u"cm", 0.5u"cm", length=100)
 begin
-poreevolplot(cases_both[1].sol_mc, label="PBM 1, 1&2&3")
-poreevolplot!(cases_both[2].sol_mc, label="PBM 2, 1&2&3")
-poreevolplot!(cases_both[3].sol_mc, label="PBM 3, 1&2&3")
-plot!(subplot=4, l, cases_both.Rp[1].(l), c=1, label="3PP 1")
-plot!(subplot=4, l, cases_both.Rp[2].(l), c=2, label="3PP 2")
-plot!(subplot=4, l, cases_both.Rp[3].(l), c=3, label="3PP 3")
+poreevolplot(cases_both[1].sol_mc, label="PBM 1, 1&2&3", marker=:o)
+poreevolplot!(cases_both[2].sol_mc, label="PBM 2, 1&2&3", marker=:square)
+poreevolplot!(cases_both[3].sol_mc, label="PBM 3, 1&2&3", marker=:d)
+plot!(subplot=4, l, cases_both.Rp[1].(l), ls=:dash, c=1, label="3PP 1")
+plot!(subplot=4, l, cases_both.Rp[2].(l), ls=:dash, c=2, label="3PP 2")
+plot!(subplot=4, l, cases_both.Rp[3].(l), ls=:dash, c=3, label="3PP 3")
 end
 
 res_fit = cases_both[1].sol_mc.prob.p
 @info "Best fit params:" res_fit.N res_fit.S res_fit.C res_fit.Rs
-
-@time objn_myega(opt123myega.u, pass123)
 
 function eval_about_myega(new, opt, pass)
     objn_myega(new .* opt.u, pass)
@@ -280,41 +278,64 @@ function eval_many(ranges...)
     eval_about_myega.(eval_points, [opt123myega], [pass123])
 end
 
-spread = [[exp(i), exp(j), fill(1.0,5)...] for i in -5:5, j in -5:5]
+# spread = [[exp(i), exp(j), fill(1.0,5)...] for i in -5:5, j in -5:5]
 
-@time sqerrs = eval_about_myega.(spread, [opt123myega], [pass123])
-
-contourf(sqerrs, cmap=:thermal, lw=0)
-exp.(-sqerrs)
-
-
-
-## Bayesian
-
-
-@model function myega_likelihood(params, fitdats)
-    magfac = 4 # Make the squared error more important than priors
-    if fitdats isa PrimaryDryFit # single parameter set
-        magfac = 4
-    else
-        magfac = 4/length(fitdats)
-    end
-    Nfac ~ Uniform(-6, 4)
-    Sfac ~ Uniform(-6, 6)
-    Cfac ~ Uniform(-4, 4)
-    Rfac ~ Uniform(-2, 2)
-    kfac ~ Uniform(-2, 2)
-    Kfac ~ Uniform(-2, 2)
-    θfac ~ Uniform(-2, 2)
-
-    fitprm = exp10.([Nfac, Sfac, Cfac, Rfac, kfac, Kfac, θfac])
-
-    sqerr = magfac * objn_mc(fitprm, (params, fitdats, k_f_myega_nolog), tweight=1e-1) 
-
-    if !isnan(sqerr)
-        Turing.@addlogprob! -sqerr
-    else
-    #     # @info "check" newpo.N.val newpo.S.val newpo.C.val newpo.Rs.val sol.t[end] sol[1,end]
-        Turing.@addlogprob! -Inf
-    end
+integ_dims(dims...) = dropdims(sum(probs, dims=dims), dims=dims)
+# @time sqerrs = eval_about_myega.(spread, [opt123myega], [pass123])
+begin
+Nr = range(-10, 10, length=11)
+Sr = range(-2, 4, length=12)
+Cr = range(-1, 4, length=5)
+Rsr = range(0, 3.5, length=4)
+@time sqerrs = eval_many(Nr, Sr, Cr, Rsr)
+minsqerr = minimum(filter(!isnan, sqerrs)) 
+opt123myega.minimum
+probs = exp.(-map(x->(isnan(x) ? Inf : x-minsqerr), sqerrs))
+probs ./= sum(probs)
 end
+contourf(integ_dims(1, 2), cmap=:thermal, cscale=:log10, lw=0)
+contourf(integ_dims(3, 4), cmap=:thermal, cscale=:log10, lw=0)
+# contourf(sqerrs[:,:,1,1], cmap=:thermal, lw=0)
+
+
+
+# ## Bayesian, a la DynamicHMC
+
+# struct MYEGA_prob1{P, F}
+#     po::P
+#     fitdat::F
+# end
+
+# function (prob::MYEGA_prob1)(θ)
+#     lim = [10, 3, 2, 2, 5, 5, 5]
+#     if any(θ .< -lim) || any(θ .> lim)
+#         return -Inf
+#     end
+#     rtype = eltype(θ)
+#     sqerr::rtype = objn_myega(opt123myega.u .+ θ, (prob.po, prob.fitdat))
+#     if isnan(sqerr)
+#         return rtype(-Inf)
+#     else
+#         return -sqerr
+#     end
+# end
+
+# bayes123 = MYEGA_prob1(pass123...)
+
+# # logprob = LogDensityProblem(bayes123)
+# using LogDensityProblems, LogDensityProblemsAD
+# LogDensityProblems.dimension(::MYEGA_prob1) = 7
+# LogDensityProblems.logdensity(prob::MYEGA_prob1, θ) = -prob(θ)
+# LogDensityProblems.capabilities(bayes123)
+
+# import Random
+# using DynamicHMC
+# ∇l = ADgradient(:ForwardDiff, bayes123)
+# @time bayes123(fill(-3.0, 7))
+# # @code_warntype LogDensityProblems.logdensity_and_gradient(∇l, fill(1.0, 7))
+# # @time ∇l(fill(1.0, 7))
+# # @time results = mcmc_with_warmup(Random.default_rng(), ∇l, 10; reporter = NoProgressReport())
+# @time results = mcmc_with_warmup(Random.default_rng(), ∇l, 10, initialization=(q=fill(0.0, 7),ϵ=0.01))
+# @time results = mcmc_with_warmup(Random.default_rng(), ∇l, 1000, initialization=(q=fill(0.0, 7),ϵ=0.01), warmup_stages=fixed_stepsize_warmup_stages())
+
+# safesave(datadir("exp_pro", "suc_mcmc.jld2"), @strdict results sqerrs Nr Sr Cr Rsr probs)
