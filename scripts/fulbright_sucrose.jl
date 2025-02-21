@@ -145,6 +145,7 @@ N = ConstPhysProp(N_typical)
 S = ConstPhysProp(V_typical) # = V_typ^2*N_typ
 C = 2e-1u"m^0.5"
 Rs = 0.5u"cm^2*Torr*hr/g"
+fit_scl = (N(0), S(0), C, Rs)
 k0 = 1e-14u"1/s"
 
 pop1 = ParamObjPikal([
@@ -204,7 +205,7 @@ pass123 = make_mcpass([1, 2, 3])
 
 myega_scale = (1e10u"s^-1", 1.6e3u"K", 1e2u"K")
 k_f_myega(vec) = MYEGA_k((exp.(vec).*myega_scale))
-objn_myega(fitprm, pf) = objn_mc(fitprm, (pf..., k_f_myega), tweight=1e-1)
+objn_myega(fitprm, pf) = objn_mc(fitprm, (pf..., k_f_myega), tweight=1e-1, fit_scl=fit_scl)
 objnf_myega = OptimizationFunction(objn_myega, AutoForwardDiff())
 lb_myega = vcat(fill(0.0, 4), fill(-100, 3))
 ub_myega = vcat(fill(Inf, 4), fill( 100, 3))
@@ -215,7 +216,7 @@ function k_f_sigm(vec)
     p4 = vec[4]*u"K" + sigm_scale[4]
     Sigmoid_k(p123..., p4)
 end
-objn_sigm(fitprm, pf) = objn_mc(fitprm, (pf..., k_f_sigm), tweight=1e-1)
+objn_sigm(fitprm, pf) = objn_mc(fitprm, (pf..., k_f_sigm), tweight=1e-1, fit_scl=fit_scl)
 objnf_sigm = OptimizationFunction(objn_sigm, AutoForwardDiff())
 lb_sigm = vcat(fill(0.0, 4), fill(-30, 4))
 # lb_sigm[8] = -30
@@ -232,7 +233,7 @@ fits = Table(fits, (kf= map(x->x.k_type(x.opt[5:end]), fits),))
 
 function gen_pbmsols(opt, k_f_gen)
     map(cases) do case
-        sol = gen_sol_mc_arb(opt.u, case.pomc, k_f_gen)
+        sol = gen_sol_mc_arb(opt.u, case.pomc, k_f_gen; fit_scl=fit_scl)
         return (sol_mc=sol,k_f=sol.prob.p.k_f)
     end
 end

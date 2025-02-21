@@ -81,14 +81,15 @@ function gennsol_mc(fitprm, pos, fitdats, k_f_gen; kwargs...)
     return sols
 end
 
-function objn_mc(fitprm, pfk; tweight=0, verbose=false)
+function objn_mc(fitprm, pfk; tweight=0, verbose=false, fit_scl = fit_scl_porous)
+    rtype = eltype(fitprm)
     pos, fitdats, k_gen = pfk
     # verbose && @info "fitprm" fitprm
     if pos isa ParamObjMC && fitdats isa PrimaryDryFit # single element
-        sols = gen_sol_mc_arb(fitprm, pos, fitdats, k_gen)
+        sols = gen_sol_mc_arb(fitprm, pos, fitdats, k_gen; fit_scl=fit_scl)
         objs = [obj_expT(sols, fitdats, tweight=tweight)]
     else
-        sols = gennsol_mc(fitprm, pos, fitdats, k_gen)
+        sols = gennsol_mc(fitprm, pos, fitdats, k_gen; fit_scl=fit_scl)
         objs = map(sols, fitdats) do sol, fitdat
             obj_expT(sol, fitdat, tweight=tweight)
         end
