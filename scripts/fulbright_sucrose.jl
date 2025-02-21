@@ -218,13 +218,14 @@ function k_f_sigm(vec)
 end
 objn_sigm(fitprm, pf) = objn_mc(fitprm, (pf..., k_f_sigm), tweight=1e-1, fit_scl=fit_scl)
 objnf_sigm = OptimizationFunction(objn_sigm, AutoForwardDiff())
-lb_sigm = vcat(fill(0.0, 4), fill(-30, 4))
+lb_sigm = vcat(fill(-10.0, 4), fill(-30, 4))
 # lb_sigm[8] = -30
-ub_sigm = vcat(fill(Inf, 4), fill( 30, 4))
+ub_sigm = vcat(fill(10.0, 4), fill( 30, 4))
 # ub_sigm[8] = 30
 
-opt123sigm = solve(OP(objnf_sigm, fill(0.1, 8), pass123, lb=lb_sigm, ub=ub_sigm), optalg, maxiters=50, time_limit=15)
-opt123myega = solve(OP(objnf_myega, fill(1.0, 7), pass123, lb=lb_myega, ub=ub_myega), optalg, maxiters=50, time_limit=15)
+@time opt123sigm = solve(OP(objnf_sigm, fill(0.1, 8), pass123, lb=lb_sigm, ub=ub_sigm), optalg, maxiters=50, time_limit=15)
+p0_myega = [5.0, 1, 0, 0.1, 10, 1, 1]
+@time opt123myega = solve(OP(objnf_myega, p0_myega, pass123, lb=lb_myega, ub=ub_myega), optalg, maxiters=50, time_limit=15, show_trace=true)
 
 fits = Table((opt=[opt123sigm, opt123myega], 
               k_type=[k_f_sigm, k_f_myega],
