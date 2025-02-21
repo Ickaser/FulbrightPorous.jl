@@ -258,9 +258,9 @@ savefig(plotsdir("fulbright_sucrose_T.pdf"))
 
 l = range(0u"cm", 0.5u"cm", length=100)
 begin
-poreevolplot(cases_both[1].sol_mc, label="PBM 1, 1&2&3", marker=:o)
-poreevolplot!(cases_both[2].sol_mc, label="PBM 2, 1&2&3", marker=:square)
-poreevolplot!(cases_both[3].sol_mc, label="PBM 3, 1&2&3", marker=:d)
+poreevolplot(cases_both[1].sol_mc, label="PBM 1, 1&2&3", marker=:o, kind=:stats)
+poreevolplot!(cases_both[2].sol_mc, label="PBM 2, 1&2&3", marker=:square, kind=:stats)
+poreevolplot!(cases_both[3].sol_mc, label="PBM 3, 1&2&3", marker=:d, kind=:stats)
 plot!(subplot=4, l, cases_both.Rp[1].(l), ls=:dash, c=1, label="3PP 1")
 plot!(subplot=4, l, cases_both.Rp[2].(l), ls=:dash, c=2, label="3PP 2")
 plot!(subplot=4, l, cases_both.Rp[3].(l), ls=:dash, c=3, label="3PP 3")
