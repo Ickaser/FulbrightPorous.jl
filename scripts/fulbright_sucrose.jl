@@ -69,7 +69,7 @@ Tsh2 = RampedVariable(uconvert.(u"K", [-47, -10]u"°C"), 0.5u"K/minute")
 fitdat2 = @df dat2 PrimaryDryFit(:t, (
     :T1[:t .< 7u"hr"],
     :T2[:t .< 7u"hr"],
-    :T3[:t .< 5u"hr"],
+    :T3[:t .< 4u"hr"],
     :T4[:t .< 3u"hr"],
     ),
     t_end2
@@ -109,13 +109,96 @@ fitdat3 = @df dat3 PrimaryDryFit(:t, (
     t_end3
 )
 # plot(fitdat3)
+
+
+# ---------------
+# 10% Sucrose cycles 
+dat4raw = CSV.read(datadir("exp_raw", "Fulbright2025", "2025-02-25-10_MFD_IW.csv"), Table; header=8)
+dat4pd = filter(x->x.Phase==4, dat4raw)
+dat4 = map(x->microfd_fulbright_columnrename(x, dat4pd.CycleTime[1]), dat4pd)
+for i in eachindex(dat4)[2:end]
+    if dat4.t[i] < dat4.t[i-1]
+        dat4.t[i:end] .+= 24u"hr"
+    end
+end
+
+pch4_pir_der2 = savitzky_golay(dat4.pch_pir, 91, 3, deriv=2, rate=1/u"minute").y
+t_end4 = dat4.t[argmax(pch4_pir_der2[1u"hr" .< dat4.t .< 50u"hr" ])] + 1u"hr"
+
+pch4 = RampedVariable(100u"mTorr")
+# @df dat4 plot(:t, :pch_cm, ylim=(0, 200))
+# @df dat4 plot!(:t, :pch_pir, ylim=(0, 200))
+# plot!(pch4)
+# tendplot!(t_end4)
+
+Tsh4 = RampedVariable(uconvert.(u"K", [-47, -20]u"°C"), 0.5u"K/minute")
+# @df dat4 plot(:t, :Tsh_i, xlim=(0, 2))
+# plot!(Tsh4)
+
+# @df dat4 exptfplot(:t, :T1, :T2, :T3, :T4)
+
+fitdat4 = @df dat4 PrimaryDryFit(:t, (
+    :T1[:t .< 6.4u"hr"],
+    :T2[:t .< 6.5u"hr"],
+    :T3[:t .< 7u"hr"],
+    :T4[:t .< 8.5u"hr"],
+    ),
+    t_end4
+)
+plot(fitdat4)
+
+dat5raw = CSV.read(datadir("exp_raw", "Fulbright2025", "2025-02-27-10_MFD_IW.csv"), Table; header=8)
+dat5pd = filter(x->x.Phase==4, dat5raw)
+dat5 = map(x->microfd_fulbright_columnrename(x, dat5pd.CycleTime[1]), dat5pd)
+for i in eachindex(dat5)[2:end]
+    if dat5.t[i] < dat5.t[i-1]
+        dat5.t[i:end] .+= 24u"hr"
+    end
+end
+
+pch5_pir_der2 = savitzky_golay(dat5.pch_pir, 91, 3, deriv=2, rate=1/u"minute").y
+t_end5 = dat5.t[argmax(pch5_pir_der2[1u"hr" .< dat5.t .< 50u"hr" ])] + 1u"hr"
+
+pch5 = RampedVariable(100u"mTorr")
+# @df dat5 plot(:t, :pch_cm, ylim=(0, 200))
+# @df dat5 plot!(:t, :pch_pir, ylim=(0, 200))
+# plot!(pch5)
+# tendplot!(t_end5)
+
+Tsh5 = RampedVariable(uconvert.(u"K", [-47, -30]u"°C"), 0.5u"K/minute")
+# @df dat5 plot(:t, :Tsh_i, xlim=(0, 2))
+# plot!(Tsh5)
+
+# @df dat5 exptfplot(:t, :T1, :T2, :T3, :T4)
+
+fitdat5 = @df dat5 PrimaryDryFit(:t, (
+    :T1[:t .< 11u"hr"],
+    :T2[:t .< 14u"hr"],
+    :T3[:t .< 13u"hr"],
+    :T4[:t .< 10u"hr"],
+    ),
+    t_end5
+)
+# plot(fitdat5)
+
 end
 
 blankplot_hrC()
 plot!(fitdat1, c=1)
 plot!(fitdat2, c=2)
 plot!(fitdat3, c=3)
+# blankplot_hrC()
+plot!(fitdat4, c=4)
+plot!(fitdat5, c=5)
+plot!(xlim=(0, 10), ylim=(-36,-30))
 
+# ------------- Check Pirani
+
+@df dat1raw plot(:VacPirani, ylim=(90, 200))
+@df dat2raw plot!(:VacPirani, )
+@df dat3raw plot!(:VacPirani, )
+@df dat4raw plot!(:VacPirani, )
+@df dat5raw plot(:VacPirani, ylim=(90, 180))
 
 
 
@@ -164,11 +247,19 @@ pop2 = @set pop1.Tsh = Tsh2
 pop3 = @set pop1.Tsh = Tsh3
 pomc2 = @set pomc1.Tsh = Tsh2
 pomc3 = @set pomc1.Tsh = Tsh3
+
+pop4 = @set pop1.c_solid = 0.1u"g/mL"
+pop5 = @set pop4.Tsh = Tsh5
+pomc4 = @set pomc1.c_solid = 0.1u"g/mL"
+pomc5 = @set pomc4.Tsh = Tsh5
 end
 
 cases = Table([ (name="1", pop=pop1, pomc=pomc1, fitdat=fitdat1, dat=dat1),
                 (name="2", pop=pop2, pomc=pomc2, fitdat=fitdat2, dat=dat2),
-                (name="3", pop=pop3, pomc=pomc3, fitdat=fitdat3, dat=dat3),])
+                (name="3", pop=pop3, pomc=pomc3, fitdat=fitdat3, dat=dat3),
+                (name="4", pop=pop4, pomc=pomc4, fitdat=fitdat4, dat=dat4),
+                (name="5", pop=pop5, pomc=pomc5, fitdat=fitdat5, dat=dat5),
+                ])
 
 obj_Rpf = OptimizationFunction(obj_Rp, AutoForwardDiff())
 @time obj_Rpf(fill(0.0, 3), (pop1, fitdat1))
@@ -190,11 +281,11 @@ cases_Rps = Table(cases, single_Rps)
 
 pls = map(cases_Rps) do case 
     plT = blankplot_hrC()
-    plot!(case.fitdat)
+    plot!(case.fitdat, title=case.name)
     modconvtplot!(case.sol_p)
     return plT
 end
-plot(pls..., layout=(3,1), size=(500, 1000))
+plot(pls..., layout=(3,2), size=(800, 1000))
 
 function make_mcpass(casenums)
     subdat = filter(x->parse(Int, x.name)∈casenums, cases)
@@ -202,6 +293,7 @@ function make_mcpass(casenums)
 end
 
 pass123 = make_mcpass([1, 2, 3])
+pass45 = make_mcpass([4, 5])
 
 myega_scale = (1e10u"s^-1", 1.6e3u"K", 1e2u"K")
 k_f_myega(vec) = MYEGA_k((exp.(vec).*myega_scale))
@@ -283,18 +375,16 @@ end
 integ_dims(dims...) = dropdims(sum(probs, dims=dims), dims=dims)
 # @time sqerrs = eval_about_myega.(spread, [opt123myega], [pass123])
 begin
-Nr = range(-10, 10, length=11)
-Sr = range(-2, 4, length=12)
-Cr = range(-1, 4, length=5)
-Rsr = range(0, 3.5, length=4)
+Nr = range(-30, 40, length=11)
+Sr = range(-16, 16, length=12)
+Cr = range(-10, 20, length=5)
+Rsr = range(-2, 10, length=4)
 @time sqerrs = eval_many(Nr, Sr, Cr, Rsr)
 minsqerr = minimum(filter(!isnan, sqerrs)) 
 opt123myega.minimum
 probs = exp.(-map(x->(isnan(x) ? Inf : x-minsqerr), sqerrs))
 probs ./= sum(probs)
-end
-contourf(integ_dims(1, 2), cmap=:thermal, cscale=:log10, lw=0)
-contourf(integ_dims(3, 4), cmap=:thermal, cscale=:log10, lw=0)
+end;
 # contourf(sqerrs[:,:,1,1], cmap=:thermal, lw=0)
 
 
@@ -339,3 +429,45 @@ contourf(integ_dims(3, 4), cmap=:thermal, cscale=:log10, lw=0)
 # @time results = mcmc_with_warmup(Random.default_rng(), ∇l, 1000, initialization=(q=fill(0.0, 7),ϵ=0.01), warmup_stages=fixed_stepsize_warmup_stages())
 
 # safesave(datadir("exp_pro", "suc_mcmc.jld2"), @strdict results sqerrs Nr Sr Cr Rsr probs)
+
+## Bayesian, Turing
+using Turing
+
+@model function myega_posterior(opt, pass)
+
+    Nfac ~ LogUniform(1e-15, 1e20)
+    Sfac ~ LogUniform(1e-6, 1e6)
+    Cfac ~ LogUniform(1e-5, 1e10)
+    Rfac ~ LogUniform(1e-1, 1e5)
+    kfac ~ LogUniform(1e-3, 1e3)
+    Kfac ~ LogUniform(1e-3, 1e3)
+    θfac ~ LogUniform(1e-3, 1e3)
+
+    prmfacs = [Nfac, Sfac, Cfac, Rfac, kfac, Kfac, θfac]
+    sqerr = eval_about_myega(prmfacs, opt, pass)
+
+    if !isnan(sqerr)
+        Turing.@addlogprob! -sqerr
+    else
+    #     # @info "check" newpo.N.val newpo.S.val newpo.C.val newpo.Rs.val sol.t[end] sol[1,end]
+        Turing.@addlogprob! -Inf
+    end
+end
+
+case123_model = myega_posterior(opt123myega, pass123);
+
+nthreads = 1
+init_set = [exp.(rand(7).-0.5) for i in 1:nthreads]
+@time smallsamp = sample(case123_model, NUTS(), MCMCThreads(), 50, nthreads, initial_params=init_set)
+nthreads = 4
+init_set = [exp.(rand(7).-0.5) for i in 1:nthreads]
+samp_alg = NUTS(100, 0.65; init_ϵ=0.01)
+@time samp = sample(case123_model, samp_alg, MCMCThreads(), 500, nthreads, initial_params=init_set)
+
+safesave(datadir("exp_pro", "fulbright123_myega_sampling.jld2"), @strdict smallsamp samp )
+
+@unpack samp = load(datadir("exp_pro", "fulbright123_myega_sampling.jld2"))
+plot(samp, yscale=:log10)
+
+
+@time bigsamp = sample(case123_model, NUTS(), MCMCThreads(), 2000, nthreads, initial_params=init_set)
