@@ -41,6 +41,7 @@ baseprob = ODEProblem(basefit1, tspan=(0.0, 1000.0))
     # Nfac ~ truncated(Normal(0.0, 2.0); lower=-8, upper=8)
     # Sfac ~ truncated(Normal(0.0, 2.0); lower=-8, upper=8)
     Nfac ~ Uniform(-6, 4)
+    
     # Sfac ~ Uniform(-12, 0)
     Sfac ~ Uniform(-6, 6)
     Cfac ~ Uniform(-4, 4)
@@ -53,16 +54,19 @@ baseprob = ODEProblem(basefit1, tspan=(0.0, 1000.0))
 
     # k_args = exp10.([kfac, Kfac, θfac]) .* fit_guess[5:7]
 
-    # newpo = @set param.N = ConstPhysProp(fitprm[1]*porous_scale[1])
-    # @reset newpo.S = ConstPhysProp(fitprm[2]*porous_scale[2])
-    # @reset newpo.C = fitprm[3]*porous_scale[3]
-    # @reset newpo.Rs = fitprm[4]*porous_scale[4]
-    # @reset newpo.k_f = k_f_myega_nolog(fitprm[5:end])
-    # newprob = ODEProblem(newpo)
-    # sol = solve(newprob, Rodas3(), saveat=ustrip.(u"hr", fitdat.t))
-    # sqerr = magfac * obj_expT(sol, fitdat, tweight=1.0) 
+    if fitdats isa PrimaryDryFit
+        newpo = @set param.N = ConstPhysProp(fitprm[1]*porous_scale[1])
+        @reset newpo.S = ConstPhysProp(fitprm[2]*porous_scale[2])
+        @reset newpo.C = fitprm[3]*porous_scale[3]
+        @reset newpo.Rs = fitprm[4]*porous_scale[4]
+        @reset newpo.k_f = k_f_myega_nolog(fitprm[5:end])
+        newprob = ODEProblem(newpo)
+        sol = solve(newprob, Rodas3(), saveat=ustrip.(u"hr", fitdat.t))
+        sqerr = magfac * obj_expT(sol, fitdat, tweight=1.0) 
+    else
+    end
 
-    sqerr = magfac * objn_mc(fitprm, (params, fitdats, k_f_myega_nolog), tweight=1e-1) 
+    # sqerr = magfac * objn_mc(fitprm, (params, fitdats, k_f_myega_nolog), tweight=1e-1) 
 
     if !isnan(sqerr)
         Turing.@addlogprob! -sqerr
