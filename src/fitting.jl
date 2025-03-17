@@ -105,5 +105,5 @@ function objn_mc(fitprm, pfk; tweight=0, verbose=false, fit_scl = fit_scl_porous
         # @info "unfinished drying" [sol for 
     end
     verbose && @info "obj" objs fitprm 
-    return sum(objs)::rtype
+    return rtype(sum(objs))
 end
