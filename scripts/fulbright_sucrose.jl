@@ -283,7 +283,22 @@ pls = map(cases_Rps) do case
     plT = blankplot_hrC()
     plot!(case.fitdat, title=case.name)
     modconvtplot!(case.sol_p)
+    # plot!(case.pop.Tsh, tmax=case.fitdat.t_end, c=:black, label=L"T_\mathrm{sh}")
     return plT
+end
+plot(pls..., layout=(3,2), size=(800, 1000))
+
+l = range(0u"cm", hf0, length=100)
+pls = map(cases_Rps) do case
+    plr = blankplot_lRp()
+    for i in 1:4
+        hdT, RpT = calc_hRp_T(case.pop, case.fitdat, i=i)
+        @info "it" hdT RpT
+        plot!(hdT, RpT, c=i, label="Rp from T, $i")
+    end
+    plot!(l, case.Rp.(l), label="3PP fit directly to T")
+    plot!(legend = :bottomright)
+    return plr
 end
 plot(pls..., layout=(3,2), size=(800, 1000))
 
@@ -348,7 +363,7 @@ end
 savefig(plotsdir("fulbright_sucrose_T.svg"))
 savefig(plotsdir("fulbright_sucrose_T.pdf"))
 
-l = range(0u"cm", 0.5u"cm", length=100)
+l = range(0u"cm", hf0, length=100)
 begin
 poreevolplot(cases_both[1].sol_mc, label="PBM 1, 1&2&3", marker=:o, kind=:stats)
 poreevolplot!(cases_both[2].sol_mc, label="PBM 2, 1&2&3", marker=:square, kind=:stats)
