@@ -6,6 +6,9 @@ blankplot_hrC(;kwargs...) = plot(u"hr", u"°C", xlabel="Time", ylabel="Temperatu
 export blankplot_lRp
 blankplot_lRp(;kwargs...) = plot(u"cm", u"cm^2*Torr*hr/g", xlabel=L"h_d", ylabel=L"R_p", unitformat=(x,y)->"$x [$(latexify(y))]";kwargs...)
 
+public calc_moms
+public calc_moms_NS
+
 @userplot PoreEvolPlot
 @recipe function f(pep::PoreEvolPlot; kind=:moms)
     sol = pep.args[1]
@@ -78,15 +81,16 @@ end
 @userplot MCRpPlot
 @recipe function f(mrp::MCRpPlot)
     sol = mrp.args[1]
-    t = sol.t*u"hr"
-
+    po = sol.prob.p
+    hf = sol[1,:]*u"cm"
+    hd = (po.hf0 .- hf) .|> u"cm"
     Rp = map(sol.t, sol.u) do ti,ui
         lyo_mc_dae!(fill(0.0, 4), ui, sol.prob.p, ti) |> u"m/s"
     end
     @series begin
         ylabel --> "Rp"
         label --> "\$R_p\$"
-        t, Rp
+        hd, Rp
     end
 end
 
@@ -171,34 +175,81 @@ end
 
 # ----------------------------
 using Distributions
-@userplot BetaPlot
-@recipe function f(bp::BetaPlot)
-    sol = bp.args[1]
-    ts = range(1, sol.t[end], length=5)
-    for ti in ts
-        hf = sol(ti, idxs=1)*u"cm"
-        μ0 = sol(ti, idxs=3)
-        μ2 = sol(ti, idxs=4)*u"mm^6" .|> u"mm^6"
-        po = sol.prob.p
-        hd = (po.hf0 .- hf) .|> u"cm"
-        ϕ = (po.ρ_solution - po.c_solid)/po.ρ_solution
-        μ1 = hd*ϕ*po.Ap .|> u"mm^3"
-        
-        # mean = μ1 ./ μ0
-        # var = μ2 ./ μ0 .- mean.^2
-        maxV = ϕ*po.hf0*po.Ap |> u"mm^3"
-        mean = μ1/μ0/maxV
-        var = μ2/μ0/maxV^2 - mean^2
+function calc_moms(u, po)
+    hf = u[1]*u"cm"
+    μ0 = u[3]
+    μ2 = u[4]*u"mm^6" .|> u"mm^6"
+    hd = (po.hf0 .- hf) .|> u"cm"
+    ϕ = 1 - po.c_solid/po.ρ_solution
+    μ1 = hd*ϕ*po.Ap .|> u"mm^3"
+    mean = μ1/μ0
+    var = μ2/μ0  - mean^2
+    return mean, var, po
+end
+function calc_moms_NS(po)
+    ϕ = 1 - po.c_solid/po.ρ_solution
+    mean = ϕ/po.N(0) 
+    var = (po.S(0)/po.N(0) - ϕ^2/po.N(0)^2)
+    return mean, var, po
+end
+function make_dist(mean, var, po, disttype)
+    ϕ = 1 - po.c_solid/po.ρ_solution
+    maxV = ϕ*po.hf0*po.Ap |> u"mm^3"
+    mean = mean/maxV |> NoUnits
+    var = var/maxV^2 |> NoUnits
+    if disttype == :gamma
+        θ = var/mean
+        α = mean/θ
+        return Gamma(α, θ), maxV
+    elseif disttype == :normal
+        return Truncated(Normal(mean, sqrt(var)), 0, Inf), maxV
+    elseif disttype == :beta
         v = mean*(1-mean)/var - 1
         α = mean*v
         β = (1-mean)*v
-        xs = logrange(1e-36, 1, length=100)
-        vs = xs .* maxV
-        βs = pdf(Beta(α, β), xs)
-        @info "check" α β mean var βs
+        return Beta(α, β), maxV
+    else
+        error("disttype should be :gamma, :normal, or :beta")
+    end
+end
+@userplot DistPlot
+@recipe function f(dp::DistPlot; disttype=:normal)
+    mean, var, po = dp.args
+    dist, maxV = make_dist(mean, var, po, disttype)
+    xs = logrange(max(1e-16, quantile(dist, 1e-4)), quantile(dist, 1-1e-4), length=100)
+    vs = xs .* maxV
+    ps = pdf(dist, xs)
+    @series begin
+        vs, ps
+    end
+end
+function DistPlot(tupsol::Tuple{ODESolution})
+    sol = tupsol[1]
+    po = sol.prob.p
+    mean, var, po = calc_moms(sol[end], po)
+    return DistPlot((mean, var, po))
+end
+
+@userplot TimeDistPlot
+@recipe function f(tdp::TimeDistPlot; disttype=:normal)
+    sol = tdp.args[1]
+    po = sol.prob.p
+
+    # COmpute new-pore distribution
+    mean, var, po = calc_moms_NS(po)
+    @series begin
+        disttype := disttype
+        DistPlot((mean, var, po))
+    end
+
+    # Compute pore distribution at given time points
+    ts = range(1, sol.t[end], length=5)
+    for ti in ts
+        mean, var, po = calc_moms(sol(ti), po)
         @series begin
             label --> "t = $(round(ti, digits=2))"
-            vs, βs
+            disttype := disttype
+            DistPlot((mean, var, po))
         end
     end
 end
