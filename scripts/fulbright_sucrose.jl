@@ -273,7 +273,8 @@ single_Rps = map(cases) do case
     sol = gen_sol_Rp(opt.u, pop)
     @info "analyis" name opt sol
     Rp = sol.prob.p.Rp
-    return (opt=opt, sol_p=sol, Rp=Rp)
+    hRps = map(x->calc_hRp_T(case.pop, case.fitdat, i=x), 1:4)
+    return (opt=opt, sol_p=sol, Rp=Rp, hRps=hRps)
 end
 
 
@@ -292,8 +293,7 @@ l = range(0u"cm", hf0, length=100)
 pls = map(cases_Rps) do case
     plr = blankplot_lRp()
     for i in 1:4
-        hdT, RpT = calc_hRp_T(case.pop, case.fitdat, i=i)
-        @info "it" hdT RpT
+        hdT, RpT = case.hRps[i]
         plot!(hdT, RpT, c=i, label="Rp from T, $i")
     end
     plot!(l, case.Rp.(l), label="3PP fit directly to T")
@@ -368,10 +368,44 @@ begin
 poreevolplot(cases_both[1].sol_mc, label="PBM 1, 1&2&3", marker=:o, kind=:stats)
 poreevolplot!(cases_both[2].sol_mc, label="PBM 2, 1&2&3", marker=:square, kind=:stats)
 poreevolplot!(cases_both[3].sol_mc, label="PBM 3, 1&2&3", marker=:d, kind=:stats)
-plot!(subplot=4, l, cases_both.Rp[1].(l), ls=:dash, c=1, label="3PP 1")
-plot!(subplot=4, l, cases_both.Rp[2].(l), ls=:dash, c=2, label="3PP 2")
-plot!(subplot=4, l, cases_both.Rp[3].(l), ls=:dash, c=3, label="3PP 3")
+for case in cases_both[1:3]
+    # plot!(subplot=4, l, case.Rp.(l), ls=:dash, c=parse(Int, case.name), label="3PP $(case.name)")
+    for i in 1:4
+        hdT, RpT = case.hRps[i]
+        plot!(subplot = 4, hdT, RpT, alpha=0.5, c=parse(Int, case.name), label=(i==1 ? "Rp from T, $(case.name)" : ""))
+    end
 end
+plot!()
+end
+
+begin
+blankplot_lRp()
+for case in cases_both[1:2]
+    # plot!(subplot=4, l, case.Rp.(l), ls=:dash, c=parse(Int, case.name), label="3PP $(case.name)")
+    mcrpplot!(case.sol_mc, c=parse(Int, case.name), label="PBM mixed-all")
+    for i in 1:4
+        hdT, RpT = case.hRps[i]
+        plot!(hdT, RpT, alpha=0.4, c=parse(Int, case.name), label=(i==1 ? "Rp from T, $(case.name)" : ""))
+    end
+    plot!(l, case.Rp.(l), ls=:dash, c=parse(Int, case.name), label="3PP $(case.name)")
+end
+# plot!(xlim=(0, 0.3), ylim=(0.5, 2.5))
+plot!()
+end
+savefig(plotsdir("fulbright_sucrose_Rp.svg"))
+savefig(plotsdir("fulbright_sucrose_Rp.pdf"))
+
+# timedistplot(cases_both[5].sol_mc; ywiden=false, scale=:log10, disttype=:beta, legend=:outerright)
+begin
+plot(u"mm^3", NoUnits, ywiden=false, ylabel="Approx. Prob. Dens.", xlabel=L"Pore Size", unitformat=latexsquareunitlabel)
+for case in cases_both
+    distplot!(case.sol_mc;  disttype=:normal, label=case.name)
+end
+# plot!(scale=:log10)
+plot!()
+end
+savefig(plotsdir("fulbright_sucrose_poredist.svg"))
+savefig(plotsdir("fulbright_sucrose_poredist.pdf"))
 
 res_fit = cases_both[1].sol_mc.prob.p
 @info "Best fit params:" res_fit.N res_fit.S res_fit.C res_fit.Rs
