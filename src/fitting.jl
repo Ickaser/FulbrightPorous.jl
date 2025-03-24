@@ -5,16 +5,17 @@ export gen_sol_mc_arb, gennsol_mc, objn_mc
 # --------------------------------- 
 # Conventional fitting for Rp
 const Rp_scale = (0.5u"cm^2*Torr*hr/g", 20.0u"cm*Torr*hr/g", 1.0u"1/cm")
-function gen_sol_Rp(a123, po)
+function gen_sol_Rp(a123, po; saveat=[])
     new_params = @set po.Rp = RpFormFit((exp.(a123).*Rp_scale)...)
     prob = ODEProblem(new_params; tspan=(0.0, 1000.0))
     sol = solve(prob, Rodas3())
     return sol
 end
 function gen_sol_Rp(a123, po, fitdat)
-    new_params = @set po.Rp = RpFormFit((exp.(a123).*Rp_scale)...)
-    prob = ODEProblem(new_params; tspan=(0.0, 1000.0))
-    sol = solve(prob, Rodas3(); saveat=ustrip.(u"hr", fitdat.t), )
+    # new_params = @set po.Rp = RpFormFit((exp.(a123).*Rp_scale)...)
+    # prob = ODEProblem(new_params; tspan=(0.0, 1000.0))
+    # sol = solve(prob, Rodas3(); saveat=ustrip.(u"hr", fitdat.t), )
+    sol = gen_sol_Rp(a123, po; saveat=ustrip.(u"hr", fitdat.t))
     return sol
 end
 function obj_Rp(x, p; tweight=1e-4, verbose=false)
@@ -41,7 +42,7 @@ end
 # S_typical = V_typical^2*N_typical = V_typical
 
 const fit_scl_porous = (2e6u"cm^-3", 5e-7u"cm^3", 2e-1u"m^0.5", 0.1u"cm^2*Torr*hr/g")
-function gen_sol_mc_arb(fitprmlog, po, k_f_gen; verbose=false, fit_scl=fit_scl_porous)
+function gen_sol_mc_arb(fitprmlog, po, k_f_gen; verbose=false, fit_scl=fit_scl_porous, saveat=[])
     new_params = deepcopy(po)
     fitprm = exp.(fitprmlog) # Constrain all to be positive by taking exp
     verbose && @info "fitprm" fitprm
@@ -50,22 +51,33 @@ function gen_sol_mc_arb(fitprmlog, po, k_f_gen; verbose=false, fit_scl=fit_scl_p
     @reset new_params.C  = fitprm[3]*fit_scl[3]
     @reset new_params.Rs = fitprm[4]*fit_scl[4]
     @reset new_params.k_f = k_f_gen(fitprmlog[5:end]) # Exp taken elsewhere
+    ϕ = 1 - new_params.c_solid/new_params.ρ_solution
+    if new_params.S(0) < ϕ/new_params.N(0)
+        @warn "S is too small: implies negative variance"
+        # @reset new_params.S = ConstPhysProp(ϕ/new_params.N(0))
+        return NaN
+    end
     prob = ODEProblem(new_params; tspan=(0.0, 1000.0))
     sol = solve(prob, Rodas3())
     return sol
 end
 function gen_sol_mc_arb(fitprmlog, po, fitdat, k_f_gen; 
                         verbose=false, fit_scl = fit_scl_porous)
-    new_params = deepcopy(po)
-    fitprm = exp.(fitprmlog) # Constrain all to be positive by taking exp
-    verbose && @info "fitprm" fitprm
-    @reset new_params.N = ConstPhysProp(fitprm[1]*fit_scl[1])
-    @reset new_params.S = ConstPhysProp(fitprm[2]*fit_scl[2])
-    @reset new_params.C  = fitprm[3]*fit_scl[3]
-    @reset new_params.Rs = fitprm[4]*fit_scl[4]
-    @reset new_params.k_f = k_f_gen(fitprmlog[5:end]) # Exp taken elsewhere
-    prob = ODEProblem(new_params; tspan=(0.0, 1000.0))
-    sol = solve(prob, Rodas3(); saveat=ustrip.(u"hr", fitdat.t))
+    # new_params = deepcopy(po)
+    # fitprm = exp.(fitprmlog) # Constrain all to be positive by taking exp
+    # verbose && @info "fitprm" fitprm
+    # @reset new_params.N = ConstPhysProp(fitprm[1]*fit_scl[1])
+    # @reset new_params.S = ConstPhysProp(fitprm[2]*fit_scl[2])
+    # @reset new_params.C  = fitprm[3]*fit_scl[3]
+    # @reset new_params.Rs = fitprm[4]*fit_scl[4]
+    # @reset new_params.k_f = k_f_gen(fitprmlog[5:end]) # Exp taken elsewhere
+    # if new_params.S(0) < ϕ/new_params.N(0)
+    #     @warn "S is too small: implies negative variance" new_params.S(0) ϕ/new_params.N(0)
+    #     new_params.S = ConstPhysProp(ϕ/new_params.N(0))
+    # end
+    # prob = ODEProblem(new_params; tspan=(0.0, 1000.0))
+    # sol = solve(prob, Rodas3(); saveat=ustrip.(u"hr", fitdat.t))
+    sol = gen_sol_mc_arb(fitprmlog, po, k_f_gen; verbose=verbose, fit_scl=fit_scl, saveat=ustrip.(u"hr", fitdat.t))
     return sol
 end
 function gennsol_mc(fitprm, pos, k_f_gen; kwargs...)
