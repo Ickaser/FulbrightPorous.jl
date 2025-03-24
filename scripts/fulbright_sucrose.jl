@@ -3,6 +3,7 @@ using LineSearches
 optalg = BFGS(linesearch=LineSearches.BackTracking())
 default(:linewidth, 3)
 default(:markersize, 5)
+using UnitfulLatexify
 
 begin
 Kv = load(datadir("exp_pro", "gravimetric_kv.jld2"))["Kv"]
@@ -312,10 +313,10 @@ pass45 = make_mcpass([4, 5])
 
 myega_scale = (1e10u"s^-1", 1.6e3u"K", 1e2u"K")
 k_f_myega(vec) = MYEGA_k((exp.(vec).*myega_scale))
-objn_myega(fitprm, pf) = objn_mc(fitprm, (pf..., k_f_myega), tweight=1e-1, fit_scl=fit_scl)
+objn_myega(fitprm, pf) = objn_mc(fitprm, (pf..., k_f_myega), tweight=1e-2, fit_scl=fit_scl)
 objnf_myega = OptimizationFunction(objn_myega, AutoForwardDiff())
-lb_myega = vcat(fill(-10.0, 4), fill(-100, 3))
-ub_myega = vcat(fill(10.0, 4), fill( 100, 3))
+lb_myega = vcat(fill(-10.0, 4), -150, fill(-5, 2))
+ub_myega = vcat(fill(10.0, 4), 150, fill( 5, 2))
 
 sigm_scale = (1e-15u"s^-1", 1e-9u"s^-1", 0.8u"K", 239u"K")
 function k_f_sigm(vec)
@@ -326,42 +327,109 @@ end
 objn_sigm(fitprm, pf) = objn_mc(fitprm, (pf..., k_f_sigm), tweight=1e-1, fit_scl=fit_scl)
 objnf_sigm = OptimizationFunction(objn_sigm, AutoForwardDiff())
 lb_sigm = vcat(fill(-10.0, 4), fill(-30, 4))
-# lb_sigm[8] = -30
 ub_sigm = vcat(fill(10.0, 4), fill( 30, 4))
-# ub_sigm[8] = 30
+p0_sigm = vcat(fill(0.1, 4), 5, 0.1, 2, -5)
 
-@time opt123sigm = solve(OP(objnf_sigm, fill(0.1, 8), pass123, lb=lb_sigm, ub=ub_sigm), optalg, maxiters=50, time_limit=15)
+@time opt123sigm = solve(OP(objnf_sigm, p0_sigm, pass123, lb=lb_sigm, ub=ub_sigm), optalg, maxiters=50, time_limit=15)
 p0_myega = [5.0, 1, 0, 0.1, 10, 1, 1]
+# p0_myega = [5.0, 1, 0, 0.1, -10, 1, 1]
 @time opt123myega = solve(OP(objnf_myega, p0_myega, pass123, lb=lb_myega, ub=ub_myega), optalg, maxiters=50, time_limit=15, show_trace=true)
 
-fits = Table((opt=[opt123sigm, opt123myega], 
-              k_type=[k_f_sigm, k_f_myega],
-              cases=[(1,2,3), (1,2,3)]))
-fits = Table(fits, (kf= map(x->x.k_type(x.opt[5:end]), fits),))
+@time opt45sigm = solve(OP(objnf_sigm, p0_sigm, pass45, lb=lb_sigm, ub=ub_sigm), optalg, maxiters=50, time_limit=15)
+p0_myega = [5.0, 1, 0, 0.1, -10, 1, 1]
+@time opt45myega = solve(OP(objnf_myega, p0_myega, pass45, lb=lb_myega, ub=ub_myega), optalg, maxiters=50, time_limit=15, show_trace=true)
 
-function gen_pbmsols(opt, k_f_gen)
+split_fit_prms(fitprm_plus) = vcat(fitprm_plus[1:4], fitprm_plus[9:end]), vcat(fitprm_plus[5:8], fitprm_plus[9:end])
+function obj_2m(fitprm_plus, pass_all)
+    prm1, prm2 = split_fit_prms(fitprm_plus)
+    obj = objn_myega(prm1, pass_all[1]) + objn_myega(prm2, pass_all[2])
+end
+function obj_2s(fitprm_plus, pass_all)
+    prm1, prm2 = split_fit_prms(fitprm_plus)
+    obj = objn_sigm(prm1, pass_all[1]) + objn_sigm(prm2, pass_all[2])
+end
+objf_2m = OptimizationFunction(obj_2m, AutoForwardDiff())
+objf_2s = OptimizationFunction(obj_2s, AutoForwardDiff())
+remap_vars(fitprm) = vcat(fitprm[1:4], fitprm[1:4], fitprm[5:end])
+lb_2m = remap_vars(lb_myega)
+ub_2m = remap_vars(ub_myega)
+p0_2m = remap_vars(p0_myega)
+@time opt_2m = solve(OP(objf_2m, p0_2m, (pass123, pass45), lb=lb_2m, ub=ub_2m), optalg, maxiters=50, time_limit=15)
+opt_2m_123, opt_2m_45 = split_fit_prms(opt_2m.u)
+
+lb_2s = remap_vars(lb_sigm)
+ub_2s = remap_vars(ub_sigm)
+p0_2s = remap_vars(p0_sigm)
+@time opt_2s = solve(OP(objf_2s, p0_2s, (pass123, pass45), lb=lb_2s, ub=ub_2s), optalg, maxiters=50, time_limit=15)
+opt_2s_123, opt_2s_45 = split_fit_prms(opt_2s.u)
+
+
+fits = Table((opt=[opt123sigm, opt123myega, opt45sigm, opt45myega], 
+              k_type=[k_f_sigm, k_f_myega, k_f_sigm, k_f_myega],
+              cases=[(1,2,3), (1,2,3), (4,5), (4,5)]))
+fits = Table(fits, (kf= map(x->x.k_type(x.opt[5:end]), fits),))
+push!(fits, (opt=opt_2m, k_type=k_f_myega, cases=(1,2,3,4,5), kf=k_f_myega(opt_2m.u[end-2:end])))
+push!(fits, (opt=opt_2s, k_type=k_f_sigm, cases=(1,2,3,4,5), kf=k_f_sigm(opt_2s.u[end-3:end])))
+
+function gen_pbmsols(opt, k_f_gen; all=false)
     map(cases) do case
-        sol = gen_sol_mc_arb(opt.u, case.pomc, k_f_gen; fit_scl=fit_scl)
+        if all
+            if case.name ∈ ["1", "2", "3"]
+                sol = gen_sol_mc_arb(split_fit_prms(opt)[1], case.pomc, k_f_gen; fit_scl=fit_scl) 
+                # @info "check1" case.name split_fit_prms(opt)[1]
+            else
+                sol = gen_sol_mc_arb(split_fit_prms(opt)[2], case.pomc, k_f_gen; fit_scl=fit_scl) 
+                # @info "check2" case.name split_fit_prms(opt)[2]
+            end
+        else
+            sol = gen_sol_mc_arb(opt, case.pomc, k_f_gen; fit_scl=fit_scl)
+        end
         return (sol_mc=sol,k_f=sol.prob.p.k_f)
     end
 end
 
-cases_both = Table(cases, single_Rps, gen_pbmsols(opt123myega, k_f_myega))
-# cases_both = Table(cases, single_Rps, gen_pbmsols(opt123sigm, k_f_sigm))
+# new_sols = vcat(gen_pbmsols(opt123myega, k_f_myega)[1:3], gen_pbmsols(opt45myega, k_f_myega)[4:5])
+# new_sols = vcat(gen_pbmsols(opt123sigm, k_f_sigm)[1:3], gen_pbmsols(opt45sigm, k_f_sigm)[4:5])
+new_sols = gen_pbmsols(opt_2m, k_f_myega, all=true)
+# new_sols = gen_pbmsols(opt_2s, k_f_sigm, all=true)
+cases_both = Table(cases, single_Rps, new_sols)
 
 begin
-pls_T = map(cases_both) do case
+pls_T1 = map(cases_both[1:3]) do case
     pl = blankplot_hrC(legend=:outerright, title=case.name)
     plot!(case.fitdat)
-    modconvtplot!(case.sol_mc, case.sol_p, linealpha=0.7, markeralpha=0, labels=["PBM: M 1&2&3" "3PP $(case.name)"])
-    plot!(xlim=(0, 16), ylim=(-50, -28))
+    modconvtplot!(case.sol_mc, case.sol_p, c=[2 :green], linealpha=0.7, markeralpha=0, labels=["PBM: M 1&2&3" "3PP $(case.name)"])
+    plot!(xlim=(0, 16), ylim=(-40, -30))
+    return pl
+end
+pls_T2 = map(cases_both[4:5]) do case
+    pl = blankplot_hrC(legend=:outerright, title=case.name)
+    plot!(case.fitdat)
+    modconvtplot!(case.sol_mc, case.sol_p, c=[2 :green], linealpha=0.7, markeralpha=0, labels=["PBM: M 4&5" "3PP $(case.name)"])
+    # plot!(xlim=(0, 65), ylim=(-40, -30))
+    plot!(ylim=(-40,-30))
     return pl
 end
 # plot!(pls_T[5], legend=:bottomright)
-plot(pls_T..., layout=(3,1), size=(500, 600))
+plot(pls_T1..., pls_T2..., layout=(5,1), size=(500, 1000))
 end
 savefig(plotsdir("fulbright_sucrose_T.svg"))
 savefig(plotsdir("fulbright_sucrose_T.pdf"))
+
+begin
+plot(u"°C", u"s^-1", xlabel="Temperature", ylabel="Rate", yscale=:log10, unitformat=:square)
+Tran = (range(-40u"°C", -30u"°C", step=1u"K")) .|> u"K"
+for fit in fits
+    @info "check" fit.kf.(Tran) fit.cases fit.kf
+    plot!(Tran, fit.kf.(Tran), label="$(fit.k_type), $(fit.cases)")
+end
+plot!(ylim=(1e-16, 1e-8), legend=:bottomright)
+# KC = (1.5, 1)
+# k0log = log(1e-17u"s^-1"/k_f_myega([0, KC...])(223u"K"))
+# kg = k_f_myega([k0log, KC...])
+# @info "check" kg.(Tran) k0log
+# plot!(Tran, kg.(Tran), legend=:outerright)
+end
 
 l = range(0u"cm", hf0, length=100)
 begin
