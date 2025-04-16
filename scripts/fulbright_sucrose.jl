@@ -255,6 +255,10 @@ pomc4 = @set pomc1.c_solid = 0.1u"g/mL"
 pomc5 = @set pomc4.Tsh = Tsh5
 end
 
+trans_Rp = as((R0 = TVScale(0.5u"cm^2*Torr*hr/g") ∘ TVExp(),
+               A1 = TVScale(10.0u"cm*Torr*hr/g") ∘ TVExp(),
+                A2 = TVScale(1e-1u"1/cm") ∘ TVExp(),))
+
 cases = Table([ (name="1", pop=pop1, pomc=pomc1, fitdat=fitdat1, dat=dat1),
                 (name="2", pop=pop2, pomc=pomc2, fitdat=fitdat2, dat=dat2),
                 (name="3", pop=pop3, pomc=pomc3, fitdat=fitdat3, dat=dat3),
@@ -263,17 +267,18 @@ cases = Table([ (name="1", pop=pop1, pomc=pomc1, fitdat=fitdat1, dat=dat1),
                 ])
 
 obj_Rpf = OptimizationFunction(obj_Rp, AutoForwardDiff())
-@time obj_Rpf(fill(0.0, 3), (pop1, fitdat1))
+@time obj_Rpf(fill(0.0, 3), (trans_Rp, pop1, fitdat1))
 
 obj_npf = OptimizationFunction(objn_Rp, AutoForwardDiff())
 
 
+
 single_Rps = map(cases) do case
     (;name, pop, fitdat, dat) = case
-    opt = solve(OP(obj_Rpf, [0.0, 0, -5], (pop, fitdat)), optalg, g_tol=1e-3)
-    sol = gen_sol_Rp(opt.u, pop)
+    opt = solve(OP(obj_Rpf, [0.0, 0, 0.0], (trans_Rp, pop, fitdat)), optalg, g_tol=1e-6)
+    Rp = copy_nt_into_struct(Rp_g, transform(trans_Rp, opt.u))
+    sol = gen_sol_Rp(opt.u, trans_Rp, pop)
     @info "analyis" name opt sol
-    Rp = sol.prob.p.Rp
     hRps = map(x->calc_hRp_T(case.pop, case.fitdat, i=x), 1:4)
     return (opt=opt, sol_p=sol, Rp=Rp, hRps=hRps)
 end
@@ -311,33 +316,52 @@ end
 pass123 = make_mcpass([1, 2, 3])
 pass45 = make_mcpass([4, 5])
 
-myega_scale = (1e10u"s^-1", 1.6e3u"K", 1e2u"K")
-k_f_myega(vec) = MYEGA_k((exp.(vec).*myega_scale))
-objn_myega(fitprm, pf) = objn_mc(fitprm, (pf..., k_f_myega), tweight=1e-2, fit_scl=fit_scl)
+# It would be desirable to enforce S > ϕ/N, 
+# and the most natural place is in copy_nt_into_struct,
+# but that seems like a confusing place to put it.
+porous_nt = (N = ConstWrapTV() ∘ TVScale(2e6u"cm^-3") ∘ TVExp(),
+               S = ConstWrapTV() ∘ TVScale(5e-7u"cm^3") ∘ TVExp(), # If I could enforce S > ϕ/N, would be great...
+               C = TVScale(2e-1u"m^0.5") ∘ TVExp(),
+               Rs = TVScale(1.5u"cm^2*Torr*hr/g") ∘ TVShift(0.01) ∘ TVLogistic()
+               )
+myega_nt = (k0 = TVScale(1e10u"s^-1") ∘ TVExp(),
+            K1 = TVScale(1.6e3u"K") ∘ TVExp(),
+            K2 = TVScale(1e2u"K") ∘ TVExp(),)
+sigma_nt = (k0 = TVScale(1e-15u"s^-1") ∘ TVExp(),
+            kf = TVScale(1e-9u"s^-1") ∘ TVExp(),
+            K1 = TVScale(1.6e3u"K") ∘ TVExp(),
+            K2 = TVScale(1.0u"K") ∘ TVShift(220.0) ∘ TVScale(50.0) ∘ TVLogistic(),)
+trans_myega = as(merge(porous_nt, (;k_f=as(myega_nt))))
+trans_sigma = as(merge(porous_nt, (;k_f=as(sigma_nt))))
+
+objn_myega(fitprm, pf) = objn_mc(fitprm, (trans_myega, pf...), tweight=1e-2)
 objnf_myega = OptimizationFunction(objn_myega, AutoForwardDiff())
-lb_myega = vcat(fill(-10.0, 4), -150, fill(-5, 2))
-ub_myega = vcat(fill(10.0, 4), 150, fill( 5, 2))
+objnf_myega(rand(7), pass123)
+# lb_myega = vcat(fill(-10.0, 4), -150, fill(-5, 2))
+# ub_myega = vcat(fill(10.0, 4), 150, fill( 5, 2))
 
-sigm_scale = (1e-15u"s^-1", 1e-9u"s^-1", 0.8u"K", 239u"K")
-function k_f_sigm(vec)
-    p123 = exp.(vec[1:3] .-1).*sigm_scale[1:3]
-    p4 = vec[4]*u"K" + sigm_scale[4]
-    Sigmoid_k(p123..., p4)
-end
-objn_sigm(fitprm, pf) = objn_mc(fitprm, (pf..., k_f_sigm), tweight=1e-1, fit_scl=fit_scl)
-objnf_sigm = OptimizationFunction(objn_sigm, AutoForwardDiff())
-lb_sigm = vcat(fill(-10.0, 4), fill(-30, 4))
-ub_sigm = vcat(fill(10.0, 4), fill( 30, 4))
-p0_sigm = vcat(fill(0.1, 4), 5, 0.1, 2, -5)
+# objn_sigm(fitprm, pf) = objn_mc(fitprm, (pf..., k_f_sigm), tweight=1e-1, fit_scl=fit_scl)
+# objnf_sigm = OptimizationFunction(objn_sigm, AutoForwardDiff())
+objn_sigma(fitprm, pf) = objn_mc(fitprm, (trans_sigma, pf...), tweight=1e-2)
+objnf_sigma = OptimizationFunction(objn_sigma, AutoForwardDiff())
+# lb_sigm = vcat(fill(-10.0, 4), fill(-30, 4))
+# ub_sigm = vcat(fill(10.0, 4), fill( 30, 4))
+# p0_sigm = vcat(fill(0.1, 4), 5, 0.1, 2, -5)
 
-@time opt123sigm = solve(OP(objnf_sigm, p0_sigm, pass123, lb=lb_sigm, ub=ub_sigm), optalg, maxiters=50, time_limit=15)
+p0_sigma = [5.0, 1, 0, 0.1, 10, 1, 1, 1]
+@time opt123sigm = solve(OP(objnf_sigma, p0_sigma, pass123), optalg, maxiters=50, time_limit=15)
 p0_myega = [5.0, 1, 0, 0.1, 10, 1, 1]
 # p0_myega = [5.0, 1, 0, 0.1, -10, 1, 1]
-@time opt123myega = solve(OP(objnf_myega, p0_myega, pass123, lb=lb_myega, ub=ub_myega), optalg, maxiters=50, time_limit=15, show_trace=true)
+# @time opt123myega = solve(OP(objnf_myega, p0_myega, pass123, lb=lb_myega, ub=ub_myega), optalg, maxiters=50, time_limit=15, show_trace=true)
+@time opt123myega = solve(OP(objnf_myega, p0_myega, pass123), optalg, maxiters=50, time_limit=15, show_trace=true)
 
-@time opt45sigm = solve(OP(objnf_sigm, p0_sigm, pass45, lb=lb_sigm, ub=ub_sigm), optalg, maxiters=50, time_limit=15)
+# @time opt45sigm = solve(OP(objnf_sigma, p0_sigma, pass45, lb=lb_sigm, ub=ub_sigm), optalg, maxiters=50, time_limit=15)
+@time opt45sigm = solve(OP(objnf_sigma, p0_sigma, pass45), optalg, maxiters=50, time_limit=15)
 p0_myega = [5.0, 1, 0, 0.1, -10, 1, 1]
-@time opt45myega = solve(OP(objnf_myega, p0_myega, pass45, lb=lb_myega, ub=ub_myega), optalg, maxiters=50, time_limit=15, show_trace=true)
+# @time opt45myega = solve(OP(objnf_myega, p0_myega, pass45, lb=lb_myega, ub=ub_myega), optalg, maxiters=50, time_limit=15, show_trace=true)
+@time opt45myega = solve(OP(objnf_myega, p0_myega, pass45), optalg, maxiters=50, time_limit=15, show_trace=true)
+
+# TODO:: get this updated to use transforms
 
 split_fit_prms(fitprm_plus) = vcat(fitprm_plus[1:4], fitprm_plus[9:end]), vcat(fitprm_plus[5:8], fitprm_plus[9:end])
 function obj_2m(fitprm_plus, pass_all)

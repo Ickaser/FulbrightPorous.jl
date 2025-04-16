@@ -155,10 +155,10 @@ function LyoPronto.calc_u0(po::ParamObjMC)
     # ustrip.([u"cm", u"K", u"mm^6", NoUnits], [po.hf0, float(po.Tsh(0u"s")), 0.0u"mm^6", 0.0])
     [ustrip(u"cm", po.hf0), ustrip(u"K", float(po.Tsh(0u"s"))), 0.0, 0.0]
 end
-LyoPronto.get_tstops(po::ParamObjMC) = LyoPronto._get_tstops((po.Tsh, po.pch))
+LyoPronto.get_tstops(po::ParamObjMC) = get_tstops((po.Tsh, po.pch))
 
 function ODEProblem(po::ParamObjMC; u0=calc_u0(po), tspan=(0.0, 200.0))
-    tstops = LyoPronto.get_tstops(po)
+    tstops = get_tstops(po)
     return ODEProblem{true}(lyo_mc_dae_f, u0, tspan, po; 
         tstops=tstops, callback=end_drying_callback)
 end

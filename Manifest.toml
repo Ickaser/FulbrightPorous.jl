@@ -1611,7 +1611,7 @@ uuid = "6f1432cf-f94c-5a45-995e-cdbf5db27b0b"
 version = "3.1.0"
 
 [[deps.LyoPronto]]
-deps = ["Accessors", "CSV", "ColorTypes", "DataInterpolations", "DiffEqCallbacks", "OrdinaryDiffEqNonlinearSolve", "OrdinaryDiffEqRosenbrock", "PrecompileTools", "RecipesBase", "Reexport", "Roots", "SpecialFunctions", "UnPack", "Unitful"]
+deps = ["Accessors", "CSV", "ColorTypes", "DataInterpolations", "DiffEqCallbacks", "OrdinaryDiffEqNonlinearSolve", "OrdinaryDiffEqRosenbrock", "PrecompileTools", "RecipesBase", "Reexport", "Roots", "SpecialFunctions", "TransformVariables", "UnPack", "Unitful"]
 path = "C:\\Users\\iwheeler\\.julia\\dev\\LyoPronto"
 uuid = "86014da0-a5b3-40a4-ad76-3e66dfc3e269"
 version = "0.1.1"
@@ -2864,8 +2864,8 @@ version = "0.4.84"
     Referenceables = "42d2dcc6-99eb-4e98-b66c-637b7d73030e"
 
 [[deps.TransformVariables]]
-deps = ["ArgCheck", "DocStringExtensions", "ForwardDiff", "LinearAlgebra", "LogExpFunctions", "Random", "StaticArrays"]
-git-tree-sha1 = "216b954254f7f05fdb8d84bb017a3e9787c9f3fb"
+deps = ["ArgCheck", "CompositionsBase", "DocStringExtensions", "ForwardDiff", "LinearAlgebra", "LogExpFunctions", "Random", "StaticArrays"]
+path = "C:\\Users\\iwheeler\\.julia\\dev\\TransformVariables"
 uuid = "84d833dd-6860-57f9-a1a7-6da5db126cff"
 version = "0.8.14"
 weakdeps = ["ChangesOfVariables", "InverseFunctions"]
