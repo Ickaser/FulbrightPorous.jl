@@ -1,26 +1,59 @@
-export gen_sol_Rp, gennsol_Rp, obj_Rp, objn_Rp
+export gennsol_Rp, objn_Rp
 export gen_sol_mc_arb, gennsol_mc, objn_mc
 
+# ---------------------------------
+function sigmoid_transform_basic(k0, kf, K1, K2)
+    tr = as((
+        k = as((
+            k0 = TVScale(k0) ∘ TVExp(),
+            kf = TVScale(kf) ∘ TVExp(),
+            K1 = TVScale(K1) ∘ TVExp(),
+            K2 = TVScale(K2) ∘ TVExp(),
+            )),
+        ))
+end
+function myega_transform_basic(k0, K1, K2)
+    tr = as((
+        k = as((
+            k0 = TVScale(k0) ∘ TVExp(),
+            K1 = TVScale(K1) ∘ TVExp(),
+            K2 = TVScale(K2) ∘ TVExp(),
+            )),
+        ))
+end
+function porous_transform_basic(Ng, Sg, Cg, Rsg)
+    tr = as((
+        N = ConstWrapTV() ∘ TVScale(Ng) ∘ TVExp(),
+        S = ConstWrapTV() ∘ TVScale(Sg) ∘ TVExp(),
+        C = TVScale(Cg) ∘ TVExp(),
+        Rs = TVScale(Rsg) ∘ TVExp(),
+        ))
+end
+
+"""
+    $(SIGNATURES)
+
+Construct a typical transform for fitting to the microcollapse model with MYEGA fitting.
+"""
+function mc_myega_transform_basic(Ng, Sg, Cg, Rsg, k0g, K1g, K2g)
+    k = myega_transform_basic(k0g, K1g, K2g).transformations.k
+    p = porous_transform_basic(Ng, Sg, Cg, Rsg).transformations
+    tr = as(merge(p, (;k)))
+    return tr
+end
+"""
+    $(SIGNATURES)
+
+Construct a typical transform for fitting to the microcollapse model with MYEGA fitting.
+"""
+function mc_sigmoid_transform_basic(Ng, Sg, Cg, Rsg, k0g, kfg, K1g, K2g)
+    k = sigmoid_transform_basic(k0g, kfg, K1g, K2g).transforms.k
+    p = porous_transform_basic(Ng, Sg, Cg, Rsg).transforms
+    tr = as(merge(p, (;k)))
+    return tr
+end
 
 # --------------------------------- 
-# Conventional fitting for Rp
-const Rp_scale = (0.5u"cm^2*Torr*hr/g", 20.0u"cm*Torr*hr/g", 1.0u"1/cm")
-function gen_sol_Rp(a123, tr, po; saveat=[])
-    # new_params = @set po.Rp = RpFormFit((exp.(a123).*Rp_scale)...)
-    fitprm = transform(tr, a123)
-    new_params = copy_nt_into_struct(po, fitprm)
-    prob = ODEProblem(new_params; tspan=(0.0, 1000.0))
-    sol = solve(prob, Rodas3(); saveat=saveat)
-    return sol
-end
-function gen_sol_Rp(a123, tr, po, fitdat)
-    sol = gen_sol_Rp(a123, tr, po; saveat=ustrip.(u"hr", fitdat.t))
-    return sol
-end
-function obj_Rp(x, p; tweight=1e-4, verbose=false)
-    sol = gen_sol_Rp(x, p[1], p[2], p[3])
-    return obj_expT(sol, p[3], tweight=tweight, verbose=verbose)
-end
 gennsol_Rp(fitprm, tr, pos) = [gen_sol_Rp(fitprm, tr, po) for po in pos]
 gennsol_Rp(fitprm, tr, pos, fitdats) = [gen_sol_Rp(fitprm, po, tr, fitdat) for (po,fitdat) in zip(pos,fitdats)]
 function objn_Rp(fitprm, tpfs; tweight=1e-3)
@@ -39,22 +72,6 @@ end
 # V_typical = 4/3*π*d_typical^3
 # N_typical = 1/V_typical
 # S_typical = V_typical^2*N_typical = V_typical
-export ConstWrapTV
-struct ConstWrapTV <: TransformVariables.ScalarTransform end
-TransformVariables.transform(::ConstWrapTV, x) = ConstPhysProp(x)
-TransformVariables.inverse(::ConstWrapTV, x) = x.value
-# struct FuncWrapTV <: TransformVariables.ScalarTransform
-#     func 
-# end
-
-function LyoPronto.copy_nt_into_struct(po, nt::NamedTuple{(:N, :S, :C, :Rs, :k_f)})
-    pon = deepcopy(po)
-    @reset pon.N = nt.N
-    @reset pon.S = nt.S
-    @reset pon.C = nt.C
-    @reset pon.Rs = nt.Rs
-    @reset pon.k_f = k_f_nt(nt.k_f)
-end
 
 k_f_nt(nt::NamedTuple{(:k0, :kf, :K1, :K2)}) = Sigmoid_k(nt.k0, nt.kf, nt.K1, nt.K2)
 k_f_nt(nt::NamedTuple{(:k0, :K1, :K2)}) = MYEGA_k(nt.k0, nt.K1, nt.K2)
@@ -65,7 +82,7 @@ function gen_sol_mc_arb(fitprmlog, tr, po; verbose=false, saveat=[])
     fitprm = transform(tr, fitprmlog)
     verbose && @info "fitprm" fitprm
     new_params = copy_nt_into_struct(po, fitprm)
-    ϕ = 1 - new_params.c_solid/new_params.ρ_solution
+    ϕ = 1 - new_params.csolid/new_params.ρsolution
     if new_params.S(0) < ϕ/new_params.N(0)
         @warn "S is too small: implies negative variance"
         # @reset new_params.S = ConstPhysProp(ϕ/new_params.N(0))
@@ -87,7 +104,7 @@ end
 #     @reset new_params.C  = fitprm[3]*fit_scl[3]
 #     @reset new_params.Rs = fitprm[4]*fit_scl[4]
 #     @reset new_params.k_f = k_f_gen(fitprmlog[5:end]) # Exp taken elsewhere
-#     ϕ = 1 - new_params.c_solid/new_params.ρ_solution
+#     ϕ = 1 - new_params.csolid/new_params.ρsolution
 #     if new_params.S(0) < ϕ/new_params.N(0)
 #         @warn "S is too small: implies negative variance"
 #         # @reset new_params.S = ConstPhysProp(ϕ/new_params.N(0))
