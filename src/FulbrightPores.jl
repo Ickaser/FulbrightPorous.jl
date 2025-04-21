@@ -20,6 +20,7 @@ import LyoPronto: ODEProblem
 @reexport using DataInterpolations
 @reexport using UnitfulLatexify, Latexify
 @reexport using SavitzkyGolay
+using DocStringExtensions
 
 
 
