@@ -22,7 +22,7 @@ public calc_moms_NS
     μ2 = sol[4,:]*u"mm^6" .|> u"mm^6"
     po = sol.prob.p
     hd = (po.hf0 .- hf) .|> u"cm"
-    ϕ = (po.ρ_solution - po.c_solid)/po.ρ_solution
+    ϕ = (po.ρsolution - po.csolid)/po.ρsolution
     μ1 = hd*ϕ*po.Ap .|> u"mm^3"
     mean = μ1 ./ μ0
     var = μ2 ./ μ0 .- mean.^2
@@ -180,20 +180,20 @@ function calc_moms(u, po)
     μ0 = u[3]
     μ2 = u[4]*u"mm^6" .|> u"mm^6"
     hd = (po.hf0 .- hf) .|> u"cm"
-    ϕ = 1 - po.c_solid/po.ρ_solution
+    ϕ = 1 - po.csolid/po.ρsolution
     μ1 = hd*ϕ*po.Ap .|> u"mm^3"
     mean = μ1/μ0
     var = μ2/μ0  - mean^2
     return mean, var, po
 end
 function calc_moms_NS(po)
-    ϕ = 1 - po.c_solid/po.ρ_solution
+    ϕ = 1 - po.csolid/po.ρsolution
     mean = ϕ/po.N(0) 
     var = (po.S(0)/po.N(0) - ϕ^2/po.N(0)^2)
     return mean, var, po
 end
 function make_dist(mean, var, po, disttype)
-    ϕ = 1 - po.c_solid/po.ρ_solution
+    ϕ = 1 - po.csolid/po.ρsolution
     maxV = ϕ*po.hf0*po.Ap |> u"mm^3"
     mean = mean/maxV |> NoUnits
     var = var/maxV^2 |> NoUnits

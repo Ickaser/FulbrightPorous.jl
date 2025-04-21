@@ -58,8 +58,8 @@ pch2 = RampedVariable(5u"Pa")
 pch3 = RampedVariable(20u"Pa")
 Ap = Av = π*(7.125u"mm")^2
 hf0 = 1.5u"mL"/Ap |> u"cm"
-c_solid = 0.05u"g/mL"
-ρ_solution = 1u"g/mL"
+csolid = 0.05u"g/mL"
+ρsolution = 1u"g/mL"
 # Rpg = RpFormFit(0.5u"cm^2/Torr/hr/g", 14u"cm/Torr/hr/g", 0.1u"1/cm")
 Rp_t1 = RpFormFit(2.11e4u"m/s", 1.62e8u"s^-1", 1.55e3u"m^-1")
 Rp_t2 = RpFormFit(1.10e4u"m/s", 6.19e7u"s^-1", 5.00e3u"m^-1")
@@ -105,7 +105,7 @@ lRp_mat1 = [
 lRp_1 = Table(map(x->(l=x[2]*u"cm", Rp=x[1]*1e5u"m/s"), eachrow(lRp_mat1)))
 # @df lRp_1 scatter(:l, :Rp)
 po_1p = ParamObjPikal([
-    (Rp_t1, hf0, c_solid, ρ_solution),
+    (Rp_t1, hf0, csolid, ρsolution),
     (Kv, Av, Ap),
     (pch1, Tsh1)])
 
@@ -123,7 +123,7 @@ Tsh2 = RampedVariable([-40, -20]u"°C".|>u"K", 1u"K/minute")
 plot!(Tsh2)
 
 po_2p = ParamObjPikal([
-    (Rp_t2, hf0, c_solid, ρ_solution),
+    (Rp_t2, hf0, csolid, ρsolution),
     (Kv, Av, Ap),
     (pch2, Tsh2)])
 
@@ -166,7 +166,7 @@ Tsh3 = RampedVariable([-43, -20, -30, -25]u"°C".|>u"K", [1, -0.5, 1]u"K/minute"
 # plot!(Tsh3)
 
 po_3p = ParamObjPikal([
-    (Rp_t3, hf0, c_solid, ρ_solution),
+    (Rp_t3, hf0, csolid, ρsolution),
     (Kv, Av, Ap),
     (pch3, Tsh3)])
 

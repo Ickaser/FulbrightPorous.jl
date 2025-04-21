@@ -143,11 +143,11 @@ hf0 = fillvol/A_p
 
 Rp_g = RpFormFit(0.8u"cm^2*Torr*hr/g", 14u"cm*Torr*hr/g", 1u"1/cm")
 
-c_solid = 0.04u"g/mL"
-ρ_solution = 1u"g/mL"
+csolid = 0.04u"g/mL"
+ρsolution = 1u"g/mL"
 
 pb_pikal = ParamObjPikal([
-    (Rp_g, hf0, c_solid, ρ_solution),
+    (Rp_g, hf0, csolid, ρsolution),
     (K_shf, A_v, A_p),
     (pch1, Tsh1),
 ])
@@ -216,7 +216,7 @@ Rs = 0.5u"cm^2*Torr*hr/g"
 k0 = 1e-14u"1/s"
 
 pb_mc = ParamObjMC([
-    (hf0, c_solid, ρ_solution),
+    (hf0, csolid, ρsolution),
     (K_shf, A_v, A_p),
     (pch1, Tsh1),
     (ConstPhysProp(k0), C, N, S, Rs)

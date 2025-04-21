@@ -218,8 +218,8 @@ hf0 = fillvol/A_p |> u"cm"
 
 Rp_g = RpFormFit(0.8u"cm^2*Torr*hr/g", 14u"cm*Torr*hr/g", 1u"1/cm")
 
-c_solid = 0.05u"g/mL"
-ρ_solution = 1u"g/mL"
+csolid = 0.05u"g/mL"
+ρsolution = 1u"g/mL"
 
 d_typical = 50u"μm"
 V_typical = 4/3*π*d_typical^3
@@ -233,12 +233,12 @@ fit_scl = (N(0), S(0), C, Rs)
 k0 = 1e-14u"1/s"
 
 pop1 = ParamObjPikal([
-    (Rp_g, hf0, c_solid, ρ_solution),
+    (Rp_g, hf0, csolid, ρsolution),
     (Kv, A_v, A_p),
     (pch1, Tsh1),
 ])
 pomc1 = ParamObjMC([
-    (hf0, c_solid, ρ_solution),
+    (hf0, csolid, ρsolution),
     (Kv, A_v, A_p),
     (pch1, Tsh1),
     (ConstPhysProp(k0), C, N, S, Rs)
@@ -249,15 +249,13 @@ pop3 = @set pop1.Tsh = Tsh3
 pomc2 = @set pomc1.Tsh = Tsh2
 pomc3 = @set pomc1.Tsh = Tsh3
 
-pop4 = @set pop1.c_solid = 0.1u"g/mL"
+pop4 = @set pop1.csolid = 0.1u"g/mL"
 pop5 = @set pop4.Tsh = Tsh5
-pomc4 = @set pomc1.c_solid = 0.1u"g/mL"
+pomc4 = @set pomc1.csolid = 0.1u"g/mL"
 pomc5 = @set pomc4.Tsh = Tsh5
 end
 
-trans_Rp = as((R0 = TVScale(0.5u"cm^2*Torr*hr/g") ∘ TVExp(),
-               A1 = TVScale(10.0u"cm*Torr*hr/g") ∘ TVExp(),
-                A2 = TVScale(1e-1u"1/cm") ∘ TVExp(),))
+trans_Rp = Rp_transform_basic(0.5u"cm^2*Torr*hr/g", 10u"cm*Torr*hr/g", 1e-1u"1/cm")
 
 cases = Table([ (name="1", pop=pop1, pomc=pomc1, fitdat=fitdat1, dat=dat1),
                 (name="2", pop=pop2, pomc=pomc2, fitdat=fitdat2, dat=dat2),
@@ -333,6 +331,7 @@ sigma_nt = (k0 = TVScale(1e-15u"s^-1") ∘ TVExp(),
             K2 = TVScale(1.0u"K") ∘ TVShift(220.0) ∘ TVScale(50.0) ∘ TVLogistic(),)
 trans_myega = as(merge(porous_nt, (;k_f=as(myega_nt))))
 trans_sigma = as(merge(porous_nt, (;k_f=as(sigma_nt))))
+FulbrightPores.mc_myega_transform_basic(1, 2, 3, 4, 5, 6, 7)
 
 objn_myega(fitprm, pf) = objn_mc(fitprm, (trans_myega, pf...), tweight=1e-2)
 objnf_myega = OptimizationFunction(objn_myega, AutoForwardDiff())
