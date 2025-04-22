@@ -81,7 +81,7 @@ const fit_scl_porous = (2e6u"cm^-3", 5e-7u"cm^3", 2e-1u"m^0.5", 0.1u"cm^2*Torr*h
 function gen_sol_mc_arb(fitprmlog, tr, po; verbose=false, saveat=[])
     fitprm = transform(tr, fitprmlog)
     verbose && @info "fitprm" fitprm
-    new_params = copy_nt_into_struct(po, fitprm)
+    new_params = setproperties(po, fitprm)
     ϕ = 1 - new_params.csolid/new_params.ρsolution
     if new_params.S(0) < ϕ/new_params.N(0)
         @warn "S is too small: implies negative variance"

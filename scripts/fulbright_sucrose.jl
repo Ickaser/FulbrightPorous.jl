@@ -199,7 +199,7 @@ plot!(xlim=(0, 10), ylim=(-36,-30))
 @df dat2raw plot!(:VacPirani, )
 @df dat3raw plot!(:VacPirani, )
 @df dat4raw plot!(:VacPirani, )
-@df dat5raw plot(:VacPirani, ylim=(90, 180))
+@df dat5raw plot!(:VacPirani, ylim=(90, 180))
 
 
 
@@ -255,7 +255,7 @@ pomc4 = @set pomc1.csolid = 0.1u"g/mL"
 pomc5 = @set pomc4.Tsh = Tsh5
 end
 
-trans_Rp = Rp_transform_basic(0.5u"cm^2*Torr*hr/g", 10u"cm*Torr*hr/g", 1e-1u"1/cm")
+trans_Rp = Rp_transform_basic(0.8u"cm^2*Torr*hr/g", 14u"cm*Torr*hr/g", 1e0u"1/cm")
 
 cases = Table([ (name="1", pop=pop1, pomc=pomc1, fitdat=fitdat1, dat=dat1),
                 (name="2", pop=pop2, pomc=pomc2, fitdat=fitdat2, dat=dat2),
@@ -264,7 +264,7 @@ cases = Table([ (name="1", pop=pop1, pomc=pomc1, fitdat=fitdat1, dat=dat1),
                 (name="5", pop=pop5, pomc=pomc5, fitdat=fitdat5, dat=dat5),
                 ])
 
-obj_Rpf = OptimizationFunction(obj_Rp, AutoForwardDiff())
+obj_Rpf = OptimizationFunction((x,y)->obj_pd(x,y,tweight=1e-2), AutoForwardDiff())
 @time obj_Rpf(fill(0.0, 3), (trans_Rp, pop1, fitdat1))
 
 obj_npf = OptimizationFunction(objn_Rp, AutoForwardDiff())
@@ -273,10 +273,11 @@ obj_npf = OptimizationFunction(objn_Rp, AutoForwardDiff())
 
 single_Rps = map(cases) do case
     (;name, pop, fitdat, dat) = case
-    opt = solve(OP(obj_Rpf, [0.0, 0, 0.0], (trans_Rp, pop, fitdat)), optalg, g_tol=1e-6)
-    Rp = copy_nt_into_struct(Rp_g, transform(trans_Rp, opt.u))
-    sol = gen_sol_Rp(opt.u, trans_Rp, pop)
-    @info "analyis" name opt sol
+    u0 = (name == "5" ? [0., 2., 5.] : [0., 0., 0.] )
+    opt = solve(OP(obj_Rpf, u0, (trans_Rp, pop, fitdat)), optalg)#, g_tol=1e-6)
+    Rp = RpFormFit(transform(trans_Rp, opt.u).Rp...)
+    sol = gen_sol_pd(opt.u, trans_Rp, pop, fitdat)
+    @info "analyis" name opt Rp
     hRps = map(x->calc_hRp_T(case.pop, case.fitdat, i=x), 1:4)
     return (opt=opt, sol_p=sol, Rp=Rp, hRps=hRps)
 end
@@ -288,6 +289,7 @@ pls = map(cases_Rps) do case
     plT = blankplot_hrC()
     plot!(case.fitdat, title=case.name)
     modconvtplot!(case.sol_p)
+    plot!(legend = :bottomright)
     # plot!(case.pop.Tsh, tmax=case.fitdat.t_end, c=:black, label=L"T_\mathrm{sh}")
     return plT
 end
@@ -322,16 +324,17 @@ porous_nt = (N = ConstWrapTV() ∘ TVScale(2e6u"cm^-3") ∘ TVExp(),
                C = TVScale(2e-1u"m^0.5") ∘ TVExp(),
                Rs = TVScale(1.5u"cm^2*Torr*hr/g") ∘ TVShift(0.01) ∘ TVLogistic()
                )
-myega_nt = (k0 = TVScale(1e10u"s^-1") ∘ TVExp(),
-            K1 = TVScale(1.6e3u"K") ∘ TVExp(),
-            K2 = TVScale(1e2u"K") ∘ TVExp(),)
-sigma_nt = (k0 = TVScale(1e-15u"s^-1") ∘ TVExp(),
-            kf = TVScale(1e-9u"s^-1") ∘ TVExp(),
-            K1 = TVScale(1.6e3u"K") ∘ TVExp(),
-            K2 = TVScale(1.0u"K") ∘ TVShift(220.0) ∘ TVScale(50.0) ∘ TVLogistic(),)
+myega_nt = (k0 = TVScale(1e42u"s^-1") ∘ TVExp(),
+            K1 = TVScale(2.0e4u"K") ∘ TVExp(),
+            K2 = TVScale(1e2u"K") ∘ TVExp() ,)
+plot(Tran, FulbrightPores.k_f_nt(transform(as(myega_nt), zeros(3))).(Tran), yscale=:log10, label="MYEGA, def")
+sigma_nt = (k0 = TVScale(1e-12u"s^-1") ∘ TVExp(),
+            kf = TVScale(1e-8u"s^-1") ∘ TVExp(),
+            K1 = TVScale(1.0u"K") ∘ TVExp(),
+            K2 = TVScale(1.0u"K") ∘ TVShift(216.0) ∘ TVScale(45.0) ∘ TVLogistic(),)
+plot(Tran, FulbrightPores.k_f_nt(transform(as(sigma_nt), zeros(4))).(Tran), yscale=:log10, label="MYEGA, def")
 trans_myega = as(merge(porous_nt, (;k_f=as(myega_nt))))
 trans_sigma = as(merge(porous_nt, (;k_f=as(sigma_nt))))
-FulbrightPores.mc_myega_transform_basic(1, 2, 3, 4, 5, 6, 7)
 
 objn_myega(fitprm, pf) = objn_mc(fitprm, (trans_myega, pf...), tweight=1e-2)
 objnf_myega = OptimizationFunction(objn_myega, AutoForwardDiff())
@@ -347,73 +350,78 @@ objnf_sigma = OptimizationFunction(objn_sigma, AutoForwardDiff())
 # ub_sigm = vcat(fill(10.0, 4), fill( 30, 4))
 # p0_sigm = vcat(fill(0.1, 4), 5, 0.1, 2, -5)
 
-p0_sigma = [5.0, 1, 0, 0.1, 10, 1, 1, 1]
-@time opt123sigm = solve(OP(objnf_sigma, p0_sigma, pass123), optalg, maxiters=50, time_limit=15)
-p0_myega = [5.0, 1, 0, 0.1, 10, 1, 1]
-# p0_myega = [5.0, 1, 0, 0.1, -10, 1, 1]
-# @time opt123myega = solve(OP(objnf_myega, p0_myega, pass123, lb=lb_myega, ub=ub_myega), optalg, maxiters=50, time_limit=15, show_trace=true)
-@time opt123myega = solve(OP(objnf_myega, p0_myega, pass123), optalg, maxiters=50, time_limit=15, show_trace=true)
-
+p0_sigma = [3, 6, 0, 0.1, 2, 0, 0, -1]
+@time opt123sigm = solve(OP(objnf_sigma, p0_sigma, pass123), optalg, time_limit=15)
 # @time opt45sigm = solve(OP(objnf_sigma, p0_sigma, pass45, lb=lb_sigm, ub=ub_sigm), optalg, maxiters=50, time_limit=15)
-@time opt45sigm = solve(OP(objnf_sigma, p0_sigma, pass45), optalg, maxiters=50, time_limit=15)
-p0_myega = [5.0, 1, 0, 0.1, -10, 1, 1]
+@time opt45sigm = solve(OP(objnf_sigma, p0_sigma, pass45), optalg, time_limit=15)
+
+# @time opt123myega = solve(OP(objnf_myega, p0_myega, pass123, lb=lb_myega, ub=ub_myega), optalg, maxiters=50, time_limit=15, show_trace=true)
+p0_myega = [3, 6, 0, 0.1, 1, 0, 0]
+@time opt123myega = solve(OP(objnf_myega, p0_myega, pass123), optalg, time_limit=15, g_tol=1e-6)
+@time opt45myega = solve(OP(objnf_myega, p0_myega, pass45), optalg, time_limit=15, g_tol=1e-6)
+
+# p0_myega = [5.0, 1, 0, 0.1, -10, 1, 1]
 # @time opt45myega = solve(OP(objnf_myega, p0_myega, pass45, lb=lb_myega, ub=ub_myega), optalg, maxiters=50, time_limit=15, show_trace=true)
-@time opt45myega = solve(OP(objnf_myega, p0_myega, pass45), optalg, maxiters=50, time_limit=15, show_trace=true)
 
-# TODO:: get this updated to use transforms
 
-split_fit_prms(fitprm_plus) = vcat(fitprm_plus[1:4], fitprm_plus[9:end]), vcat(fitprm_plus[5:8], fitprm_plus[9:end])
+# TODO:: get this part updated to use transforms
+# It works as is but feels janky
+split_fit_prms(fitprm_plus) = vcat(fitprm_plus[1:2], fitprm_plus[5:end]), vcat(fitprm_plus[3:4], fitprm_plus[5:end])
+remap_vars(fitprm) = vcat(fitprm[1:2], fitprm[1:2], fitprm[3:end])
+trans_2m = as((p1=as((porous_nt[1], porous_nt[2])), p2=as(porous_nt), k_f=as(myega_nt)))
+trans_2s = as((p1=as((porous_nt[1], porous_nt[2])), p2=as(porous_nt), k_f=as(sigma_nt)))
+# trans_2m = as((p1=as(porous_nt), p2=as(porous_nt), k_f=as(myega_nt)))
+# trans_2s = as((p1=as(porous_nt), p2=as(porous_nt), k_f=as(sigma_nt)))
 function obj_2m(fitprm_plus, pass_all)
     prm1, prm2 = split_fit_prms(fitprm_plus)
     obj = objn_myega(prm1, pass_all[1]) + objn_myega(prm2, pass_all[2])
 end
 function obj_2s(fitprm_plus, pass_all)
     prm1, prm2 = split_fit_prms(fitprm_plus)
-    obj = objn_sigm(prm1, pass_all[1]) + objn_sigm(prm2, pass_all[2])
+    obj = objn_sigma(prm1, pass_all[1]) + objn_sigma(prm2, pass_all[2])
 end
 objf_2m = OptimizationFunction(obj_2m, AutoForwardDiff())
 objf_2s = OptimizationFunction(obj_2s, AutoForwardDiff())
-remap_vars(fitprm) = vcat(fitprm[1:4], fitprm[1:4], fitprm[5:end])
-lb_2m = remap_vars(lb_myega)
-ub_2m = remap_vars(ub_myega)
+
 p0_2m = remap_vars(p0_myega)
-@time opt_2m = solve(OP(objf_2m, p0_2m, (pass123, pass45), lb=lb_2m, ub=ub_2m), optalg, maxiters=50, time_limit=15)
+@time opt_2m = solve(OP(objf_2m, p0_2m, (pass123, pass45)), optalg, time_limit=15)
 opt_2m_123, opt_2m_45 = split_fit_prms(opt_2m.u)
 
-lb_2s = remap_vars(lb_sigm)
-ub_2s = remap_vars(ub_sigm)
-p0_2s = remap_vars(p0_sigm)
-@time opt_2s = solve(OP(objf_2s, p0_2s, (pass123, pass45), lb=lb_2s, ub=ub_2s), optalg, maxiters=50, time_limit=15)
+p0_2s = remap_vars(p0_sigma)
+@time opt_2s = solve(OP(objf_2s, p0_2s, (pass123, pass45)), optalg, time_limit=15)
 opt_2s_123, opt_2s_45 = split_fit_prms(opt_2s.u)
 
 
-fits = Table((opt=[opt123sigm, opt123myega, opt45sigm, opt45myega], 
-              k_type=[k_f_sigm, k_f_myega, k_f_sigm, k_f_myega],
-              cases=[(1,2,3), (1,2,3), (4,5), (4,5)]))
-fits = Table(fits, (kf= map(x->x.k_type(x.opt[5:end]), fits),))
-push!(fits, (opt=opt_2m, k_type=k_f_myega, cases=(1,2,3,4,5), kf=k_f_myega(opt_2m.u[end-2:end])))
-push!(fits, (opt=opt_2s, k_type=k_f_sigm, cases=(1,2,3,4,5), kf=k_f_sigm(opt_2s.u[end-3:end])))
+fits = Table((opt=[opt123sigm, opt123myega, opt45sigm, opt45myega, opt_2m, opt_2s], 
+              tr=[trans_sigma, trans_myega, trans_sigma, trans_myega, trans_2m, trans_2s],
+              cases=[(1,2,3), (1,2,3), (4,5), (4,5), (1,2,3,4,5), (1,2,3,4,5)],))
+fits = Table(fits, (kf= map(x->FulbrightPores.k_f_nt(transform(x.tr, x.opt.u).k_f), fits),))
+fits = Table(fits, (k_type = map(x->(x.kf isa Sigmoid_k ? Sigmoid_k : MYEGA_k), fits)))
+# push!(fits, (opt=opt_2m, tr=trans_myega, cases=(1,2,3,4,5), kf=FulbrightPores.k_f_nt(transform(trans_myega, opt_2m.u[end-6:end]).k_f)))
+# push!(fits, (opt=opt_2s, tr=trans_sigma, cases=(1,2,3,4,5), kf=FulbrightPores.k_f_nt(transform(trans_sigma, opt_2s.u[end-7:end]).k_f)))
 
-function gen_pbmsols(opt, k_f_gen; all=false)
+function gen_pbmsols(opt, tr; all=false)
     map(cases) do case
         if all
             if case.name ∈ ["1", "2", "3"]
-                sol = gen_sol_mc_arb(split_fit_prms(opt)[1], case.pomc, k_f_gen; fit_scl=fit_scl) 
+                sol = gen_sol_mc_arb(split_fit_prms(opt)[1], tr, case.pomc) 
                 # @info "check1" case.name split_fit_prms(opt)[1]
             else
-                sol = gen_sol_mc_arb(split_fit_prms(opt)[2], case.pomc, k_f_gen; fit_scl=fit_scl) 
+                sol = gen_sol_mc_arb(split_fit_prms(opt)[2], tr, case.pomc) 
                 # @info "check2" case.name split_fit_prms(opt)[2]
             end
         else
-            sol = gen_sol_mc_arb(opt, case.pomc, k_f_gen; fit_scl=fit_scl)
+            sol = gen_sol_mc_arb(opt, tr, case.pomc)
+            MCfit = transform(tr, opt)
         end
         return (sol_mc=sol,k_f=sol.prob.p.k_f)
     end
 end
 
-# new_sols = vcat(gen_pbmsols(opt123myega, k_f_myega)[1:3], gen_pbmsols(opt45myega, k_f_myega)[4:5])
-# new_sols = vcat(gen_pbmsols(opt123sigm, k_f_sigm)[1:3], gen_pbmsols(opt45sigm, k_f_sigm)[4:5])
-new_sols = gen_pbmsols(opt_2m, k_f_myega, all=true)
+# new_sols = vcat(gen_pbmsols(opt123myega, trans_myega)[1:3], gen_pbmsols(opt45myega, trans_myega)[4:5])
+# new_sols = vcat(gen_pbmsols(opt123sigm, trans_sigma)[1:3], gen_pbmsols(opt45sigm, trans_sigma)[4:5])
+new_sols = gen_pbmsols(opt_2m, trans_myega, all=true)
+# new_sols = gen_pbmsols(opt_2s, trans_sigma, all=true)
 # new_sols = gen_pbmsols(opt_2s, k_f_sigm, all=true)
 cases_both = Table(cases, single_Rps, new_sols)
 
@@ -441,17 +449,15 @@ savefig(plotsdir("fulbright_sucrose_T.pdf"))
 
 begin
 plot(u"°C", u"s^-1", xlabel="Temperature", ylabel="Rate", yscale=:log10, unitformat=:square)
-Tran = (range(-40u"°C", -30u"°C", step=1u"K")) .|> u"K"
+Tran = (range(-40u"°C", -30u"°C", step=0.2u"K")) .|> u"K"
 for fit in fits
     @info "check" fit.kf.(Tran) fit.cases fit.kf
     plot!(Tran, fit.kf.(Tran), label="$(fit.k_type), $(fit.cases)")
 end
-plot!(ylim=(1e-16, 1e-8), legend=:bottomright)
-# KC = (1.5, 1)
-# k0log = log(1e-17u"s^-1"/k_f_myega([0, KC...])(223u"K"))
-# kg = k_f_myega([k0log, KC...])
-# @info "check" kg.(Tran) k0log
-# plot!(Tran, kg.(Tran), legend=:outerright)
+# plot!(Tran, FulbrightPores.k_f_nt(transform(as(myega_nt), zeros(3))).(Tran), label="MYEGA, def")
+# plot!(Tran, FulbrightPores.k_f_nt(transform(as(sigma_nt), zeros(4))).(Tran), label="Sigmoid, def")
+# plot!(ylim=(1e-16, 1e-4), legend=:bottomright)
+plot!()
 end
 
 l = range(0u"cm", hf0, length=100)
@@ -459,6 +465,8 @@ begin
 poreevolplot(cases_both[1].sol_mc, label="PBM 1, 1&2&3", marker=:o, kind=:stats)
 poreevolplot!(cases_both[2].sol_mc, label="PBM 2, 1&2&3", marker=:square, kind=:stats)
 poreevolplot!(cases_both[3].sol_mc, label="PBM 3, 1&2&3", marker=:d, kind=:stats)
+poreevolplot!(cases_both[4].sol_mc, label="PBM 4, 4&5", marker=:square, kind=:stats)
+poreevolplot!(cases_both[5].sol_mc, label="PBM 5, 4&5", marker=:d, kind=:stats)
 for case in cases_both[1:3]
     # plot!(subplot=4, l, case.Rp.(l), ls=:dash, c=parse(Int, case.name), label="3PP $(case.name)")
     for i in 1:4
@@ -471,7 +479,7 @@ end
 
 begin
 blankplot_lRp()
-for case in cases_both[1:2]
+for case in cases_both[4:5]
     # plot!(subplot=4, l, case.Rp.(l), ls=:dash, c=parse(Int, case.name), label="3PP $(case.name)")
     mcrpplot!(case.sol_mc, c=parse(Int, case.name), label="PBM mixed-all")
     for i in 1:4
@@ -491,6 +499,7 @@ begin
 plot(u"mm^3", NoUnits, ywiden=false, ylabel="Approx. Prob. Dens.", xlabel=L"Pore Size", unitformat=latexsquareunitlabel)
 for case in cases_both
     distplot!(case.sol_mc;  disttype=:normal, label=case.name)
+    plot!(scale=:log10)
 end
 # plot!(scale=:log10)
 plot!()
@@ -499,7 +508,9 @@ savefig(plotsdir("fulbright_sucrose_poredist.svg"))
 savefig(plotsdir("fulbright_sucrose_poredist.pdf"))
 
 res_fit = cases_both[1].sol_mc.prob.p
-@info "Best fit params:" res_fit.N res_fit.S res_fit.C res_fit.Rs
+@info "Best fit params, 1&2&3:" res_fit.N res_fit.S res_fit.C res_fit.Rs res_fit.k_f
+res_fit = cases_both[4].sol_mc.prob.p
+@info "Best fit params, 4&5:" res_fit.N res_fit.S res_fit.C res_fit.Rs res_fit.k_f
 
 function eval_about_myega(new, opt, pass)
     objn_myega(new .* opt.u, pass)
