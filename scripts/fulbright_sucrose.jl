@@ -21,13 +21,13 @@ end
 pch1_pir_der2 = savitzky_golay(dat1.pch_pir, 91, 3, deriv=2, rate=1/u"minute").y
 t_end1 = dat1.t[argmax(pch1_pir_der2[1u"hr" .< dat1.t .< 50u"hr" ])] + 1u"hr"
 
-pch1 = RampedVariable(100u"mTorr")
+pch1 = RampedVariable(100.0u"mTorr")
 # @df dat1 plot(:t, :pch_cm, ylim=(0, 200))
 # @df dat1 plot!(:t, :pch_pir, ylim=(0, 200))
 # plot!(pch1)
 # tendplot!(t_end1)
 
-Tsh1 = RampedVariable(uconvert.(u"K", [-47, -20]u"°C"), 0.5u"K/minute")
+Tsh1 = RampedVariable(uconvert.(u"K", [-47.0, -20]u"°C"), 0.5u"K/minute")
 # @df dat1 plot(:t, :Tsh_i, xlim=(0, 2))
 # plot!(Tsh1)
 
@@ -55,13 +55,13 @@ end
 pch2_pir_der2 = savitzky_golay(dat2.pch_pir, 91, 3, deriv=2, rate=1/u"minute").y
 t_end2 = dat2.t[argmax(pch2_pir_der2[1u"hr" .< dat2.t .< 50u"hr" ])] + 1u"hr"
 
-pch2 = RampedVariable(100u"mTorr")
+pch2 = RampedVariable(100.0u"mTorr")
 # @df dat2 plot(:t, :pch_cm, ylim=(0, 200))
 # @df dat2 plot!(:t, :pch_pir, ylim=(0, 200))
 # plot!(pch2)
 # tendplot!(t_end2)
 
-Tsh2 = RampedVariable(uconvert.(u"K", [-47, -10]u"°C"), 0.5u"K/minute")
+Tsh2 = RampedVariable(uconvert.(u"K", [-47.0, -10]u"°C"), 0.5u"K/minute")
 # @df dat2 plot(:t, :Tsh_i, xlim=(0, 2))
 # plot!(Tsh2)
 
@@ -89,13 +89,13 @@ end
 pch3_pir_der2 = savitzky_golay(dat3.pch_pir, 91, 3, deriv=2, rate=1/u"minute").y
 t_end3 = dat3.t[argmax(pch3_pir_der2[1u"hr" .< dat3.t .< 50u"hr" ])] + 1u"hr"
 
-pch3 = RampedVariable(100u"mTorr")
+pch3 = RampedVariable(100.0u"mTorr")
 # @df dat3 plot(:t, :pch_cm, ylim=(0, 200))
 # @df dat3 plot!(:t, :pch_pir, ylim=(0, 200))
 # plot!(pch3)
 # tendplot!(t_end3)
 
-Tsh3 = RampedVariable(uconvert.(u"K", [-47, 0]u"°C"), 0.5u"K/minute")
+Tsh3 = RampedVariable(uconvert.(u"K", [-47.0, 0.0]u"°C"), 0.5u"K/minute")
 # @df dat3 plot(:t, :Tsh_i, xlim=(0, 2))
 # plot!(Tsh3)
 
@@ -126,13 +126,13 @@ end
 pch4_pir_der2 = savitzky_golay(dat4.pch_pir, 91, 3, deriv=2, rate=1/u"minute").y
 t_end4 = dat4.t[argmax(pch4_pir_der2[1u"hr" .< dat4.t .< 50u"hr" ])] + 1u"hr"
 
-pch4 = RampedVariable(100u"mTorr")
+pch4 = RampedVariable(100.0u"mTorr")
 # @df dat4 plot(:t, :pch_cm, ylim=(0, 200))
 # @df dat4 plot!(:t, :pch_pir, ylim=(0, 200))
 # plot!(pch4)
 # tendplot!(t_end4)
 
-Tsh4 = RampedVariable(uconvert.(u"K", [-47, -20]u"°C"), 0.5u"K/minute")
+Tsh4 = RampedVariable(uconvert.(u"K", [-47.0, -20.0]u"°C"), 0.5u"K/minute")
 # @df dat4 plot(:t, :Tsh_i, xlim=(0, 2))
 # plot!(Tsh4)
 
@@ -160,13 +160,13 @@ end
 pch5_pir_der2 = savitzky_golay(dat5.pch_pir, 91, 3, deriv=2, rate=1/u"minute").y
 t_end5 = dat5.t[argmax(pch5_pir_der2[1u"hr" .< dat5.t .< 50u"hr" ])] + 1u"hr"
 
-pch5 = RampedVariable(100u"mTorr")
+pch5 = RampedVariable(100.0u"mTorr")
 # @df dat5 plot(:t, :pch_cm, ylim=(0, 200))
 # @df dat5 plot!(:t, :pch_pir, ylim=(0, 200))
 # plot!(pch5)
 # tendplot!(t_end5)
 
-Tsh5 = RampedVariable(uconvert.(u"K", [-47, -30]u"°C"), 0.5u"K/minute")
+Tsh5 = RampedVariable(uconvert.(u"K", [-47.0, -30.0]u"°C"), 0.5u"K/minute")
 # @df dat5 plot(:t, :Tsh_i, xlim=(0, 2))
 # plot!(Tsh5)
 
@@ -216,7 +216,7 @@ A_v = π*rad_o^2
 fillvol = 2u"mL"
 hf0 = fillvol/A_p |> u"cm"
 
-Rp_g = RpFormFit(0.8u"cm^2*Torr*hr/g", 14u"cm*Torr*hr/g", 1u"1/cm")
+Rp_g = RpFormFit(0.8u"cm^2*Torr*hr/g", 14.0u"cm*Torr*hr/g", 1.0u"1/cm")
 
 csolid = 0.05u"g/mL"
 ρsolution = 1u"g/mL"
@@ -229,7 +229,6 @@ N = ConstPhysProp(N_typical)
 S = ConstPhysProp(V_typical) # = V_typ^2*N_typ
 C = 2e-1u"m^0.5"
 Rs = 0.5u"cm^2*Torr*hr/g"
-fit_scl = (N(0), S(0), C, Rs)
 k0 = 1e-14u"1/s"
 
 pop1 = ParamObjPikal([
@@ -264,8 +263,9 @@ cases = Table([ (name="1", pop=pop1, pomc=pomc1, fitdat=fitdat1, dat=dat1),
                 (name="5", pop=pop5, pomc=pomc5, fitdat=fitdat5, dat=dat5),
                 ])
 
-obj_Rpf = OptimizationFunction((x,y)->obj_pd(x,y,tweight=1e-2), AutoForwardDiff())
-@time obj_Rpf(fill(0.0, 3), (trans_Rp, pop1, fitdat1))
+obj_Rpf = OptimizationFunction((x,y)->obj_pd(x,y,tweight=1e-2), AutoForwardDiff(chunksize=3))
+# obj_Rpf = OptimizationFunction(obj_pd, AutoForwardDiff(chunksize=3))
+@time obj_Rpf([0.0, 1.0, 0.0], (trans_Rp, pop1, fitdat1))
 
 obj_npf = OptimizationFunction(objn_Rp, AutoForwardDiff())
 
@@ -274,7 +274,7 @@ obj_npf = OptimizationFunction(objn_Rp, AutoForwardDiff())
 single_Rps = map(cases) do case
     (;name, pop, fitdat, dat) = case
     u0 = (name == "5" ? [0., 2., 5.] : [0., 0., 0.] )
-    opt = solve(OP(obj_Rpf, u0, (trans_Rp, pop, fitdat)), optalg)#, g_tol=1e-6)
+    @time opt = solve(OP(obj_Rpf, u0, (trans_Rp, pop, fitdat)), optalg)#, g_tol=1e-6)
     Rp = RpFormFit(transform(trans_Rp, opt.u).Rp...)
     sol = gen_sol_pd(opt.u, trans_Rp, pop, fitdat)
     @info "analyis" name opt Rp
@@ -327,17 +327,17 @@ porous_nt = (N = ConstWrapTV() ∘ TVScale(2e6u"cm^-3") ∘ TVExp(),
 myega_nt = (k0 = TVScale(1e42u"s^-1") ∘ TVExp(),
             K1 = TVScale(2.0e4u"K") ∘ TVExp(),
             K2 = TVScale(1e2u"K") ∘ TVExp() ,)
-plot(Tran, FulbrightPores.k_f_nt(transform(as(myega_nt), zeros(3))).(Tran), yscale=:log10, label="MYEGA, def")
+# plot(Tran, FulbrightPores.k_f_nt(transform(as(myega_nt), zeros(3))).(Tran), yscale=:log10, label="MYEGA, def")
 sigma_nt = (k0 = TVScale(1e-12u"s^-1") ∘ TVExp(),
             kf = TVScale(1e-8u"s^-1") ∘ TVExp(),
             K1 = TVScale(1.0u"K") ∘ TVExp(),
             K2 = TVScale(1.0u"K") ∘ TVShift(216.0) ∘ TVScale(45.0) ∘ TVLogistic(),)
-plot(Tran, FulbrightPores.k_f_nt(transform(as(sigma_nt), zeros(4))).(Tran), yscale=:log10, label="MYEGA, def")
+# plot(Tran, FulbrightPores.k_f_nt(transform(as(sigma_nt), zeros(4))).(Tran), yscale=:log10, label="MYEGA, def")
 trans_myega = as(merge(porous_nt, (;k_f=as(myega_nt))))
 trans_sigma = as(merge(porous_nt, (;k_f=as(sigma_nt))))
 
 objn_myega(fitprm, pf) = objn_mc(fitprm, (trans_myega, pf...), tweight=1e-2)
-objnf_myega = OptimizationFunction(objn_myega, AutoForwardDiff())
+objnf_myega = OptimizationFunction(objn_myega, AutoForwardDiff(chunksize=4))
 objnf_myega(rand(7), pass123)
 # lb_myega = vcat(fill(-10.0, 4), -150, fill(-5, 2))
 # ub_myega = vcat(fill(10.0, 4), 150, fill( 5, 2))
@@ -345,7 +345,7 @@ objnf_myega(rand(7), pass123)
 # objn_sigm(fitprm, pf) = objn_mc(fitprm, (pf..., k_f_sigm), tweight=1e-1, fit_scl=fit_scl)
 # objnf_sigm = OptimizationFunction(objn_sigm, AutoForwardDiff())
 objn_sigma(fitprm, pf) = objn_mc(fitprm, (trans_sigma, pf...), tweight=1e-2)
-objnf_sigma = OptimizationFunction(objn_sigma, AutoForwardDiff())
+objnf_sigma = OptimizationFunction(objn_sigma, AutoForwardDiff(chunksize=4))
 # lb_sigm = vcat(fill(-10.0, 4), fill(-30, 4))
 # ub_sigm = vcat(fill(10.0, 4), fill( 30, 4))
 # p0_sigm = vcat(fill(0.1, 4), 5, 0.1, 2, -5)

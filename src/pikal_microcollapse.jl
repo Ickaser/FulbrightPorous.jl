@@ -11,10 +11,10 @@ export R, ΔHsub, Mw, η
 """
 function lyo_mc_dae!(du, u, params, t)
 
-    hf0, csolid, ρsolution = params[1]
-    Kshf, Av, Ap, = params[2]
-    pch, Tsh = params[3] 
-    k_f, C, N, S, Rs = params[4] 
+    (; hf0, csolid, ρsolution,
+    Kshf, Av, Ap,
+    pch, Tsh, 
+    k_f, C, N, S, Rs, ) = params
     
     td = t*u"hr" # Dimensional time
     hf = u[1]*u"cm"
@@ -24,7 +24,8 @@ function lyo_mc_dae!(du, u, params, t)
 
     # exit hatch for bad parameter guesses
     if Tf < 0u"K"
-        return fill(NaN, 4)
+        du .= NaN
+        return NaN*u"m/s"
     end
 
     k = k_f(Tf)
@@ -46,7 +47,7 @@ function lyo_mc_dae!(du, u, params, t)
     dmdt = - Ap*(calc_psub(Tsub)-pch(td))/Rsp
     Qsub = uconvert(u"W", dmdt*ΔHsub)
 
-    dhf_dt = min(0.0u"cm/hr", dmdt/(ρsolution-csolid)/Ap ) # Cap dhf_dt at 0: no desublimation
+    dhf_dt = min(0.0u"cm/hr", dmdt/(ρsolution-csolid)/Ap |>u"cm/hr" ) # Cap dhf_dt at 0: no desublimation
     dμ0_dt = -k/2*μ0^2 - N(hd)*Ap*dhf_dt
     dμ2_dt = k*μ1^2 - S(hd)*Ap*dhf_dt # dhf_dt < 0 for drying proceeding
 
@@ -55,7 +56,8 @@ function lyo_mc_dae!(du, u, params, t)
     du[3] = ustrip(u"hr^-1", dμ0_dt)
     du[4] = ustrip(u"mm^6/hr", dμ2_dt)
 
-    return Rsp
+    # return Rsp
+    return nothing
 end
 
 const lyo_mc_mm = [1.0 0.0 0.0 0.0; 
@@ -96,7 +98,7 @@ See [`RpFormFit`](@ref LyoPronto.RpFormFit) and [`RampedVariable`](@ref LyoPront
 - `Tsh(t)`, `pch(t)` return shelf temperature and chamber pressure respectively at time `t`.
 - `k_f(T)` returns the rate constant for pore coalescence at temperature `T`.
 """
-const lyo_mc_dae_f = ODEFunction(lyo_mc_dae!, mass_matrix=lyo_mc_mm)
+const lyo_mc_dae_f = ODEFunction{true, SciMLBase.FullSpecialize}(lyo_mc_dae!, mass_matrix=lyo_mc_mm)
 
 struct ParamObjMC{T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13}
     hf0::T1
