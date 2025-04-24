@@ -7,9 +7,10 @@ import LyoPronto: Mw, k_ice, ΔHsub
 const η = LyoPronto.μ_vap # Water vapor viscosity
 export R, ΔHsub, Mw, η
 
-@doc raw"""
 """
-function lyo_mc_dae!(du, u, params, t)
+    $(SIGNATURES)
+"""
+function lyo_mc_dae!(du, u, params, t, rp_ret = Val{false})
 
     (; hf0, csolid, ρsolution,
     Kshf, Av, Ap,
@@ -56,8 +57,11 @@ function lyo_mc_dae!(du, u, params, t)
     du[3] = ustrip(u"hr^-1", dμ0_dt)
     du[4] = ustrip(u"mm^6/hr", dμ2_dt)
 
-    # return Rsp
-    return nothing
+    if rp_ret == Val{true}
+        return Rsp
+    else
+        return nothing
+    end
 end
 
 const lyo_mc_mm = [1.0 0.0 0.0 0.0; 

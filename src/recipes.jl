@@ -85,7 +85,7 @@ end
     hf = sol[1,:]*u"cm"
     hd = (po.hf0 .- hf) .|> u"cm"
     Rp = map(sol.t, sol.u) do ti,ui
-        lyo_mc_dae!(fill(0.0, 4), ui, sol.prob.p, ti) |> u"m/s"
+        lyo_mc_dae!(fill(0.0, 4), ui, sol.prob.p, ti, Val{true}) |> u"m/s"
     end
     @series begin
         ylabel --> "Rp"
