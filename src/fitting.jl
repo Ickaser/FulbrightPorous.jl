@@ -2,30 +2,56 @@ export gennsol_Rp, objn_Rp
 export gen_sol_mc_arb, gennsol_mc, objn_mc
 
 # ---------------------------------
+export identify_pd_end_2der
+
+"""
+    $(SIGNATURES)
+    
+Identify the end of primary drying using second derivative of Pirani pressure.
+
+# Arguments
+- `data`: Table containing the Pirani pressure `pch_pir` and time `t`
+- `window_width`: Width of the Savitzky-Golay filter window (default: 91)
+- `tmin`: Minimum time for analysis (default: 0 hours, unitful)
+- `tmax`: Maximum time for analysis (default: Inf hours, unitful)
+
+Very simple implementation:
+
+    pch_pir_der2 = savitzky_golay(data.pch_pir, window_width, 3, deriv=2).y
+    t_end = data.t[argmax(pch_pir_der2[tmin .< data.t .< tmax])] + tmin
+    return t_end
+"""
+function identify_pd_end_2der(data, window_width=91, tmin=0u"hr", tmax=Inf*u"hr")
+    pch_pir_der2 = savitzky_golay(data.pch_pir, window_width, 3, deriv=2).y
+    t_end = data.t[argmax(pch_pir_der2[tmin .< data.t .< tmax])] + tmin
+    return t_end
+end
+
+# ---------------------------------
 function sigmoid_transform_basic(k0, kf, K1, K2)
-    tr = as((
-        k = as((
-            k0 = TVScale(k0) ∘ TVExp(),
-            kf = TVScale(kf) ∘ TVExp(),
-            K1 = TVScale(K1) ∘ TVExp(),
-            K2 = TVScale(K2) ∘ TVExp(),
-            )),
-        ))
+tr = as((
+    k = as((
+        k0 = TVScale(k0) ∘ TVExp(),
+        kf = TVScale(kf) ∘ TVExp(),
+        K1 = TVScale(K1) ∘ TVExp(),
+        K2 = TVScale(K2) ∘ TVExp(),
+        )),
+    ))
 end
 function myega_transform_basic(k0, K1, K2)
-    tr = as((
-        k = as((
-            k0 = TVScale(k0) ∘ TVExp(),
-            K1 = TVScale(K1) ∘ TVExp(),
-            K2 = TVScale(K2) ∘ TVExp(),
-            )),
-        ))
+tr = as((
+    k = as((
+        k0 = TVScale(k0) ∘ TVExp(),
+        K1 = TVScale(K1) ∘ TVExp(),
+        K2 = TVScale(K2) ∘ TVExp(),
+        )),
+    ))
 end
 function porous_transform_basic(Ng, Sg, Cg, Rsg)
-    tr = as((
-        N = ConstWrapTV() ∘ TVScale(Ng) ∘ TVExp(),
-        S = ConstWrapTV() ∘ TVScale(Sg) ∘ TVExp(),
-        C = TVScale(Cg) ∘ TVExp(),
+tr = as((
+    N = ConstWrapTV() ∘ TVScale(Ng) ∘ TVExp(),
+    S = ConstWrapTV() ∘ TVScale(Sg) ∘ TVExp(),
+    C = TVScale(Cg) ∘ TVExp(),
         Rs = TVScale(Rsg) ∘ TVExp(),
         ))
 end
@@ -54,8 +80,8 @@ function mc_sigmoid_transform_basic(Ng, Sg, Cg, Rsg, k0g, kfg, K1g, K2g)
 end
 
 # --------------------------------- 
-gennsol_Rp(fitprm, tr, pos) = [gen_sol_Rp(fitprm, tr, po) for po in pos]
-gennsol_Rp(fitprm, tr, pos, fitdats) = [gen_sol_Rp(fitprm, po, tr, fitdat) for (po,fitdat) in zip(pos,fitdats)]
+gennsol_Rp(fitprm, tr, pos) = [gen_sol_pd(fitprm, tr, po) for po in pos]
+gennsol_Rp(fitprm, tr, pos, fitdats) = [gen_sol_pd(fitprm, tr, po, fitdat) for (po,fitdat) in zip(pos,fitdats)]
 function objn_Rp(fitprm, tpfs; tweight=1e-3)
     tr, pos, fitdats = tpfs
     sols = gennsol_Rp(fitprm, tr, pos, fitdats)
@@ -72,12 +98,12 @@ end
 # V_typical = 4/3*π*d_typical^3
 # N_typical = 1/V_typical
 # S_typical = V_typical^2*N_typical = V_typical
+export k_f_nt
 
 k_f_nt(nt::NamedTuple{(:k0, :kf, :K1, :K2)}) = Sigmoid_k(nt.k0, nt.kf, nt.K1, nt.K2)
 k_f_nt(nt::NamedTuple{(:k0, :K1, :K2)}) = MYEGA_k(nt.k0, nt.K1, nt.K2)
 k_f_nt(nt) = error("Mis-ordered k_f parameters. This should be handled more carefully")
 
-const fit_scl_porous = (2e6u"cm^-3", 5e-7u"cm^3", 2e-1u"m^0.5", 0.1u"cm^2*Torr*hr/g")
 function gen_sol_mc_arb(fitprmlog, tr, po; verbose=false, saveat=[])
     fitprm = transform(tr, fitprmlog)
     verbose && @info "fitprm" fitprm

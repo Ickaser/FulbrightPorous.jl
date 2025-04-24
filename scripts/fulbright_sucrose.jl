@@ -254,7 +254,6 @@ pomc4 = @set pomc1.csolid = 0.1u"g/mL"
 pomc5 = @set pomc4.Tsh = Tsh5
 end
 
-trans_Rp = Rp_transform_basic(0.8u"cm^2*Torr*hr/g", 14u"cm*Torr*hr/g", 1e0u"1/cm")
 
 cases = Table([ (name="1", pop=pop1, pomc=pomc1, fitdat=fitdat1, dat=dat1),
                 (name="2", pop=pop2, pomc=pomc2, fitdat=fitdat2, dat=dat2),
@@ -263,6 +262,7 @@ cases = Table([ (name="1", pop=pop1, pomc=pomc1, fitdat=fitdat1, dat=dat1),
                 (name="5", pop=pop5, pomc=pomc5, fitdat=fitdat5, dat=dat5),
                 ])
 
+trans_Rp = Rp_transform_basic(0.8u"cm^2*Torr*hr/g", 14u"cm*Torr*hr/g", 1e0u"1/cm")
 obj_Rpf = OptimizationFunction((x,y)->obj_pd(x,y,tweight=1e-2), AutoForwardDiff(chunksize=3))
 # obj_Rpf = OptimizationFunction(obj_pd, AutoForwardDiff(chunksize=3))
 @time obj_Rpf([0.0, 1.0, 0.0], (trans_Rp, pop1, fitdat1))
