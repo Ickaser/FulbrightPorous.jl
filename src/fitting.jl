@@ -172,29 +172,44 @@ function gennsol_mc(fitprm, tr, pos, fitdats; kwargs...)
     return sols
 end
 
-function objn_mc(fitprm, tpf; tweight=0, verbose=false)
-    rtype = eltype(fitprm)
+function objn_mc(fitprmlog, tpf; tweight=0, verbose=false)
+    rtype = eltype(fitprmlog)
     tr, pos, fitdats = tpf
     # verbose && @info "fitprm" fitprm
     if pos isa ParamObjMC && fitdats isa PrimaryDryFit # single element
-        sols = gen_sol_mc_arb(fitprm, tr, pos, fitdats)
-        objs = [obj_expT(sols, fitdats, tweight=tweight)]
+        fitprm = transform(tr, fitprmlog)
+        if fitprm.S(0) < (1 - fitprm.csolid/fitprm.ρsolution)/fitprm.N(0)
+            @warn "S is too small: implies negative variance" fitprm.S(0) 1/fitprm.N(0)
+            return rtype(NaN)
+        end
+        sols = gen_sol_pd(fitprmlog, tr, pos, fitdats)
+        objs = [obj_expT(sols, fitdats; tweight)]
     else
-        sols = gennsol_mc(fitprm, tr, pos, fitdats)
+        sols = gen_nsol_pd(fitprmlog, tr, pos, fitdats)
+        for sol in sols
+            fitprm = sol.prob.p
+            if fitprm.S(0) < (1 - fitprm.csolid/fitprm.ρsolution)/fitprm.N(0)
+                @warn "S is too small: implies negative variance" fitprm.S(0) 1/fitprm.N(0)
+                return rtype(NaN)
+            end
+            if sol.retcode != ReturnCode.Terminated
+                @warn "unfinished drying" sol[1,end] fitprmlog 
+            end
+        end
         objs = map(sols, fitdats) do sol, fitdat
-            obj_expT(sol, fitdat, tweight=tweight)
+            obj_expT(sol, fitdat; tweight)
         end
     end
     if verbose
         if any([sol.retcode != ReturnCode.Terminated for sol in sols])
             for sol in sols 
                 if sol.retcode != ReturnCode.Terminated
-                    @info "unfinished drying" sol[1,end] fitprm 
+                    @info "unfinished drying" sol[1,end] fitprmlog 
                 end
             end
         end
         # @info "unfinished drying" [sol for 
     end
-    verbose && @info "obj" objs fitprm 
+    verbose && @info "obj" objs fitprmlog 
     return rtype(sum(objs))
 end

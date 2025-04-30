@@ -319,11 +319,12 @@ pass45 = make_mcpass([4, 5])
 # It would be desirable to enforce S > ϕ/N, 
 # and the most natural place is in copy_nt_into_struct,
 # but that seems like a confusing place to put it.
-porous_nt = (N = ConstWrapTV() ∘ TVScale(2e6u"cm^-3") ∘ TVExp(),
-               S = ConstWrapTV() ∘ TVScale(5e-7u"cm^3") ∘ TVExp(), # If I could enforce S > ϕ/N, would be great...
-               C = TVScale(2e-1u"m^0.5") ∘ TVExp(),
-               Rs = TVScale(1.5u"cm^2*Torr*hr/g") ∘ TVShift(0.01) ∘ TVLogistic()
-               )
+NTV = ConstWrapTV() ∘ TVScale(2e6u"cm^-3") ∘ TVExp()
+STV = ConstWrapTV() ∘ TVScale(5e-7u"cm^3") ∘ TVExp()
+CTV = TVScale(2e-1u"m^0.5") ∘ TVExp()
+RsTV = TVScale(1.5u"cm^2*Torr*hr/g") ∘ TVShift(0.01) ∘ TVLogistic()
+porous_nt = (N = NTV, S = STV, # If I could enforce S > ϕ/N, would be great...
+               C = CTV, Rs = RsTV,)
 myega_nt = (k0 = TVScale(1e42u"s^-1") ∘ TVExp(),
             K1 = TVScale(2.0e4u"K") ∘ TVExp(),
             K2 = TVScale(1e2u"K") ∘ TVExp() ,)
@@ -364,31 +365,23 @@ p0_myega = [3, 6, 0, 0.1, 1, 0, 0]
 # @time opt45myega = solve(OP(objnf_myega, p0_myega, pass45, lb=lb_myega, ub=ub_myega), optalg, maxiters=50, time_limit=15, show_trace=true)
 
 
-# TODO:: get this part updated to use transforms
-# It works as is but feels janky
-split_fit_prms(fitprm_plus) = vcat(fitprm_plus[1:2], fitprm_plus[5:end]), vcat(fitprm_plus[3:4], fitprm_plus[5:end])
+# split_fit_prms(fitprm_plus) = vcat(fitprm_plus[1:2], fitprm_plus[5:end]), vcat(fitprm_plus[3:4], fitprm_plus[5:end])
 remap_vars(fitprm) = vcat(fitprm[1:2], fitprm[1:2], fitprm[3:end])
-trans_2m = as((p1=as((porous_nt[1], porous_nt[2])), p2=as(porous_nt), k_f=as(myega_nt)))
-trans_2s = as((p1=as((porous_nt[1], porous_nt[2])), p2=as(porous_nt), k_f=as(sigma_nt)))
+# trans_2m = as((p1=as((porous_nt[1], porous_nt[2])), p2=as(porous_nt), k_f=as(myega_nt)))
+trans_2m = as((separate=as(Vector, as((N=NTV, S=STV)), 2),
+                shared=as((C=CTV, Rs=RsTV, k_f=as(myega_nt))),))
+trans_2s = as((separate=as(Vector, as((N=NTV, S=STV)), 2),
+                shared=as((C=CTV, Rs=RsTV, k_f=as(sigma_nt))),))
 # trans_2m = as((p1=as(porous_nt), p2=as(porous_nt), k_f=as(myega_nt)))
 # trans_2s = as((p1=as(porous_nt), p2=as(porous_nt), k_f=as(sigma_nt)))
-function obj_2m(fitprm_plus, pass_all)
-    prm1, prm2 = split_fit_prms(fitprm_plus)
-    obj = objn_myega(prm1, pass_all[1]) + objn_myega(prm2, pass_all[2])
-end
-function obj_2s(fitprm_plus, pass_all)
-    prm1, prm2 = split_fit_prms(fitprm_plus)
-    obj = objn_sigma(prm1, pass_all[1]) + objn_sigma(prm2, pass_all[2])
-end
-objf_2m = OptimizationFunction(obj_2m, AutoForwardDiff())
-objf_2s = OptimizationFunction(obj_2s, AutoForwardDiff())
+objnf_pd = OptimizationFunction((x,y)->LyoPronto.objn_pd(x,y,tweight=1e-1), AutoForwardDiff(chunksize=5))
 
 p0_2m = remap_vars(p0_myega)
-@time opt_2m = solve(OP(objf_2m, p0_2m, (pass123, pass45)), optalg, time_limit=15)
+@time opt_2m = solve(OP(objnf_pd, p0_2m, (trans_2m, cases_both.pomc, cases_both.fitdat)), optalg, time_limit=15)
 opt_2m_123, opt_2m_45 = split_fit_prms(opt_2m.u)
 
 p0_2s = remap_vars(p0_sigma)
-@time opt_2s = solve(OP(objf_2s, p0_2s, (pass123, pass45)), optalg, time_limit=15)
+@time opt_2m = solve(OP(objnf_pd, p0_2m, (trans_2s, cases_both.pomc, cases_both.fitdat)), optalg, time_limit=15)
 opt_2s_123, opt_2s_45 = split_fit_prms(opt_2s.u)
 
 
