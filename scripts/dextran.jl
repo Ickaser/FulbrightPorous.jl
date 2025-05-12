@@ -125,12 +125,11 @@ cases_Rp = Table(map(cases_pdfit, fitKv.separate) do case, fit
     hRp = calc_hRp_T(po, case.pdfit)
     return merge(case, (;po, pomc, hRp))
 end)
-psols = [solve(ODEProblem(po), Rodas3()) for po in cases_pdfit.po]
+psols = [solve(ODEProblem(po), Rodas3()) for po in cases_Rp.po]
 # psols = LyoPronto.gen_nsol_pd(opt_Kv.u, shared_trans, cases_pdfit.po, cases_pdfit.pdfit);
 
 begin
 KRp_plots = map(cases_Rp, psols) do case, sol
-    # @info "check" obj_expT(sol, case.pdfit, tweight=0) obj_expT(sol, case.pdfit, tweight=1)
     blankplot_hrC(legend=:bottomright, title=case.name)
     modconvtplot!(sol)
     plot!(case.pdfit)
@@ -168,11 +167,8 @@ remap_vars(fitprm) = vcat(repeat(fitprm[1:2], 4), fitprm[3:end])
 trans_nm = as((separate=as(Vector, as((N=NTV, S=STV)), 4),
                 shared=as((C=CTV, Rs=RsTV, k_f=as(myega_nt))),))
 # trans_nm_sem = as((C=CTV, Rs=RsTV, k_f=as(myega_nt)))
-# TODO: figure out why only changing C isn't enough to fit the data,
-# we need to also change S.
-trans_nm_sem = as((separate=as(Vector, as((S=STV,C=CTV)), 4),
+trans_nm_sem = as((separate=as(Vector, as((C=CTV,)), 4),
                 shared=as((Rs=RsTV, k_f=as(myega_nt))),))
-p0_sem
 trans_ns = as((separate=as(Vector, as((N=NTV, S=STV)), 4),
                 shared=as((C=CTV, Rs=RsTV, k_f=as(sigma_nt))),))
 
@@ -181,7 +177,7 @@ objnf_mc = OptimizationFunction((x,y)->objn_mc(x,y,tweight=1e-1), AutoForwardDif
 @time opt1234myega = solve(OP(objnf_mc, zeros(13), (trans_nm, cases_Rp.pomc, cases_Rp.pdfit)), optalg)
 
 # p0_sem = vcat(repeat([-2.5], 4), zeros(4))
-p0_sem = zeros(12)
+p0_sem = zeros(8)
 blankplot_hrC()
 modconvtplot!(LyoPronto.gen_nsol_pd(p0_sem, trans_nm_sem, cases_Rp.pomc, cases_Rp.pdfit)..., c=[1 2 3 4])
 
@@ -190,7 +186,8 @@ modconvtplot!(LyoPronto.gen_nsol_pd(p0_sem, trans_nm_sem, cases_Rp.pomc, cases_R
 fit_mc = transform(trans_nm, opt1234myega.u)
 fit_mc_sem = transform(trans_nm_sem, opt1234myegasem.u)
 # all_pomc = [setproperties(pomc, merge(sep, fit_mc.shared)) for (pomc, sep) in zip(cases_Rp.pomc, fit_mc.separate)]
-all_pomc = [setproperties(pomc, merge(sep, fit_mc_sem.shared)) for (pomc, sep) in zip(cases_Rp.pomc, fit_mc.separate)];
+all_pomc = [setproperties(pomc, merge(sep, fit_mc_sem.shared)) for (pomc, sep) in zip(cases_Rp.pomc, fit_mc_sem.separate)];
+# all_pomc = [setproperties(pomc, fit_mc_sem) for pomc in cases_Rp.pomc];
 
 sols_m = [solve(ODEProblem(pomc), Rodas3()) for pomc in all_pomc];
 cases_both = Table(cases_Rp, (pomc=all_pomc,sol_mc=sols_m))
@@ -199,27 +196,32 @@ begin
 myega_plots = map(cases_both, psols) do case, solp
     @info "check" obj_expT(case.sol_mc, case.pdfit, tweight=0) obj_expT(case.sol_mc, case.pdfit, tweight=1)
     blankplot_hrC(legend=:bottomright, title=case.name)
+    plot!(Tsh, label=L"T_{sh}", c=:black)
     modconvtplot!(case.sol_mc)
-    modconvtplot!(solp, c=:green, label=L"$T_f$, Pikal")
+    modconvtplot!(solp, c=:green, alpha=0.6, label=L"$T_f$, Pikal")
     plot!(case.pdfit)
-    plot!(xlim=(-0.5, 21), ylim=(-45, -15))
+    plot!(xlim=(-0.5, 21), ylim=(-45, -2))
 end
-plot(myega_plots...)
+plot(myega_plots..., size=(600, 500))
 end
+savefig(plotsdir("dextran_T_semC.svg"))
+savefig(plotsdir("dextran_T_semC.pdf"))
 
 l = range(0u"cm", hf0, length=100)
 begin
 blankplot_lRp()
 for (i, case) in enumerate(cases_both)
     # plot!(subplot=4, l, case.Rp.(l), ls=:dash, c=parse(Int, case.name), label="3PP $(case.name)")
-    mcrpplot!(case.sol_mc, c=i, label="PBM mixed-all")
+    mcrpplot!(case.sol_mc, c=i, label="PBM $(case.name)")
     hdT, RpT = case.hRp
-    scatter!(hdT, RpT, alpha=0.5, c=i, label="Rp from T, $(case.name)", seriestype=:samplemarkers)
     plot!(l, case.po.Rp.(l), ls=:dash, c=i, label="3PP $(case.name)")
+    scatter!(hdT, RpT, alpha=0.5, c=i, label="Rp from T, $(case.name)", seriestype=:samplemarkers)
 end
-# plot!(xlim=(0, 0.3), ylim=(0.5, 2.5))
+plot!(xlim=(0, 0.4), ylim=(0, 15))
 plot!()
 end
+savefig(plotsdir("dextran_Rp.svg"))
+savefig(plotsdir("dextran_Rp.pdf"))
 
 
 
@@ -234,7 +236,8 @@ ns_SEM = Table(map(cases_both, fit_mc.separate, fit_mc_sem.separate) do case, fi
     C_sem = fitsem.C
     C_fit = fit_mc.shared.C
     # @info "check" N S sum(case.Df.f)
-    return (;N_sem,N_mod, N_fit, S_sem, S_mod, S_fit, C_sem, C_fit)
+    # return (;N_sem,N_mod, N_fit, S_sem, S_mod, S_fit, C_sem, C_fit)
+    return (;N_sem, N_fit, S_sem, S_fit, C_sem, C_fit)
 end)
 
 @df ns_SEM scatter(:N_sem, :S_sem, scale=:log10)
