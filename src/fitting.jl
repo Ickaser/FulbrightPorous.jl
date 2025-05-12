@@ -115,7 +115,7 @@ function gen_sol_mc_arb(fitprmlog, tr, po; verbose=false, saveat=[])
         return NaN
     end
     prob = ODEProblem(new_params; tspan=(0.0, 1000.0))
-    sol = solve(prob, Rodas3(); saveat=saveat)
+    sol = solve(prob, odealg_chunk4; saveat=saveat)
     return sol
 end
 function gen_sol_mc_arb(fitprmlog, tr, po, fitdat; verbose=false)
@@ -193,7 +193,8 @@ function objn_mc(fitprmlog, tpf; tweight=0, verbose=false)
                 return rtype(NaN)
             end
             if sol.retcode != ReturnCode.Terminated
-                @warn "unfinished drying" sol[1,end] fitprmlog 
+                hf = length(sol)>0 ? sol[begin,end] : sol.prob.p.hf0
+                @warn "unfinished drying" hf fitprmlog 
             end
         end
         objs = map(sols, fitdats) do sol, fitdat

@@ -20,9 +20,12 @@ import LyoPronto: ODEProblem
 @reexport using DataInterpolations
 @reexport using UnitfulLatexify, Latexify
 @reexport using SavitzkyGolay
+using ADTypes: AutoForwardDiff
 using DocStringExtensions
 
 
+export odealg_chunk4
+const odealg_chunk4 = Rodas4(autodiff=AutoForwardDiff(chunksize=4))
 
 include("pikal_microcollapse.jl")
 include("kinetic_models.jl")
