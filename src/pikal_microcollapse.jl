@@ -67,14 +67,7 @@ function lyo_mc_dae!(du, u, params, t, rp_ret = Val(false))
     return 
 end
 
-const lyo_mc_mm = [1.0 0.0 0.0 0.0; 
-                   0.0 0.0 0.0 0.0; 
-                   0.0 0.0 1.0 0.0;
-                   0.0 0.0 0.0 1.0]
-# lyo_mc_mm2 = [1.0 0.0 0.0 0.0; 
-#                    0.0 0.0 0.0 0.0; 
-#                    0.0 0.0 1.0 0.0;
-#                    0.0 0.0 0.0 1.0]
+const lyo_mc_mm = Diagonal([1.0, 0, 1, 1])
 
 @doc raw"""
     lyo_mc_dae_f = ODEFunction(lyo_mc_dae!, mass_matrix=lyo_mc_mm)

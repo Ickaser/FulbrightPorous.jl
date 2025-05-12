@@ -22,6 +22,7 @@ import LyoPronto: ODEProblem
 @reexport using SavitzkyGolay
 using ADTypes: AutoForwardDiff
 using DocStringExtensions
+using LinearAlgebra: Diagonal
 
 
 export odealg_chunk4
