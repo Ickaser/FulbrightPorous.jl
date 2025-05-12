@@ -27,7 +27,7 @@ public calc_moms_NS
     mean = μ1 ./ μ0
     var = μ2 ./ μ0 .- mean.^2
     Rp = map(sol.t, sol.u) do t,u
-        lyo_mc_dae!(fill(0.0, 4), u, sol.prob.p, t) |> u"cm^2*Torr*hr/g"
+        lyo_mc_dae!(fill(0.0, 4), u, sol.prob.p, t, Val(true)) |> u"cm^2*Torr*hr/g"
     end
     seriestype --> :samplemarkers
     layout --> @layout [[a ; b; c;] d]
@@ -85,7 +85,7 @@ end
     hf = sol[1,:]*u"cm"
     hd = (po.hf0 .- hf) .|> u"cm"
     Rp = map(sol.t, sol.u) do ti,ui
-        lyo_mc_dae!(fill(0.0, 4), ui, sol.prob.p, ti, Val{true}) |> u"m/s"
+        lyo_mc_dae!(fill(0.0, 4), ui, sol.prob.p, ti, Val(true)) |> u"m/s"
     end
     @series begin
         ylabel --> "Rp"
@@ -102,7 +102,7 @@ function calc_l(dat, hf0)
 end
 function calc_lRp(sol)
     l = (sol[1,1] .- sol[1,:])*u"cm"
-    Rp_mc = [FulbrightPores.lyo_mc_dae!(fill(0.0, 4), u, sol.prob.p, t) for (u,t) in zip(sol.u, sol.t)]
+    Rp_mc = [FulbrightPores.lyo_mc_dae!(fill(0.0, 4), u, sol.prob.p, t, Val(true)) for (u,t) in zip(sol.u, sol.t)]
     return l, Rp_mc
 end
 

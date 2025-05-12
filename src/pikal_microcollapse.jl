@@ -10,7 +10,7 @@ export R, ΔHsub, Mw, η
 """
     $(SIGNATURES)
 """
-function lyo_mc_dae!(du, u, params, t, rp_ret = Val{false})
+function lyo_mc_dae!(du, u, params, t, rp_ret = Val(false))
 
     (; hf0, csolid, ρsolution,
     Kshf, Av, Ap,
@@ -26,7 +26,11 @@ function lyo_mc_dae!(du, u, params, t, rp_ret = Val{false})
     # exit hatch for bad parameter guesses
     if Tf < 0u"K"
         du .= NaN
-        return NaN*u"m/s"
+        if rp_ret isa Val{true}
+            return NaN*u"m/s"
+        else
+            return
+        end
     end
 
     k = k_f(Tf)
@@ -57,11 +61,10 @@ function lyo_mc_dae!(du, u, params, t, rp_ret = Val{false})
     du[3] = ustrip(u"hr^-1", dμ0_dt)
     du[4] = ustrip(u"mm^6/hr", dμ2_dt)
 
-    if rp_ret == Val{true}
+    if rp_ret isa Val{true}
         return Rsp
-    else
-        return nothing
     end
+    return 
 end
 
 const lyo_mc_mm = [1.0 0.0 0.0 0.0; 
