@@ -143,8 +143,10 @@ end
 @userplot KineticPlot
 @recipe function f(kp::KineticPlot; T = range(230, 250, length=101)*u"K")
     prm = kp.args[1]
-    if prm isa ParamObjMC
+    if prm isa ParamObjMC 
         kf = prm.k_f
+    elseif prm isa NamedTuple
+        kf = k_f_nt(prm.k_f)
     elseif prm isa ODESolution
         kf = prm.prob.p.k_f
     elseif prm isa InterpK || prm isa Sigmoid_k || prm isa MYEGA_k
