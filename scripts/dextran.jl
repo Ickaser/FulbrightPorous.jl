@@ -60,7 +60,7 @@ end
 
 cases = Table(data, (;t_end, csolid))
 
-pdends = [13u"hr", 12.5u"hr", 14u"hr", 14u"hr"]
+pdends = [13u"hr", 10.5u"hr", 14u"hr", 13.8u"hr"]
 cases_pdfit = Table(map(cases, pdends) do case, pdend
     (; tT, t_end) = case
     pdfit = @df filter(x->x.t<pdend, tT) PrimaryDryFit(:t .- :t[1], :T, t_end .- :t[1])
@@ -166,27 +166,34 @@ trans_sigma = as(merge(porous_nt, (;k_f=as(sigma_nt))))
 remap_vars(fitprm) = vcat(repeat(fitprm[1:2], 4), fitprm[3:end])
 trans_nm = as((separate=as(Vector, as((N=NTV, S=STV)), 4),
                 shared=as((C=CTV, Rs=RsTV, k_f=as(myega_nt))),))
-# trans_nm_sem = as((C=CTV, Rs=RsTV, k_f=as(myega_nt)))
-trans_nm_sem = as((separate=as(Vector, as((C=CTV,)), 4),
-                shared=as((Rs=RsTV, k_f=as(myega_nt))),))
+# trans_ns_sem = as((C=CTV, Rs=RsTV, k_f=as(sigma_nt)))
+trans_ns_sem = as((separate=as(Vector, as((C=CTV,)), 4),
+                shared=as((Rs=RsTV, k_f=as(sigma_nt))),))
 trans_ns = as((separate=as(Vector, as((N=NTV, S=STV)), 4),
                 shared=as((C=CTV, Rs=RsTV, k_f=as(sigma_nt))),))
 
 
-objnf_mc = OptimizationFunction((x,y)->objn_mc(x,y,tweight=1e-1), AutoForwardDiff())
-@time opt1234myega = solve(OP(objnf_mc, zeros(13), (trans_nm, cases_Rp.pomc, cases_Rp.pdfit)), optalg)
+function badNS(nt) 
+    if hasproperty(nt, :N) && hasproperty(nt, :S)
+        return (nt.N(0) < 1/nt.S(0))
+    end
+    error("Unhandled nt in badNS")
+end
+objnf_mc = OptimizationFunction((x,y)->objn_pd(x,y,tweight=1e-1, badprms=badNS), AutoForwardDiff())
+
+@time opt1234myega = solve(OP(objnf_mc, zeros(14), (trans_ns, cases_Rp.pomc, cases_Rp.pdfit)), optalg)
 
 # p0_sem = vcat(repeat([-2.5], 4), zeros(4))
-p0_sem = zeros(8)
+p0_sem = zeros(9)
 blankplot_hrC()
-modconvtplot!(LyoPronto.gen_nsol_pd(p0_sem, trans_nm_sem, cases_Rp.pomc, cases_Rp.pdfit)..., c=[1 2 3 4])
+modconvtplot!(LyoPronto.gen_nsol_pd(p0_sem, trans_ns_sem, cases_Rp.pomc, cases_Rp.pdfit)..., c=[1 2 3 4])
 
-@time opt1234myegasem = solve(OP(objnf_mc, p0_sem, (trans_nm_sem, cases_Rp.pomc, cases_Rp.pdfit)), optalg, show_trace=true)
+@time opt1234myegasem = solve(OP(objnf_pd, p0_sem, (trans_ns_sem, cases_Rp.pomc, cases_Rp.pdfit)), optalg, show_trace=true)
 
-fit_mc = transform(trans_nm, opt1234myega.u)
-fit_mc_sem = transform(trans_nm_sem, opt1234myegasem.u)
-# all_pomc = [setproperties(pomc, merge(sep, fit_mc.shared)) for (pomc, sep) in zip(cases_Rp.pomc, fit_mc.separate)]
-all_pomc = [setproperties(pomc, merge(sep, fit_mc_sem.shared)) for (pomc, sep) in zip(cases_Rp.pomc, fit_mc_sem.separate)];
+fit_mc = transform(trans_ns, opt1234myega.u)
+fit_mc_sem = transform(trans_ns_sem, opt1234myegasem.u)
+all_pomc = [setproperties(pomc, merge(sep, fit_mc.shared)) for (pomc, sep) in zip(cases_Rp.pomc, fit_mc.separate)]
+# all_pomc = [setproperties(pomc, merge(sep, fit_mc_sem.shared)) for (pomc, sep) in zip(cases_Rp.pomc, fit_mc_sem.separate)];
 # all_pomc = [setproperties(pomc, fit_mc_sem) for pomc in cases_Rp.pomc];
 
 sols_m = [solve(ODEProblem(pomc), Rodas3()) for pomc in all_pomc];
@@ -226,26 +233,31 @@ savefig(plotsdir("dextran_Rp.pdf"))
 
 
 ns_SEM = Table(map(cases_both, fit_mc.separate, fit_mc_sem.separate) do case, fit, fitsem
-    μ1 = π/6*sum(case.Df.f .* case.Df.D.^3)/sum(case.Df.f)
-    N_sem = 1/μ1 |> u"mL^-1"
-    S_sem = π^2/36 * sum(case.Df.f .* case.Df.D.^6)/sum(case.Df.f) / Vfill |> u"mL"
-    N_mod = case.sol_mc[3,end] / Vfill
-    S_mod = case.sol_mc[4,end]*u"mm"^6 / Vfill |> u"mL"
+    # μ1 = π/6*sum(case.Df.f .* case.Df.D.^3)/sum(case.Df.f)
+    # N_sem = 1/μ1 |> u"mL^-1"
+    # S_sem = π^2/36 * sum(case.Df.f .* case.Df.D.^6)/sum(case.Df.f) / Vfill |> u"mL"
+    N_sem = case.pomc.N(0) |> u"mL^-1"
+    S_sem = case.pomc.S(0) |> u"mL"
+    C_sem = fitsem.C
+
+    # N_mod = case.sol_mc[3,end] / Vfill
+    # S_mod = case.sol_mc[4,end]*u"mm"^6 / Vfill |> u"mL"
     N_fit = fit.N(0) |> u"mL^-1"
     S_fit = fit.S(0) |> u"mL"
-    C_sem = fitsem.C
     C_fit = fit_mc.shared.C
     # @info "check" N S sum(case.Df.f)
     # return (;N_sem,N_mod, N_fit, S_sem, S_mod, S_fit, C_sem, C_fit)
     return (;N_sem, N_fit, S_sem, S_fit, C_sem, C_fit)
 end)
 
-@df ns_SEM scatter(:N_sem, :S_sem, scale=:log10)
-plot!([10^6.4, 10^7.4], [1e-13, 1e-15], label="slope -1")
-@df ns_SEM scatter(:N_sem, :C_sem, scale=:log10)
-plot!([10^6.4, 10^7.4], [10^-0.5, 10^-1.5], label="slope -1")
+# @df ns_SEM scatter(:N_sem, :S_sem, scale=:log10)
+@df ns_SEM scatter((:N_sem)', (:S_sem)', label=permutedims(cases_both.name), scale=:log10)
+plot!([10^6.4, 10^7.4], [1e-13, 1e-15], ls=:dash, label="slope -1", c=:gray)
+# @df ns_SEM scatter(:N_sem, :C_sem, scale=:log10)
+@df ns_SEM scatter((:N_sem)', (:C_sem)', label=permutedims(cases_both.name), scale=:log10)
+# plot!([10^6.4, 10^7.4], [10^-0.5, 10^-1.5], label="slope -1")
 @df ns_SEM scatter((:S_sem)', (:C_sem)', label=permutedims(cases_both.name), scale=:log10)
 plot!(xlabel="S", ylabel="C")
-plot!([1e-15, 1e-13], [10^-1.5, 10^-0.5], label="slope 2")
+# plot!([1e-15, 1e-13], [10^-1.5, 10^-0.5], label="slope 2")
 
 @df ns_SEM scatter((:S_fit)', (:N_fit)', label=permutedims(cases_both.name), scale=:log10)
