@@ -1,5 +1,6 @@
 export simtra_rename
 export microfd_fulbright_columnrename, microfd_SURF_columnrename
+export overnightfix
  
 repmissing(x) = ismissing(x) ? NaN : x
 function simtra_rename(row)
@@ -58,7 +59,7 @@ function microfd_fulbright_columnrename(row, t0 = nothing)
         t = nothing
     end
     nt = (tstamp = row.CycleTime,
-          t = t,
+          t = float(t),
           phase = row.Phase,
           step = row.Step,
           pch_sp = row.VacSetPT*u"mTorr",
@@ -66,13 +67,22 @@ function microfd_fulbright_columnrename(row, t0 = nothing)
           pch_cm = row.VacCPM*u"mTorr",
           Tsh_sp = row.ShelfSetPT*u"°C",
           Tsh_i = row.ShelfInlet*u"°C",
-          T1 = row.TP1*u"°C",
-          T2 = row.TP2*u"°C",
-          T3 = row.TP3*u"°C", 
-          T4 = row.TP4*u"°C", 
+          # THermocouple calibration checked by comparing temperatures just after ice nucleation.
+          T1 = (row.TP1+1)*u"°C", # Fudge for thermocouple calibration
+          T2 = (row.TP2  )*u"°C",
+          T3 = (row.TP3+1)*u"°C", # Fudge for thermocouple calibration
+          T4 = (row.TP4  )*u"°C", 
           # if a column has names with whitespace 
           # or special characters in it, do this:
           # mfr = row.var"Mass Flow Rate"
     )
     return nt
+end
+
+function overnightfix(data)
+    for i in eachindex(data)[2:end]
+        if data.t[i] < data.t[i-1]
+            data.t[i:end] .+= 24u"hr"
+        end
+    end
 end

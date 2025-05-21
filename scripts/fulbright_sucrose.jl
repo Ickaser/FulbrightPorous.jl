@@ -8,18 +8,27 @@ using UnitfulLatexify
 begin
 Kv = load(datadir("exp_pro", "gravimetric_kv.jld2"))["Kv"]
 
+MWsuc = 342.3u"g/mol"
+MWwat = 18.01u"g/mol"
+function freezepoint(csolid)
+    xsol = csolid/MWsuc / (csolid/MWsuc + 1u"g/mL"/MWwat)
+    ΔHm = 6.01u"kJ/mol"
+    Tm_0 = 273.15u"K"
+    ΔT = xsol*u"R"*Tm_0^2/ΔHm
+    return Tm_0 - ΔT
+end
+
+freezepoint(0.05u"g/mL")
+
 dat1raw = CSV.read(datadir("exp_raw", "Fulbright2025", "2025-01-20-10_MFD_ISW.csv"), Table; header=8)
 dat1pd = filter(x->x.Phase==4, dat1raw)
 dat1 = map(x->microfd_fulbright_columnrename(x, dat1pd.CycleTime[1]), dat1pd)
-for i in eachindex(dat1)[2:end]
-    if dat1.t[i] < dat1.t[i-1]
-        dat1.t[i:end] .+= 24u"hr"
-    end
-end
+overnightfix(dat1)
+
 # plot(dat1raw.Phase)
 
-pch1_pir_der2 = savitzky_golay(dat1.pch_pir, 91, 3, deriv=2, rate=1/u"minute").y
-t_end1 = dat1.t[argmax(pch1_pir_der2[1u"hr" .< dat1.t .< 50u"hr" ])] + 1u"hr"
+# t_end1 = identify_pd_end_2der(dat1, 91, 1u"hr", 50u"hr")
+t_end1 = identify_pd_end_onoff(dat1, 91, 1u"hr", 50u"hr")
 
 pch1 = RampedVariable(100.0u"mTorr")
 # @df dat1 plot(:t, :pch_cm, ylim=(0, 200))
@@ -31,10 +40,10 @@ Tsh1 = RampedVariable(uconvert.(u"K", [-47.0, -20]u"°C"), 0.5u"K/minute")
 # @df dat1 plot(:t, :Tsh_i, xlim=(0, 2))
 # plot!(Tsh1)
 
-@df dat1 exptfplot(:t, :T1, :T2, :T3, :T4)
+# @df dat1 exptfplot(:t, :T1, :T2, :T3, :T4)
 
-fitdat1 = @df dat1 PrimaryDryFit(:t, (
-    :T1[:t .< 5u"hr"],
+fitdat1 = @df dat1 PrimaryDryFit(:t, 
+    (:T1[:t .< 5u"hr"],
     :T2[:t .< 5u"hr"],
     :T3[:t .< 5u"hr"],
     :T4[:t .< 5.9u"hr"],
@@ -46,14 +55,10 @@ fitdat1 = @df dat1 PrimaryDryFit(:t, (
 dat2raw = CSV.read(datadir("exp_raw", "Fulbright2025", "2025-01-28-10_MFD_ISW.csv"), Table; header=8)
 dat2pd = filter(x->x.Phase==4, dat2raw)
 dat2 = map(x->microfd_fulbright_columnrename(x, dat2pd.CycleTime[1]), dat2pd)
-for i in eachindex(dat2)[2:end]
-    if dat2.t[i] < dat2.t[i-1]
-        dat2.t[i:end] .+= 24u"hr"
-    end
-end
+overnightfix(dat2)
 
-pch2_pir_der2 = savitzky_golay(dat2.pch_pir, 91, 3, deriv=2, rate=1/u"minute").y
-t_end2 = dat2.t[argmax(pch2_pir_der2[1u"hr" .< dat2.t .< 50u"hr" ])] + 1u"hr"
+# t_end2 = identify_pd_end_2der(dat2, 91, 1u"hr", 50u"hr")
+t_end2 = identify_pd_end_onoff(dat2, 91, 1u"hr", 50u"hr")
 
 pch2 = RampedVariable(100.0u"mTorr")
 # @df dat2 plot(:t, :pch_cm, ylim=(0, 200))
@@ -80,14 +85,10 @@ fitdat2 = @df dat2 PrimaryDryFit(:t, (
 dat3raw = CSV.read(datadir("exp_raw", "Fulbright2025", "2025-02-03-10_MFD_ISW.csv"), Table; header=8)
 dat3pd = filter(x->x.Phase==4, dat3raw)
 dat3 = map(x->microfd_fulbright_columnrename(x, dat3pd.CycleTime[1]), dat3pd)
-for i in eachindex(dat3)[2:end]
-    if dat3.t[i] < dat3.t[i-1]
-        dat3.t[i:end] .+= 24u"hr"
-    end
-end
+overnightfix(dat3)
 
-pch3_pir_der2 = savitzky_golay(dat3.pch_pir, 91, 3, deriv=2, rate=1/u"minute").y
-t_end3 = dat3.t[argmax(pch3_pir_der2[1u"hr" .< dat3.t .< 50u"hr" ])] + 1u"hr"
+# t_end3 = identify_pd_end_2der(dat3, 91, 1u"hr", 50u"hr")
+t_end3 = identify_pd_end_onoff(dat3, 91, 1u"hr", 50u"hr")
 
 pch3 = RampedVariable(100.0u"mTorr")
 # @df dat3 plot(:t, :pch_cm, ylim=(0, 200))
@@ -117,14 +118,10 @@ fitdat3 = @df dat3 PrimaryDryFit(:t, (
 dat4raw = CSV.read(datadir("exp_raw", "Fulbright2025", "2025-02-25-10_MFD_IW.csv"), Table; header=8)
 dat4pd = filter(x->x.Phase==4, dat4raw)
 dat4 = map(x->microfd_fulbright_columnrename(x, dat4pd.CycleTime[1]), dat4pd)
-for i in eachindex(dat4)[2:end]
-    if dat4.t[i] < dat4.t[i-1]
-        dat4.t[i:end] .+= 24u"hr"
-    end
-end
+overnightfix(dat4)
 
-pch4_pir_der2 = savitzky_golay(dat4.pch_pir, 91, 3, deriv=2, rate=1/u"minute").y
-t_end4 = dat4.t[argmax(pch4_pir_der2[1u"hr" .< dat4.t .< 50u"hr" ])] + 1u"hr"
+# t_end4 = identify_pd_end_2der(dat4, 91, 1u"hr", 50u"hr")
+t_end4 = identify_pd_end_onoff(dat4, 91, 1u"hr", 50u"hr")
 
 pch4 = RampedVariable(100.0u"mTorr")
 # @df dat4 plot(:t, :pch_cm, ylim=(0, 200))
@@ -151,14 +148,10 @@ plot(fitdat4)
 dat5raw = CSV.read(datadir("exp_raw", "Fulbright2025", "2025-02-27-10_MFD_IW.csv"), Table; header=8)
 dat5pd = filter(x->x.Phase==4, dat5raw)
 dat5 = map(x->microfd_fulbright_columnrename(x, dat5pd.CycleTime[1]), dat5pd)
-for i in eachindex(dat5)[2:end]
-    if dat5.t[i] < dat5.t[i-1]
-        dat5.t[i:end] .+= 24u"hr"
-    end
-end
+overnightfix(dat5)
 
-pch5_pir_der2 = savitzky_golay(dat5.pch_pir, 91, 3, deriv=2, rate=1/u"minute").y
-t_end5 = dat5.t[argmax(pch5_pir_der2[1u"hr" .< dat5.t .< 50u"hr" ])] + 1u"hr"
+# t_end5 = identify_pd_end_2der(dat5, 91, 1u"hr", 50u"hr")
+t_end5 = identify_pd_end_onoff(dat5, 91, 1u"hr", 50u"hr")
 
 pch5 = RampedVariable(100.0u"mTorr")
 # @df dat5 plot(:t, :pch_cm, ylim=(0, 200))
@@ -173,14 +166,76 @@ Tsh5 = RampedVariable(uconvert.(u"K", [-47.0, -30.0]u"°C"), 0.5u"K/minute")
 # @df dat5 exptfplot(:t, :T1, :T2, :T3, :T4)
 
 fitdat5 = @df dat5 PrimaryDryFit(:t, (
-    :T1[:t .< 11u"hr"],
-    :T2[:t .< 14u"hr"],
-    :T3[:t .< 13u"hr"],
-    :T4[:t .< 10u"hr"],
+    :T1[:t .< 11u"hr"] .-2u"K",
+    :T2[:t .< 14u"hr"] .-2u"K",
+    :T3[:t .< 13u"hr"] .-2u"K",
+    :T4[:t .< 10u"hr"] .-2u"K",
     ),
     t_end5
 )
 # plot(fitdat5)
+
+dat6raw = CSV.read(datadir("exp_raw", "Fulbright2025", "2025-05-14-10_MFD_ISW.csv"), Table; header=8)
+dat6pd = filter(x->x.Phase==4, dat6raw)
+dat6 = map(x->microfd_fulbright_columnrename(x, dat6pd.CycleTime[1]), dat6pd)
+overnightfix(dat6)
+
+# t_end5 = identify_pd_end_2der(dat5, 91, 1u"hr", 50u"hr")
+t_end6 = identify_pd_end_onoff(dat6, 91, 1u"hr", 50u"hr")
+
+pch6 = RampedVariable(100.0u"mTorr")
+# @df dat6 plot(:t, :pch_cm, ylim=(0, 200))
+# @df dat6 plot!(:t, :pch_pir, ylim=(0, 200))
+# plot!(pch6)
+# tendplot!(t_end6)
+
+Tsh6 = RampedVariable(uconvert.(u"K", [-45.0, -0]u"°C"), 0.5u"K/minute")
+# @df dat6 plot(:t, :Tsh_i, xlim=(0, 2))
+# plot!(Tsh6)
+
+@df dat6 exptfplot(:t, :T1, :T2, :T3, :T4)
+
+fitdat6 = @df dat6 PrimaryDryFit(:t, (
+    :T1[:t .< 3u"hr"],
+    :T2[:t .< 3u"hr"],
+    :T3[:t .< 2.5u"hr"],
+    :T4[:t .< 3u"hr"],
+    ),
+    t_end6
+)
+# plot(fitdat6)
+
+dat7raw = CSV.read(datadir("exp_raw", "Fulbright2025", "2025-05-20-10_MFD_ISW.csv"), Table; header=8)
+dat7pd = filter(x->x.Phase==4, dat7raw)
+dat7 = map(x->microfd_fulbright_columnrename(x, dat7pd.CycleTime[1]), dat7pd)
+overnightfix(dat7)
+
+# t_end5 = identify_pd_end_2der(dat5, 91, 1u"hr", 50u"hr")
+t_end7 = identify_pd_end_onoff(dat7, 91, 1u"hr", 50u"hr")
+
+pch7 = RampedVariable(100.0u"mTorr")
+# @df dat7 plot(:t, :pch_cm, ylim=(0, 200))
+# @df dat7 plot!(:t, :pch_pir, ylim=(0, 200))
+# plot!(pch7)
+# tendplot!(t_end7)
+
+Tsh7 = RampedVariable(uconvert.(u"K", [-46.0, -20]u"°C"), 0.5u"K/minute")
+# @df dat7 plot(:t, :Tsh_i, xlim=(0, 2))
+# plot!(Tsh7)
+
+# @df dat7 exptfplot(:t, :T1, :T2, :T3, :T4)
+@df dat7raw plot([:TP1, :TP2, :TP3, :TP4], xlim=(0, 120), ylim=(-5, 0))
+# # @df dat7raw plot(:TP1 .- :TP2)
+
+fitdat7 = @df dat7 PrimaryDryFit(:t, (
+    :T1[:t .< 6.5u"hr"],
+    :T2[:t .< 7.5u"hr"],
+    :T3[:t .< 9u"hr"],
+    :T4[:t .< 8u"hr"],
+    ),
+    t_end7
+)
+plot(fitdat7)
 
 end
 
@@ -188,18 +243,20 @@ blankplot_hrC()
 plot!(fitdat1, c=1)
 plot!(fitdat2, c=2)
 plot!(fitdat3, c=3)
-# blankplot_hrC()
+# plot!(fitdat6, c=6)
+plot!(fitdat7, c=7)
+blankplot_hrC()
 plot!(fitdat4, c=4)
 plot!(fitdat5, c=5)
-plot!(xlim=(0, 10), ylim=(-36,-30))
+# plot!(xlim=(0, 10), ylim=(-36,-30))
 
 # ------------- Check Pirani
 
-@df dat1raw plot(:VacPirani, ylim=(90, 200))
-@df dat2raw plot!(:VacPirani, )
-@df dat3raw plot!(:VacPirani, )
-@df dat4raw plot!(:VacPirani, )
-@df dat5raw plot!(:VacPirani, ylim=(90, 180))
+# @df dat1raw plot(:t, :VacPirani, ylim=(90, 200))
+# @df dat2raw plot!(:VacPirani, )
+# @df dat3raw plot!(:VacPirani, )
+# @df dat4raw plot!(:VacPirani, )
+# @df dat5raw plot!(:VacPirani, ylim=(90, 180))
 
 
 
@@ -245,8 +302,10 @@ pomc1 = ParamObjMC([
 
 pop2 = @set pop1.Tsh = Tsh2
 pop3 = @set pop1.Tsh = Tsh3
+pop7 = @set pop1.Tsh = Tsh7
 pomc2 = @set pomc1.Tsh = Tsh2
 pomc3 = @set pomc1.Tsh = Tsh3
+pomc7 = @set pomc1.Tsh = Tsh7
 
 pop4 = @set pop1.csolid = 0.1u"g/mL"
 pop5 = @set pop4.Tsh = Tsh5
@@ -260,20 +319,23 @@ cases = Table([ (name="1", pop=pop1, pomc=pomc1, fitdat=fitdat1, dat=dat1),
                 (name="3", pop=pop3, pomc=pomc3, fitdat=fitdat3, dat=dat3),
                 (name="4", pop=pop4, pomc=pomc4, fitdat=fitdat4, dat=dat4),
                 (name="5", pop=pop5, pomc=pomc5, fitdat=fitdat5, dat=dat5),
+                (name="7", pop=pop7, pomc=pomc7, fitdat=fitdat7, dat=dat7),
                 ])
 
 trans_Rp = Rp_transform_basic(0.8u"cm^2*Torr*hr/g", 14u"cm*Torr*hr/g", 1e0u"1/cm")
-obj_Rpf = OptimizationFunction((x,y)->obj_pd(x,y,tweight=1e-2), AutoForwardDiff(chunksize=3))
+obj_Rpf = OptimizationFunction((x,y)->obj_pd(x,y,tweight=1e-1), AutoForwardDiff(chunksize=3))
 # obj_Rpf = OptimizationFunction(obj_pd, AutoForwardDiff(chunksize=3))
 @time obj_Rpf([0.0, 1.0, 0.0], (trans_Rp, pop1, fitdat1))
 
 obj_npf = OptimizationFunction(objn_Rp, AutoForwardDiff())
 
+rp123 = @time solve(OP(obj_npf, fill(0.0, 3), (trans_Rp, cases.pop[1:3], cases.fitdat[1:3])), optalg;)
 
 
 single_Rps = map(cases) do case
     (;name, pop, fitdat, dat) = case
     u0 = (name == "5" ? [0., 2., 5.] : [0., 0., 0.] )
+    # u0 = [0.0, 0.0, 0.0]
     @time opt = solve(OP(obj_Rpf, u0, (trans_Rp, pop, fitdat)), optalg)#, g_tol=1e-6)
     Rp = RpFormFit(transform(trans_Rp, opt.u).Rp...)
     sol = gen_sol_pd(opt.u, trans_Rp, pop, fitdat)
@@ -316,9 +378,6 @@ end
 pass123 = make_mcpass([1, 2, 3])
 pass45 = make_mcpass([4, 5])
 
-# It would be desirable to enforce S > ϕ/N, 
-# and the most natural place is in copy_nt_into_struct,
-# but that seems like a confusing place to put it.
 NTV = ConstWrapTV() ∘ TVScale(2e6u"cm^-3") ∘ TVExp()
 STV = ConstWrapTV() ∘ TVScale(5e-7u"cm^3") ∘ TVExp()
 CTV = TVScale(2e-1u"m^0.5") ∘ TVExp()
@@ -337,58 +396,63 @@ sigma_nt = (k0 = TVScale(1e-12u"s^-1") ∘ TVExp(),
 trans_myega = as(merge(porous_nt, (;k_f=as(myega_nt))))
 trans_sigma = as(merge(porous_nt, (;k_f=as(sigma_nt))))
 
-objn_myega(fitprm, pf) = objn_mc(fitprm, (trans_myega, pf...), tweight=1e-2)
-objnf_myega = OptimizationFunction(objn_myega, AutoForwardDiff(chunksize=4))
-objnf_myega(rand(7), pass123)
-# lb_myega = vcat(fill(-10.0, 4), -150, fill(-5, 2))
-# ub_myega = vcat(fill(10.0, 4), 150, fill( 5, 2))
+function badNS(nt) 
+    if hasproperty(nt, :N) && hasproperty(nt, :S)
+        return (nt.N(0) < 1/nt.S(0))
+    end
+    error("Unhandled nt in badNS")
+end
+# objn_myega(fitprm, pf) = objn_mc(fitprm, (trans_myega, pf...), tweight=1e-2)
+obj_mc(fitprm, tpf) = objn_pd(fitprm, tpf; badprms=badNS, tweight=1e-2)
+objf_mc = OptimizationFunction(obj_mc, AutoForwardDiff(chunksize=4))
+objf_mc(rand(7), (trans_myega, pass123...))
 
-# objn_sigm(fitprm, pf) = objn_mc(fitprm, (pf..., k_f_sigm), tweight=1e-1, fit_scl=fit_scl)
-# objnf_sigm = OptimizationFunction(objn_sigm, AutoForwardDiff())
-objn_sigma(fitprm, pf) = objn_mc(fitprm, (trans_sigma, pf...), tweight=1e-2)
-objnf_sigma = OptimizationFunction(objn_sigma, AutoForwardDiff(chunksize=4))
-# lb_sigm = vcat(fill(-10.0, 4), fill(-30, 4))
-# ub_sigm = vcat(fill(10.0, 4), fill( 30, 4))
-# p0_sigm = vcat(fill(0.1, 4), 5, 0.1, 2, -5)
+# # objn_sigm(fitprm, pf) = objn_mc(fitprm, (pf..., k_f_sigm), tweight=1e-1, fit_scl=fit_scl)
+# # objnf_sigm = OptimizationFunction(objn_sigm, AutoForwardDiff())
+# objn_sigma(fitprm, pf) = objn_mc(fitprm, (trans_sigma, pf...), tweight=1e-2)
+# objnf_sigma = OptimizationFunction(objn_sigma, AutoForwardDiff(chunksize=4))
+# # lb_sigm = vcat(fill(-10.0, 4), fill(-30, 4))
+# # ub_sigm = vcat(fill(10.0, 4), fill( 30, 4))
+# # p0_sigm = vcat(fill(0.1, 4), 5, 0.1, 2, -5)
 
 
 p0_sigma = [3, 6, 0, 0.1, -2, 2, -1, -1]
-@time opt123sigm = solve(OP(objnf_sigma, p0_sigma, pass123), optalg, time_limit=15)
+@time opt123sigm = solve(OP(objf_mc, p0_sigma, (trans_sigma, pass123...)), optalg, time_limit=15)
 # @time opt45sigm = solve(OP(objnf_sigma, p0_sigma, pass45, lb=lb_sigm, ub=ub_sigm), optalg, maxiters=50, time_limit=15)
-@time opt45sigm = solve(OP(objnf_sigma, p0_sigma, pass45), optalg, time_limit=15)
+@time opt45sigm = solve(OP(objf_mc, p0_sigma, (trans_sigma, pass45...)), optalg, time_limit=15)
 
 # @time opt123myega = solve(OP(objnf_myega, p0_myega, pass123, lb=lb_myega, ub=ub_myega), optalg, maxiters=50, time_limit=15, show_trace=true)
 p0_myega = [3, 6, 0, 0.1, 1, 0, 0]
-@time opt123myega = solve(OP(objnf_myega, p0_myega, pass123), optalg, time_limit=15, g_tol=1e-6)
-@time opt45myega = solve(OP(objnf_myega, p0_myega, pass45), optalg, time_limit=15, g_tol=1e-6)
+@time opt123myega = solve(OP(objf_mc, p0_myega, (trans_myega, pass123...)), optalg, time_limit=15, g_tol=1e-6)
+@time opt45myega = solve(OP(objf_mc, p0_myega, (trans_myega, pass45...)), optalg, time_limit=15, g_tol=1e-6)
 
 # p0_myega = [5.0, 1, 0, 0.1, -10, 1, 1]
 # @time opt45myega = solve(OP(objnf_myega, p0_myega, pass45, lb=lb_myega, ub=ub_myega), optalg, maxiters=50, time_limit=15, show_trace=true)
 
 
 # split_fit_prms(fitprm_plus) = vcat(fitprm_plus[1:2], fitprm_plus[5:end]), vcat(fitprm_plus[3:4], fitprm_plus[5:end])
-remap_vars(fitprm) = vcat(fitprm[1:2], fitprm[1:2], fitprm[3:end])
+remap_vars(fitprm) = vcat(fitprm[1:2], fitprm[1:2], fitprm[1:2], fitprm[3:end])
 # trans_2m = as((p1=as((porous_nt[1], porous_nt[2])), p2=as(porous_nt), k_f=as(myega_nt)))
-trans_2m = as((separate=as(Vector, as((N=NTV, S=STV)), 2),
-                sep_inds=Constant([1, 1, 1, 2, 2]),
+trans_2m = as((separate=as(Vector, as((N=NTV, S=STV)), 3),
+                sep_inds=Constant([1, 1, 1, 2, 2, 3]),
                 shared=as((C=CTV, Rs=RsTV, k_f=as(myega_nt))),))
-trans_2s = as((separate=as(Vector, as((N=NTV, S=STV)), 2),
-                sep_inds=Constant([1, 1, 1, 2, 2]),
+trans_2s = as((separate=as(Vector, as((N=NTV, S=STV)), 3),
+                sep_inds=Constant([1, 1, 1, 2, 2, 3]),
                 shared=as((C=CTV, Rs=RsTV, k_f=as(sigma_nt))),))
 # trans_2m = as((p1=as(porous_nt), p2=as(porous_nt), k_f=as(myega_nt)))
 # trans_2s = as((p1=as(porous_nt), p2=as(porous_nt), k_f=as(sigma_nt)))
-objnf_pd = OptimizationFunction((x,y)->LyoPronto.objn_pd(x,y,tweight=1e-1), AutoForwardDiff(chunksize=5))
+objf_mc_c5 = OptimizationFunction((x,y)->LyoPronto.objn_pd(x,y; badprms=badNS, tweight=1e-1), AutoForwardDiff(chunksize=6))
 
 p0_2m = remap_vars(p0_myega)
-@time opt_2m = solve(OP(objnf_pd, p0_2m, (trans_2m, cases_Rps.pomc, cases_Rps.fitdat)), optalg, time_limit=15)
+@time opt_2m = solve(OP(objf_mc_c5, p0_2m, (trans_2m, cases_Rps.pomc, cases_Rps.fitdat)), optalg, time_limit=15)
 
 p0_2s = remap_vars(p0_sigma)
-@time opt_2s = solve(OP(objnf_pd, p0_2s, (trans_2s, cases_Rps.pomc, cases_Rps.fitdat)), optalg, time_limit=15)
+@time opt_2s = solve(OP(objf_mc_c5, p0_2s, (trans_2s, cases_Rps.pomc, cases_Rps.fitdat)), optalg, time_limit=15)
 
 
 fits = Table((opt=[opt123sigm, opt123myega, opt45sigm, opt45myega, opt_2m, opt_2s], 
               tr=[trans_sigma, trans_myega, trans_sigma, trans_myega, trans_2m, trans_2s],
-              cases=[(1,2,3), (1,2,3), (4,5), (4,5), (1,2,3,4,5), (1,2,3,4,5)],))
+              cases=[(1,2,3), (1,2,3), (4,5), (4,5), (1,2,3,4,5, 6), (1,2,3,4,5, 6)],))
 fits = Table(fits, (kf= map(fits) do x
     fitprm = transform(x.tr, x.opt.u)
     if hasproperty(fitprm, :shared)
@@ -415,32 +479,58 @@ end
 # new_sols = vcat(gen_pbmsols(opt123myega, trans_myega)[1:3], gen_pbmsols(opt45myega, trans_myega)[4:5])
 # new_sols = vcat(gen_pbmsols(opt123sigm, trans_sigma)[1:3], gen_pbmsols(opt45sigm, trans_sigma)[4:5])
 # new_sols = 
-new_sols = gen_pbmsols(opt_2m, trans_2m)
-# new_sols = gen_pbmsols(opt_2s, trans_2s)
+# new_sols = gen_pbmsols(opt_2m, trans_2m)
+new_sols = gen_pbmsols(opt_2s, trans_2s)
 # new_sols = gen_pbmsols(opt_2s, k_f_sigm)
 cases_both = Table(cases, single_Rps, new_sols)
 
 begin
 pls_T1 = map(cases_both[1:3]) do case
+    pl = blankplot_hrC(legend=:bottomright, title="$(case.name), Tsh=$(case.pop.Tsh(Inf*u"s")|>u"°C")")
+    plot!(case.fitdat)
+    modconvtplot!(case.sol_mc, c=2, label="PBM: 1&2&3")
+    modconvtplot!(case.sol_p, c=:green, linealpha=0.7, label="3PP $(case.name)")
+    modconvtplot!(gen_sol_pd(rp123.u, trans_Rp, case.pop), c=:purple, label="3PP 1&2&3")
+    plot!(xlim=(0, 16), ylim=(-40, -30), left_margin=20Plots.px)
+    case.name != "1" && plot!(ylabel="", yformatter=:none, left_margin=0Plots.px)
+    return pl
+end
+# plot!(pls_T1[1], ylabel="Temperature [°C]")
+plot(pls_T1..., layout=(1,3), size=(1000, 400), bottom_margin=20Plots.px)
+end
+savefig(plotsdir("fulbright_sucrose5_T.svg"))
+savefig(plotsdir("fulbright_sucrose5_T.pdf"))
+
+begin
+pls_T1 = map(cases_both[1:3]) do case
     pl = blankplot_hrC(legend=:outerright, title=case.name)
     plot!(case.fitdat)
-    modconvtplot!(case.sol_mc, case.sol_p, c=[2 :green], linealpha=0.7, markeralpha=0, labels=["PBM: M 1&2&3" "3PP $(case.name)"])
+    modconvtplot!(case.sol_mc, case.sol_p, c=[2 :green], linealpha=0.7, markeralpha=0, labels=["PBM: S 1&2&3" "3PP $(case.name)"])
     plot!(xlim=(0, 16), ylim=(-40, -30))
     return pl
 end
 pls_T2 = map(cases_both[4:5]) do case
     pl = blankplot_hrC(legend=:outerright, title=case.name)
     plot!(case.fitdat)
-    modconvtplot!(case.sol_mc, case.sol_p, c=[2 :green], linealpha=0.7, markeralpha=0, labels=["PBM: M 4&5" "3PP $(case.name)"])
+    modconvtplot!(case.sol_mc, case.sol_p, c=[2 :green], linealpha=0.7, markeralpha=0, labels=["PBM: S 4&5" "3PP $(case.name)"])
+    # plot!(xlim=(0, 65), ylim=(-40, -30))
+    plot!(ylim=(-40,-30))
+    return pl
+end
+pl_T3 = map(cases_both[6:6]) do case
+    pl = blankplot_hrC(legend=:outerright, title=case.name)
+    plot!(case.fitdat)
+    modconvtplot!(case.sol_mc, case.sol_p, c=[2 :green], linealpha=0.7, markeralpha=0, labels=["PBM: S 7" "3PP $(case.name)"])
     # plot!(xlim=(0, 65), ylim=(-40, -30))
     plot!(ylim=(-40,-30))
     return pl
 end
 # plot!(pls_T[5], legend=:bottomright)
-plot(pls_T1..., pls_T2..., layout=(5,1), size=(500, 1000))
+plot(pls_T1..., pls_T2..., pl_T3..., layout=(6,1), size=(500, 1000))
 end
 savefig(plotsdir("fulbright_sucrose_T.svg"))
 savefig(plotsdir("fulbright_sucrose_T.pdf"))
+
 
 begin
 plot(u"°C", u"s^-1", xlabel="Temperature", ylabel="Rate", yscale=:log10, unitformat=:square)
@@ -453,18 +543,20 @@ end
 # plot!(Tran, FulbrightPores.k_f_nt(transform(trans_sigma, p0_sigma).k_f).(Tran), label="Sigmoid, guess")
 # plot!(Tran, FulbrightPores.k_f_nt(transform(as(myega_nt), zeros(3))).(Tran), label="MYEGA, def")
 # plot!(Tran, FulbrightPores.k_f_nt(transform(as(sigma_nt), zeros(4))).(Tran), label="Sigmoid, def")
-plot!(ylim=(1e-16, 1e-2), legend=:bottomright)
+plot!(ylim=(1e-20, 1e10), legend=:bottomright)
 plot!()
 end
 
 l = range(0u"cm", hf0, length=100)
 begin
-poreevolplot(cases_both[1].sol_mc, label="PBM 1, 1&2&3", marker=:o, kind=:stats)
+poreevolplot(cases_both[1].sol_mc, label="PBM 1, 1&2&3", marker=:o, kind=:stats, yscale=[:log10 :log10 :log10 :identity])
+plot!(subplot=1, ylims=(1e4, 1e7))
 poreevolplot!(cases_both[2].sol_mc, label="PBM 2, 1&2&3", marker=:square, kind=:stats)
 poreevolplot!(cases_both[3].sol_mc, label="PBM 3, 1&2&3", marker=:d, kind=:stats)
-poreevolplot!(cases_both[4].sol_mc, label="PBM 4, 4&5", marker=:square, kind=:stats)
-poreevolplot!(cases_both[5].sol_mc, label="PBM 5, 4&5", marker=:d, kind=:stats)
-for case in cases_both[1:3]
+# poreevolplot!(cases_both[4].sol_mc, label="PBM 4, 4&5", marker=:square, kind=:stats)
+# poreevolplot!(cases_both[5].sol_mc, label="PBM 5, 4&5", marker=:d, kind=:stats)
+poreevolplot!(cases_both[6].sol_mc, label="PBM 7, 7", marker=:d, kind=:stats)
+for case in cases_both[[1,6]]
     # plot!(subplot=4, l, case.Rp.(l), ls=:dash, c=parse(Int, case.name), label="3PP $(case.name)")
     for i in 1:4
         hdT, RpT = case.hRps[i]
@@ -473,10 +565,11 @@ for case in cases_both[1:3]
 end
 plot!()
 end
+savefig(plotsdir("fulbright_suc_moments.svg"))
 
 begin
 blankplot_lRp()
-for case in cases_both[4:5]
+for case in cases_both[[1, 6]]
     # plot!(subplot=4, l, case.Rp.(l), ls=:dash, c=parse(Int, case.name), label="3PP $(case.name)")
     mcrpplot!(case.sol_mc, c=parse(Int, case.name), label="PBM mixed-all")
     for i in 1:4
@@ -508,6 +601,8 @@ res_fit = cases_both[1].sol_mc.prob.p
 @info "Best fit params, 1&2&3:" res_fit.N res_fit.S res_fit.C res_fit.Rs res_fit.k_f
 res_fit = cases_both[4].sol_mc.prob.p
 @info "Best fit params, 4&5:" res_fit.N res_fit.S res_fit.C res_fit.Rs res_fit.k_f
+res_fit = cases_both[6].sol_mc.prob.p
+@info "Best fit params, 7:" res_fit.N res_fit.S res_fit.C res_fit.Rs res_fit.k_f
 
 function eval_about_myega(new, opt, pass)
     objn_myega(new .* opt.u, pass)

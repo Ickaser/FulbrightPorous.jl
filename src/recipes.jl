@@ -49,8 +49,9 @@ public calc_moms_NS
         legend --> :none
         xformatter -->  _->""
         if kind == :stats
-            ylabel --> "typical \npore size\n" #*", total pore volume"
-            return hd, mean
+            ylabel --> "typical \npore diameter\n" #*", total pore volume"
+            diam = @. cbrt(mean*3/4/π) |> u"μm"
+            return hd, diam
         elseif kind == :moms
             ylabel --> "μ1" 
             return hd, μ1

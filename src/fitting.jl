@@ -1,8 +1,8 @@
 export gennsol_Rp, objn_Rp
-export gen_sol_mc_arb, gennsol_mc, objn_mc
+# export gen_sol_mc_arb, gennsol_mc, objn_mc
 
 # ---------------------------------
-export identify_pd_end_2der
+export identify_pd_end_2der, identify_pd_end_onoff
 
 """
     $(SIGNATURES)
@@ -25,6 +25,31 @@ function identify_pd_end_2der(data, window_width=91, tmin=0u"hr", tmax=Inf*u"hr"
     pch_pir_der2 = savitzky_golay(data.pch_pir, window_width, 3, deriv=2).y
     t_end = data.t[argmax(pch_pir_der2[tmin .< data.t .< tmax])] + tmin
     return t_end
+end
+"""
+    $(SIGNATURES)
+
+Identify a range of times for the end of primary drying, with the onset and offset of the
+Pirani pressure curve.
+
+Use a Savitzky-Golay filter to smooth, identify minimum of derivative, and then find linear
+intersects with maximum and minimum values of pressure. Those intersects are taken as onset 
+and offset.
+"""
+function identify_pd_end_onoff(data, window_width=91, tmin=0u"hr", tmax=Inf*u"hr")
+    pch_pir_sm = savitzky_golay(data.pch_pir, window_width, 3, deriv=0).y
+    dt = sum(diff(data.t)) / (length(data.t)-1)
+    pch_pir_der1 = savitzky_golay(data.pch_pir, window_width, 3, deriv=1, rate=1/dt).y
+    ti_inds = tmin .< data.t .< tmax
+    i_mid = argmin(pch_pir_der1[ti_inds]) + searchsortedfirst(data.t, tmin)
+    t_mid = data.t[i_mid]
+    dp_mid = pch_pir_der1[i_mid]
+    p_mid = pch_pir_sm[i_mid]
+    p_max = maximum(pch_pir_sm[ti_inds])
+    p_min = minimum(pch_pir_sm[ti_inds])
+    t_onset = (p_max - p_mid)/dp_mid + t_mid
+    t_offset = (p_min - p_mid)/dp_mid + t_mid
+    return (t_onset, t_offset)
 end
 
 # ---------------------------------
@@ -93,124 +118,8 @@ end
 # ----------------------------------------
 # Fitting with microcollapse model for Rp
 
-# Estimates of N and S:
-# d_typical = 50u"μm"
-# V_typical = 4/3*π*d_typical^3
-# N_typical = 1/V_typical
-# S_typical = V_typical^2*N_typical = V_typical
 export k_f_nt
 
 k_f_nt(nt::NamedTuple{(:k0, :kf, :K1, :K2)}) = Sigmoid_k(nt.k0, nt.kf, nt.K1, nt.K2)
 k_f_nt(nt::NamedTuple{(:k0, :K1, :K2)}) = MYEGA_k(nt.k0, nt.K1, nt.K2)
 k_f_nt(nt) = error("Mis-ordered k_f parameters. This should be handled more carefully")
-
-function gen_sol_mc_arb(fitprmlog, tr, po; verbose=false, saveat=[])
-    fitprm = transform(tr, fitprmlog)
-    verbose && @info "fitprm" fitprm
-    new_params = setproperties(po, fitprm)
-    ϕ = 1 - new_params.csolid/new_params.ρsolution
-    if new_params.S(0) < ϕ/new_params.N(0)
-        @warn "S is too small: implies negative variance"
-        # @reset new_params.S = ConstPhysProp(ϕ/new_params.N(0))
-        return NaN
-    end
-    prob = ODEProblem(new_params; tspan=(0.0, 1000.0))
-    sol = solve(prob, odealg_chunk4; saveat=saveat)
-    return sol
-end
-function gen_sol_mc_arb(fitprmlog, tr, po, fitdat; verbose=false)
-    return gen_sol_mc_arb(fitprmlog, tr, po; verbose=verbose, saveat=ustrip.(u"hr", fitdat.t))
-end
-# function gen_sol_mc_arb(fitprmlog, po, k_f_gen; verbose=false, fit_scl=fit_scl_porous, saveat=[])
-#     new_params = deepcopy(po)
-#     fitprm = exp.(fitprmlog) # Constrain all to be positive by taking exp
-#     verbose && @info "fitprm" fitprm
-#     @reset new_params.N = ConstPhysProp(fitprm[1]*fit_scl[1])
-#     @reset new_params.S = ConstPhysProp(fitprm[2]*fit_scl[2])
-#     @reset new_params.C  = fitprm[3]*fit_scl[3]
-#     @reset new_params.Rs = fitprm[4]*fit_scl[4]
-#     @reset new_params.k_f = k_f_gen(fitprmlog[5:end]) # Exp taken elsewhere
-#     ϕ = 1 - new_params.csolid/new_params.ρsolution
-#     if new_params.S(0) < ϕ/new_params.N(0)
-#         @warn "S is too small: implies negative variance"
-#         # @reset new_params.S = ConstPhysProp(ϕ/new_params.N(0))
-#         return NaN
-#     end
-#     prob = ODEProblem(new_params; tspan=(0.0, 1000.0))
-#     sol = solve(prob, Rodas3())
-#     return sol
-# end
-# function gen_sol_mc_arb(fitprmlog, po, fitdat, k_f_gen; 
-#                         verbose=false, fit_scl = fit_scl_porous)
-#     # new_params = deepcopy(po)
-#     # fitprm = exp.(fitprmlog) # Constrain all to be positive by taking exp
-#     # verbose && @info "fitprm" fitprm
-#     # @reset new_params.N = ConstPhysProp(fitprm[1]*fit_scl[1])
-#     # @reset new_params.S = ConstPhysProp(fitprm[2]*fit_scl[2])
-#     # @reset new_params.C  = fitprm[3]*fit_scl[3]
-#     # @reset new_params.Rs = fitprm[4]*fit_scl[4]
-#     # @reset new_params.k_f = k_f_gen(fitprmlog[5:end]) # Exp taken elsewhere
-#     # if new_params.S(0) < ϕ/new_params.N(0)
-#     #     @warn "S is too small: implies negative variance" new_params.S(0) ϕ/new_params.N(0)
-#     #     new_params.S = ConstPhysProp(ϕ/new_params.N(0))
-#     # end
-#     # prob = ODEProblem(new_params; tspan=(0.0, 1000.0))
-#     # sol = solve(prob, Rodas3(); saveat=ustrip.(u"hr", fitdat.t))
-#     sol = gen_sol_mc_arb(fitprmlog, po, k_f_gen; verbose=verbose, fit_scl=fit_scl, saveat=ustrip.(u"hr", fitdat.t))
-#     return sol
-# end
-function gennsol_mc(fitprm, tr, pos; kwargs...)
-    sols = map(pos) do po
-        gen_sol_mc_arb(fitprm, tr, po; kwargs...)
-    end
-    return sols
-end
-function gennsol_mc(fitprm, tr, pos, fitdats; kwargs...)
-    sols = map(pos, fitdats) do po, fitdat
-        gen_sol_mc_arb(fitprm, tr, po, fitdat; kwargs...)
-    end
-    return sols
-end
-
-function objn_mc(fitprmlog, tpf; tweight=0, verbose=false)
-    rtype = eltype(fitprmlog)
-    tr, pos, fitdats = tpf
-    # verbose && @info "fitprm" fitprm
-    if pos isa ParamObjMC && fitdats isa PrimaryDryFit # single element
-        fitprm = transform(tr, fitprmlog)
-        if fitprm.S(0) < (1 - fitprm.csolid/fitprm.ρsolution)/fitprm.N(0)
-            @warn "S is too small: implies negative variance" fitprm.S(0) 1/fitprm.N(0)
-            return rtype(NaN)
-        end
-        sols = gen_sol_pd(fitprmlog, tr, pos, fitdats)
-        objs = [obj_expT(sols, fitdats; tweight)]
-    else
-        sols = gen_nsol_pd(fitprmlog, tr, pos, fitdats)
-        for sol in sols
-            fitprm = sol.prob.p
-            if fitprm.S(0) < (1 - fitprm.csolid/fitprm.ρsolution)/fitprm.N(0)
-                @warn "S is too small: implies negative variance" fitprm.S(0) 1/fitprm.N(0)
-                return rtype(NaN)
-            end
-            if sol.retcode != ReturnCode.Terminated
-                hf = length(sol)>0 ? sol[begin,end] : sol.prob.p.hf0
-                @warn "unfinished drying" hf fitprmlog 
-            end
-        end
-        objs = map(sols, fitdats) do sol, fitdat
-            obj_expT(sol, fitdat; tweight)
-        end
-    end
-    if verbose
-        if any([sol.retcode != ReturnCode.Terminated for sol in sols])
-            for sol in sols 
-                if sol.retcode != ReturnCode.Terminated
-                    @info "unfinished drying" sol[1,end] fitprmlog 
-                end
-            end
-        end
-        # @info "unfinished drying" [sol for 
-    end
-    verbose && @info "obj" objs fitprmlog 
-    return rtype(sum(objs))
-end
