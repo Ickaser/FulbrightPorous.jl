@@ -1,7 +1,3 @@
-export gennsol_Rp, objn_Rp
-# export gen_sol_mc_arb, gennsol_mc, objn_mc
-
-# ---------------------------------
 export identify_pd_end_2der, identify_pd_end_onoff
 
 """
@@ -105,16 +101,6 @@ function mc_sigmoid_transform_basic(Ng, Sg, Cg, Rsg, k0g, kfg, K1g, K2g)
 end
 
 # --------------------------------- 
-gennsol_Rp(fitprm, tr, pos) = [gen_sol_pd(fitprm, tr, po) for po in pos]
-gennsol_Rp(fitprm, tr, pos, fitdats) = [gen_sol_pd(fitprm, tr, po, fitdat) for (po,fitdat) in zip(pos,fitdats)]
-function objn_Rp(fitprm, tpfs; tweight=1e-3)
-    tr, pos, fitdats = tpfs
-    sols = gennsol_Rp(fitprm, tr, pos, fitdats)
-    objs = map(sols, fitdats) do sol, fitdat
-        obj_expT(sol, fitdat, tweight=tweight)
-    end
-    return sum(objs)
-end
 # ----------------------------------------
 # Fitting with microcollapse model for Rp
 

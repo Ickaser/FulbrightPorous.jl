@@ -207,7 +207,7 @@ obj_Rpf = OptimizationFunction((x,y)->obj_pd(x,y,tweight=1e-2), AutoForwardDiff(
 # obj_Rpf = OptimizationFunction(obj_pd, AutoForwardDiff(chunksize=3))
 @time obj_Rpf([0.0, 1.0, 0.0], (trans_Rp, pop1, fitdat1))
 
-obj_npf = OptimizationFunction(objn_Rp, AutoForwardDiff(chunksize=3))
+obj_npf = OptimizationFunction(objn_pd, AutoForwardDiff(chunksize=3))
 
 single_Rps = map(cases) do case
     (;name, pop, fitdat, dat) = case

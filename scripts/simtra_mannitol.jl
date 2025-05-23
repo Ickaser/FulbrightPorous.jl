@@ -233,10 +233,10 @@ end
 
 # ----------------------
 # Fit Rp
-obj_Rpf = OptimizationFunction(obj_Rp, AutoForwardDiff())
+obj_Rpf = OptimizationFunction(obj_pd, AutoForwardDiff())
 @time obj_Rpf(fill(0.0, 3), (pop1, fitdat1))
 
-obj_npf = OptimizationFunction(objn_Rp, AutoForwardDiff())
+obj_npf = OptimizationFunction(objn_pd, AutoForwardDiff())
 
 cases = Table([ (name="1", pop=pop1, pomc=pomc1, fitdat=fitdat1, dat=dat1),
                 (name="2", pop=pop2, pomc=pomc2, fitdat=fitdat2, dat=dat2),

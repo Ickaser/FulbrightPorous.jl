@@ -327,7 +327,7 @@ obj_Rpf = OptimizationFunction((x,y)->obj_pd(x,y,tweight=1e-1), AutoForwardDiff(
 # obj_Rpf = OptimizationFunction(obj_pd, AutoForwardDiff(chunksize=3))
 @time obj_Rpf([0.0, 1.0, 0.0], (trans_Rp, pop1, fitdat1))
 
-obj_npf = OptimizationFunction(objn_Rp, AutoForwardDiff())
+obj_npf = OptimizationFunction((x,y)->LyoPronto.objn_pd(x,y,tweight=1e-1), AutoForwardDiff())
 
 rp123 = @time solve(OP(obj_npf, fill(0.0, 3), (trans_Rp, cases.pop[1:3], cases.fitdat[1:3])), optalg;)
 
@@ -566,6 +566,7 @@ end
 plot!()
 end
 savefig(plotsdir("fulbright_suc_moments.svg"))
+savefig(plotsdir("fulbright_suc_moments.pdf"))
 
 begin
 blankplot_lRp()
