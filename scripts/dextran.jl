@@ -72,7 +72,7 @@ cases_pdfit = Table(map(cases, pdends) do case, pdend
     # μ1 / Vfill
     μ2 = sum(case.Df.f .* V.^2)/sum(case.Df.f) |> u"mL^2"
     S_sem = μ2 / μ1
-    @info "check" μ2 μ1 cbrt(sqrt(μ2-μ1^2))|>u"μm" S_sem-1/N_sem
+    @info "check" case.name μ2 μ1 cbrt(sqrt(μ2-μ1^2))|>u"μm" S_sem-1/N_sem
     pomc = @set pomc_base.csolid = case.csolid
     @reset pomc.N = ConstPhysProp(N_sem)
     @reset pomc.S = ConstPhysProp(S_sem)
@@ -155,7 +155,7 @@ myega_nt = (k0 = TVScale(1e42u"s^-1") ∘ TVExp(),
             K1 = TVScale(2.0e4u"K") ∘ TVExp(),
             K2 = TVScale(1e2u"K") ∘ TVExp() ,)
 # plot(Tran, FulbrightPores.k_f_nt(transform(as(myega_nt), zeros(3))).(Tran), yscale=:log10, label="MYEGA, def")
-sigma_nt = (k0 = TVScale(1e-12u"s^-1") ∘ TVExp(),
+sigma_nt = (k0 = TVScale(1e-15u"s^-1") ∘ TVExp(),
             kf = TVScale(1e-8u"s^-1") ∘ TVExp(),
             K1 = TVScale(1.0u"K") ∘ TVExp(),
             K2 = TVScale(1.0u"K") ∘ TVShift(216.0) ∘ TVScale(45.0) ∘ TVLogistic(),)
@@ -166,7 +166,7 @@ trans_sigma = as(merge(porous_nt, (;k_f=as(sigma_nt))))
 remap_vars(fitprm) = vcat(repeat(fitprm[1:2], 4), fitprm[3:end])
 trans_nm = as((separate=as(Vector, as((N=NTV, S=STV)), 4),
                 shared=as((C=CTV, Rs=RsTV, k_f=as(myega_nt))),))
-# trans_ns_sem = as((C=CTV, Rs=RsTV, k_f=as(sigma_nt)))
+trans_ns_sem_s = as((C=CTV, Rs=RsTV, k_f=as(sigma_nt)))
 trans_ns_sem = as((separate=as(Vector, as((C=CTV,)), 4),
                 shared=as((Rs=RsTV, k_f=as(sigma_nt))),))
 trans_ns = as((separate=as(Vector, as((N=NTV, S=STV)), 4),
@@ -189,12 +189,14 @@ blankplot_hrC()
 modconvtplot!(LyoPronto.gen_nsol_pd(p0_sem, trans_ns_sem, cases_Rp.pomc, cases_Rp.pdfit)..., c=[1 2 3 4])
 
 @time opt1234myegasem = solve(OP(objnf_pd, p0_sem, (trans_ns_sem, cases_Rp.pomc, cases_Rp.pdfit)), optalg, show_trace=true)
+@time opt1234myegasems = solve(OP(objnf_pd, zeros(6), (trans_ns_sem_s, cases_Rp.pomc, cases_Rp.pdfit)), optalg, show_trace=true)
 
 fit_mc = transform(trans_ns, opt1234myega.u)
 fit_mc_sem = transform(trans_ns_sem, opt1234myegasem.u)
-all_pomc = [setproperties(pomc, merge(sep, fit_mc.shared)) for (pomc, sep) in zip(cases_Rp.pomc, fit_mc.separate)]
+fit_mc_sem_s = transform(trans_ns_sem_s, opt1234myegasems.u)
+# all_pomc = [setproperties(pomc, merge(sep, fit_mc.shared)) for (pomc, sep) in zip(cases_Rp.pomc, fit_mc.separate)]
 # all_pomc = [setproperties(pomc, merge(sep, fit_mc_sem.shared)) for (pomc, sep) in zip(cases_Rp.pomc, fit_mc_sem.separate)];
-# all_pomc = [setproperties(pomc, fit_mc_sem) for pomc in cases_Rp.pomc];
+all_pomc = [setproperties(pomc, fit_mc_sem_s) for pomc in cases_Rp.pomc];
 
 sols_m = [solve(ODEProblem(pomc), Rodas3()) for pomc in all_pomc];
 cases_both = Table(cases_Rp, (pomc=all_pomc,sol_mc=sols_m))
@@ -232,7 +234,7 @@ savefig(plotsdir("dextran_Rp.pdf"))
 
 
 
-ns_SEM = Table(map(cases_both, fit_mc.separate, fit_mc_sem.separate) do case, fit, fitsem
+ns_SEM = Table(map(cases_Rp, fit_mc.separate, fit_mc_sem.separate) do case, fit, fitsem
     # μ1 = π/6*sum(case.Df.f .* case.Df.D.^3)/sum(case.Df.f)
     # N_sem = 1/μ1 |> u"mL^-1"
     # S_sem = π^2/36 * sum(case.Df.f .* case.Df.D.^6)/sum(case.Df.f) / Vfill |> u"mL"
@@ -245,19 +247,18 @@ ns_SEM = Table(map(cases_both, fit_mc.separate, fit_mc_sem.separate) do case, fi
     N_fit = fit.N(0) |> u"mL^-1"
     S_fit = fit.S(0) |> u"mL"
     C_fit = fit_mc.shared.C
+    C_shared = fit_mc_sem_s.C
     # @info "check" N S sum(case.Df.f)
     # return (;N_sem,N_mod, N_fit, S_sem, S_mod, S_fit, C_sem, C_fit)
-    return (;N_sem, N_fit, S_sem, S_fit, C_sem, C_fit)
+    return (;N_sem, N_fit, S_sem, S_fit, C_fit, C_sem, C_shared)
 end)
 
 # @df ns_SEM scatter(:N_sem, :S_sem, scale=:log10)
 @df ns_SEM scatter((:N_sem)', (:S_sem)', label=permutedims(cases_both.name), scale=:log10)
-plot!([10^6.4, 10^7.4], [1e-13, 1e-15], ls=:dash, label="slope -1", c=:gray)
+plot!([10^6.4, 10^7.4], [1e-6, 1e-7], ls=:dash, label="slope -1", c=:gray)
 # @df ns_SEM scatter(:N_sem, :C_sem, scale=:log10)
 @df ns_SEM scatter((:N_sem)', (:C_sem)', label=permutedims(cases_both.name), scale=:log10)
 # plot!([10^6.4, 10^7.4], [10^-0.5, 10^-1.5], label="slope -1")
 @df ns_SEM scatter((:S_sem)', (:C_sem)', label=permutedims(cases_both.name), scale=:log10)
 plot!(xlabel="S", ylabel="C")
 # plot!([1e-15, 1e-13], [10^-1.5, 10^-0.5], label="slope 2")
-
-@df ns_SEM scatter((:S_fit)', (:N_fit)', label=permutedims(cases_both.name), scale=:log10)
