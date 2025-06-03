@@ -22,6 +22,7 @@ import LyoPronto: ODEProblem
 @reexport using SavitzkyGolay
 using ADTypes: AutoForwardDiff
 using DocStringExtensions
+using ConcreteStructs
 using LinearAlgebra: Diagonal
 
 
