@@ -261,12 +261,14 @@ rpfit_cases = Table(cases = [(1,), (2,), (3,), (5,), (8,), (1,8), (1,2,8)],
 rpfits = map(rpfit_cases) do case
     @time solve(OP(obj_npf, case.p0, (case.trans, make_Rp_pass(case.cases)...)), optalg;)
 end
+
 # -----------------------------
 # Fit k by interpolating at four values
 # interp_nt = (kl1 = TV.Identity(),
 #             kl2 = TV.Identity(),
 #             kl3 = TV.Identity(),
 #             kl4 = TV.Identity())
+const TV = TransformVariables
 interp_nt = (kl1 = TV.Identity(),
             kl2 = TVExp(),
             kl3 = TVExp(),
@@ -277,7 +279,6 @@ function FulbrightPores.k_f_nt(nt::NamedTuple{(:kl1, :kl2, :kl3, :kl4)})
     #     return 
     # end
     return InterpK(cumsum([nt...]), [-45.0, -38, -32, -22]u"°C" .|> u"K", 1e-14u"s^-1")
-
 end
 const TV = TransformVariables
 porous_nt = (N = ConstWrapTV() ∘ TVScale(3e7u"cm^-3") ∘ TVExp(),
@@ -304,7 +305,7 @@ interp_guess = [-1.0, 1, 0, 0, -1, 1.5, 0, 2]
 # plot(u"°C", u"s^-1")
 # kineticplot!(transform(trans_interp, interp_guess),  label="Interp guess")
 myega_guess = [0.1, 0.1, 0, 0, -10, 0, 0]
-kineticplot(transform(trans_myega, myega_guess), label="MYEGA guess")
+# kineticplot(transform(trans_myega, myega_guess), label="MYEGA guess")
 sigma_guess = [-1.0, 1, 0, 0, 0, 0, 0, 0]
 # kineticplot(transform(trans_sigma, sigma_guess), label="MYEGA guess")
 
@@ -446,5 +447,60 @@ savefig(plotsdir("suc18_Rp_val.svg"))
 # # pretty_table(report, header = ["Fit", "N", "S", "k0", "E", "C", "Rs"])
 
 # ---------------------
-# Validation
+# MCMC sampling
+using Turing
+
+
+@model function sigma_likelihood(pf)
+
+    Nfac ~ Uniform(-6, 6)
+    Sfac ~ Uniform(-6, 6)
+    Cfac ~ Uniform(-6, 6)
+    Rfac ~ Uniform(-6, 6)
+    k0fac ~ Uniform(-6, 6)
+    kffac ~ Uniform(-6, 6)
+    K1fac ~ Uniform(-6, 6)
+    K2fac ~ Uniform(-6, 6)
+
+    # k_args = exp10.([kfac, Kfac, θfac]) .* fit_guess[5:7]
+    allvals = [Nfac, Sfac, Cfac, Rfac, k0fac, kffac, K1fac, K2fac]
+
+    if pf[1] isa PrimaryDryFit
+        sqerr = obj_pd(allvals, (trans_sigma, pf...), tweight=1e-2)
+    else
+        sqerr = objn_pd(allvals, (trans_sigma, pf...), tweight=1e-2)
+    end
+
+    if !isnan(sqerr)
+        Turing.@addlogprob! -sqerr
+    else
+    #     # @info "check" newpo.N.val newpo.S.val newpo.C.val newpo.Rs.val sol.t[end] sol[1,end]
+        Turing.@addlogprob! -Inf
+    end
+end
+
+case1_params = sigma_likelihood(make_mc_pass([1]))
+case128_params = sigma_likelihood(make_mc_pass([1, 2, 8]))
+    
+smallalg = NUTS(10, 0.65)
+init_single = [rand(8).-0.5]
+smallsamp = @time sample(case1_params, smallalg, MCMCSerial(), 20, 1; initial_params=init_single)
+nthreads = 4
+init_set = [(rand(8).-0.5) for i in 1:nthreads]
+smallsamp128 = @time sample(case128_params, smallalg, MCMCSerial(), 20, nthreads, initial_params = init_set)
+# smallsamp128 = @time sample(case128_params, smallalg, MCMCThreads(), 20, nthreads, initial_params = init_set)
+# @profview sample(case1_params, smallalg, MCMCSerial(), 20, 1)
+# plot(smallsamp)
+
+alg = NUTS(75, 0.65)
+samp = @time sample(case1_params, alg, MCMCThreads(), 500, 4)
+safesave(datadir("exp_pro", "case1_myega_sampling.jld2"), Dict("samp" => samp, "smallsamp" => smallsamp))
+samp128 = @time sample(case128_params, alg, MCMCThreads(), 500, 4)
+safesave(datadir("exp_pro", "case128_myega_sampling.jld2"), @strdict smallsamp128 samp128 )
+
+# # safesave(datadir("exp_pro", "case1_myega_sampling.jld2"), Dict("samp" => samp, "smallsamp" => smallsamp))
+
+# samp = load(datadir("exp_pro", "case1_myega_sampling_#1.jld2"))["samp"]
+
+# plot(samp)
 
