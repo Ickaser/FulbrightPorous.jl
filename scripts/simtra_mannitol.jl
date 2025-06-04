@@ -204,7 +204,7 @@ pomc1 = ParamObjMC([
 end
 
 function new_Tp(po, Tsh, pch)
-    po_n = deepcopy(po)
+    po_n = copy(po)
     @reset po_n.pch = pch
     @reset po_n.Tsh = Tsh
     return po_n

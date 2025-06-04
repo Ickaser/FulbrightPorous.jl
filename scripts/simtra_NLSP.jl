@@ -152,10 +152,10 @@ pb_pikal = ParamObjPikal([
 ])
 
 pop1 = pb_pikal
-pop2 = deepcopy(pop1)
+pop2 = copy(pop1)
 @reset pop2.pch = pch2
 @reset pop2.Tsh = Tsh2
-pop8 = deepcopy(pop1)
+pop8 = copy(pop1)
 @reset pop8.pch = pch8
 @reset pop8.Tsh = Tsh8
 
@@ -201,10 +201,10 @@ pb_mc = (
     (ConstPhysProp(k0), C, N, S, Rs)
 )
 pomc1 = ParamObjMC(pb_mc)
-pomc2 = deepcopy(pomc1)
+pomc2 = copy(pomc1)
 @reset pomc2.pch = pch2
 @reset pomc2.Tsh = Tsh2
-pomc8 = deepcopy(pomc1)
+pomc8 = copy(pomc1)
 @reset pomc8.pch = pch8
 @reset pomc8.Tsh = Tsh8
 
