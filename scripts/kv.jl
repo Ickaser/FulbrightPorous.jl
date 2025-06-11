@@ -44,9 +44,8 @@ grav_Tdat = CSV.read(datadir("exp_raw", "Fulbright2025", "2025-01-27-09_MFD_ISW_
 grav_Tdat = map(x->microfd_fulbright_columnrename(x, grav_Tdat.CycleTime[1]), grav_Tdat)
 
 
-istart = findfirst(0u"mTorr" .< grav_Tdat.pch_cm .< 110u"mTorr")
-iend = findlast(0u"mTorr" .< grav_Tdat.pch_cm .< 110u"mTorr")
-grav_pd = grav_Tdat[istart:iend]
+grav_pd = filter(x->(0u"mTorr" < x.pch_cm < 110u"mTorr"), grav_Tdat)
+grav_pd.t .-= grav_pd.t[1]
 
 begin
 plT = @df grav_pd plot(:t, :Tsh_i)
@@ -65,14 +64,20 @@ int_dT_data = quadgk(t->(Tsh_i(t) - Tf_i(t)), grav_pd.t[begin], grav_pd.t[end])[
 mean_Δm = sum(Δm)/length(Δm)
 
 # Replace this with an integration across the data once I have it...
-Tsh = RampedVariable([228.15u"K", 253.15u"K"], 1u"K/minute")
+Tsh = RampedVariable([228.15u"K", 253.15u"K"], 0.5u"K/minute")
 pch = RampedVariable(100u"mTorr")
-nlprob = NonlinearProblem((T,_)->ustrip(u"mTorr", calc_psub(T*u"K")-pch(0)), 240.0)
-Tsub = solve(nlprob).u[1]*u"K"
+Tsub = LyoPronto.calc_Tsub(pch(0))
 integrand = t-> max(0u"K", Tsh(t) - Tsub)
 int_dT_theory = quadgk(integrand, 0.0u"hr", 4.0u"hr")[1]
 
-Kv = ConstPhysProp(LyoPronto.ΔH*mean_Δm/int_dT_theory/Av |> u"W/m^2/K")
+begin
+pl1 = @df grav_pd plot(:t, :Tsh_i, c=1)
+@df grav_pd plot!(:t, :T1, c=1)
+plot!(Tsh, tmax=4u"hr", c=2)
+plot!([0u"hr", 4u"hr"], [Tsub,Tsub], c=2)
+end
+
+Kv = ConstPhysProp(LyoPronto.ΔH*mean_Δm/int_dT_data/Av |> u"W/m^2/K")
 
 safesave(datadir("exp_pro", "gravimetric_kv.jld2"), @strdict Kv)
 
