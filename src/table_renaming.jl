@@ -51,7 +51,7 @@ end
 function microfd_fulbright_columnrename(row, t0 = nothing)
     # nt = (tstamp = DateTime(row.Timestamp, dateformat"mm/dd/yyyy H:M:S"),
     if !isnothing(t0)
-        t = uconvert(u"hr", row.CycleTime - t0)
+        t = float(uconvert(u"hr", row.CycleTime - t0))
         if t < 0u"hr"
             t += 24u"hr"
         end
@@ -59,7 +59,7 @@ function microfd_fulbright_columnrename(row, t0 = nothing)
         t = nothing
     end
     nt = (tstamp = row.CycleTime,
-          t = float(t),
+          t = t,
           phase = row.Phase,
           step = row.Step,
           pch_sp = row.VacSetPT*u"mTorr",
