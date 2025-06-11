@@ -33,10 +33,15 @@ pl1 = blankplot_hrC()
 tendplot!(t_end1)
 
 fitdat1 = @df dat1 PrimaryDryFit(:t[0u"hr".< :t] , 
-    (:T1[0u"hr" .< :t .< 3.7u"hr"],
-     :T2[0u"hr" .< :t .< 3.7u"hr"],
-     :T3[0u"hr" .< :t .< 3.7u"hr"],
-     :T4[0u"hr" .< :t .< 3.7u"hr"],
+    # (:T1[0u"hr" .< :t .< 3.7u"hr"],
+    #  :T2[0u"hr" .< :t .< 3.7u"hr"],
+    #  :T3[0u"hr" .< :t .< 3.7u"hr"],
+    #  :T4[0u"hr" .< :t .< 3.7u"hr"],
+    # ),
+    (:T1[0u"hr" .< :t .< 7u"hr"],
+     :T2[0u"hr" .< :t .< 7u"hr"],
+     :T3[0u"hr" .< :t .< 7u"hr"],
+     :T4[0u"hr" .< :t .< 7u"hr"],
     ),
     t_end1
 )
@@ -177,7 +182,7 @@ pls = map(cases_Rps) do case
     plr = blankplot_lRp()
     for i in 1:4
         hdT, RpT = case.hRps[i]
-        plot!(hdT, RpT, c=:gray, marker=marks[i], seriestype=:samplemarkers, step=20, linealpha=0.8, label="Rp from T, $i")
+        plot!(hdT, RpT, c=:gray, marker=marks[i], offset=mod1(i, 4)*5, seriestype=:samplemarkers, step=20, linealpha=0.8, label="Rp from T, $i")
     end
     plot!(l, case.Rp.(l), c=1, label="3PP fit directly to T")
     plot!(l, RpFormFit(transform(trans_Rp, rp12.u).Rp...).(l), c=2, label="3PP fit to both T")
