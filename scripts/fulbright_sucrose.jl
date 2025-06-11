@@ -588,9 +588,9 @@ savefig(plotsdir("fulbright_sucrose_Rp.pdf"))
 # timedistplot(cases_both[5].sol_mc; ywiden=false, scale=:log10, disttype=:beta, legend=:outerright)
 begin
 plot(u"mm^3", NoUnits, ywiden=false, ylabel="Approx. Prob. Dens.", xlabel=L"Pore Size", unitformat=latexsquareunitlabel)
-for case in cases_both
+for case in cases_both[[1, 2, 3, 6, 4, 5]]
     distplot!(case.sol_mc;  disttype=:normal, label=case.name)
-    plot!(scale=:log10)
+    plot!(yscale=:log10)
 end
 # plot!(scale=:log10)
 plot!()
