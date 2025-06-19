@@ -76,13 +76,90 @@ fitdat2 = @df dat2 PrimaryDryFit(:t[0u"hr".< :t] ,
     ),
     t_end2
 )
-plot(fitdat2)
+# plot(fitdat2)
+
+dat3raw = CSV.read(datadir("exp_raw", "Fulbright2025", "2025-06-16-10_MFD_ISW.csv"), Table; header=8)
+dat3nm = map(x->microfd_fulbright_columnrename(x, dat3raw.CycleTime[1]), dat3raw)
+dat3 = filter(x->x.phase==4, dat3nm)
+dat3.t .-= dat3.t[1]
+overnightfix(dat3nm)
+overnightfix(dat3)
+
+# plot(dat3raw.Phase)
+
+# t_end3 = identify_pd_end_2der(dat3, 91, 1u"hr", 50u"hr")
+t_end3 = identify_pd_end_onoff(dat3, 91, 1u"hr", 50u"hr")
+
+pch3 = RampedVariable(100.0u"mTorr")
+# @df dat3 plot(:t, :pch_cm, ylim=(0, 200))
+# @df dat3 plot!(:t, :pch_pir, ylim=(0, 200))
+# plot!(pch3)
+# tendplot!(t_end3)
+
+Tsh3 = RampedVariable(uconvert.(u"K", [-45.0,  -10]u"°C"), 1u"K/minute")
+# @df dat3 plot(:t, :Tsh_i, xlim=(0, 2))
+# plot!(Tsh3)
+
+pl1 = blankplot_hrC()
+# @df dat3 exptfplot!(:t, :T1, :T2, :T3, :T4)
+# tendplot!(t_end3)
+
+fitdat3 = @df dat3 PrimaryDryFit(:t[0u"hr".< :t] , 
+    (
+    :T1[0u"hr" .< :t .< 12u"hr"],
+    :T2[0u"hr" .< :t .< 12u"hr"],
+    :T3[0u"hr" .< :t .< 3.5u"hr"],
+    :T4[0u"hr" .< :t .< 5u"hr"],
+    ),
+    t_end3
+)
+# plot(fitdat3)
+
+dat4raw = CSV.read(datadir("exp_raw", "Fulbright2025", "2025-06-18-10_MFD_ISW.csv"), Table; header=8)
+dat4nm = map(x->microfd_fulbright_columnrename(x, dat4raw.CycleTime[1]), dat4raw)
+dat4 = filter(x->x.phase==4, dat4nm)
+dat4.t .-= dat4.t[1]
+overnightfix(dat4nm)
+overnightfix(dat4)
+
+# plot(dat4raw.Phase)
+
+# t_end4 = identify_pd_end_2der(dat4, 91, 1u"hr", 50u"hr")
+t_end4 = identify_pd_end_onoff(dat4, 91, 5u"hr", 50u"hr")
+
+pch4 = RampedVariable(100.0u"mTorr")
+@df dat4 plot(:t, :pch_cm, ylim=(0, 200))
+@df dat4 plot!(:t, :pch_pir, ylim=(0, 200))
+plot!(pch4)
+tendplot!(t_end4)
+
+Tsh4 = RampedVariable(uconvert.(u"K", [-45.0,  0]u"°C"), 1u"K/minute")
+# @df dat4 plot(:t, :Tsh_i, xlim=(0, 2))
+# plot!(Tsh4)
+
+# pl1 = blankplot_hrC()
+# @df dat4 exptfplot!(:t, :T1, :T2, :T3, :T4)
+# tendplot!(t_end4)
+
+fitdat4 = @df dat4 PrimaryDryFit(:t[0u"hr".< :t] , 
+    (
+    :T1[0u"hr" .< :t .< 7u"hr"],
+    :T2[0u"hr" .< :t .< 7u"hr"],
+    :T3[0u"hr" .< :t .< 7u"hr"],
+    :T4[0u"hr" .< :t .< 2u"hr"],
+    ),
+    t_end4
+)
+plot(fitdat4)
+
 
 end
 
 blankplot_hrC()
 plot!(fitdat1, c=1)
 plot!(fitdat2, c=2)
+plot!(fitdat3, c=3)
+plot!(fitdat4, c=4)
 
 begin
 rad_i, rad_o = get_vial_radii("10R")
@@ -122,16 +199,24 @@ pop2 = @set pop1.Tsh = Tsh2
 # @reset pop2.Rp.R0 = 1e-8u"cm^2*Torr*hr/g"
 # @reset pop2.Rp.A1 = 32.3u"cm*Torr*hr/g"
 pomc2 = @set pomc1.Tsh = Tsh2
+
+pop3 = @set pop1.Tsh = Tsh3
+@reset pop3.hf0 = 3u"mL"/A_p |> u"cm"
+pop4 = @set pop3.Tsh = Tsh4
 end
 
 @df dat1nm exptfplot(:t, :T1, :T2, :T3, :T4, xlim=(1,2))
 @df dat2nm exptfplot(:t, :T1, :T2, :T3, :T4, xlim=(1,2))
+@df dat3nm exptfplot(:t, :T1, :T2, :T3, :T4, xlim=(1,2))
+@df dat4nm exptfplot(:t, :T1, :T2, :T3, :T4, xlim=(1,2))
 
 # blankplot_hrC()
 # modconvtplot!(solve(ODEProblem(pop2), LyoPronto.odealg_chunk2))
 
 cases = Table([ (name="1", pop=pop1, pomc=pomc1, fitdat=fitdat1, dat=dat1),
                 (name="2", pop=pop2, pomc=pomc2, fitdat=fitdat2, dat=dat2),
+                (name="3", pop=pop3, pomc=pomc3, fitdat=fitdat3, dat=dat3),
+                (name="4", pop=pop4, pomc=pomc4, fitdat=fitdat4, dat=dat4),
 ])
 
 trans_Rp = Rp_transform_basic(1.4u"cm^2*Torr*hr/g", 16.0u"cm*Torr*hr/g", 1e-2u"1/cm")
@@ -150,7 +235,7 @@ single_Rps = map(cases) do case
 end;
 
 obj_n = OptimizationFunction((x,y)->LyoPronto.objn_pd(x,y,tweight=1e-1), AutoForwardDiff())
-rp12 = @time solve(OP(obj_n, fill(0.0, 3), (trans_Rp, cases.pop[1:2], cases.fitdat[1:2])), optalg;)
+rp_all = @time solve(OP(obj_n, fill(0.0, 3), (trans_Rp, cases.pop, cases.fitdat)), optalg;)
 
 cases_Rps = Table(cases, single_Rps)
 
@@ -162,27 +247,28 @@ pls = map(cases_Rps) do case
     tendplot!(case.fitdat.t[case.fitdat.Tf_iend[1]], label="end useful")
     tendplot!(case.fitdat.t_end)
     modconvtplot!(case.sol_p, label="3PP fit, $(case.name)")
-    # modconvtplot!(gen_sol_pd(rp12.u, trans_Rp, case.pop), c=:purple, label="3PP fit, 1&2")
-    plot!(legend = :bottomright)
+    modconvtplot!(gen_sol_pd(rp_all.u, trans_Rp, case.pop), c=:purple, label="3PP fit, 1&2")
+    plot!(legend = :top, legend_columns=2)
+    plot!(ylim=(-45, 10))
     plot!(case.pop.Tsh, tmax=case.fitdat.t[end], c=:black, label=L"T_\mathrm{sh}")
     return plT
 end
-plot(pls..., layout=(1,2), size=(800, 400))
+plot(pls..., layout=(2,2), size=(800, 600))
 end
 
 l = range(0u"cm", hf0, length=100)
 begin
 marks = [:o, :x, :square, :diamond]
 pls = map(cases_Rps) do case
-    plr = blankplot_lRp()
+    plr = blankplot_lRp(title=case.name)
     for (i, hRp) in enumerate(case.hRps)
         hdT, RpT = hRp
         plot!(hdT, RpT, c=:gray, marker=marks[i], seriestype=:samplemarkers, step=20, offset=mod1(i, 4)*5, linealpha=0.8, label="Rp from T, $i")
     end
     plot!(l, case.Rp.(l), c=1, label="3PP fit directly to T")
-    plot!(l, RpFormFit(transform(trans_Rp, rp12.u).Rp...).(l), c=2, label="3PP fit to both T")
-    plot!(legend = :bottomright)
+    plot!(l, RpFormFit(transform(trans_Rp, rp_all.u).Rp...).(l), c=2, label="3PP fit to all T")
+    plot!(legend = :topleft)
     return plr
 end
-plot(pls..., layout=(1,2), ylim=(0,20), size=(800, 400))
+plot(pls..., layout=(2,2), size=(800, 600))
 end
