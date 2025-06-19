@@ -502,5 +502,12 @@ safesave(datadir("exp_pro", "case128_myega_sampling.jld2"), @strdict smallsamp12
 
 # samp = load(datadir("exp_pro", "case1_myega_sampling_#1.jld2"))["samp"]
 
+using Turing
+samp = load(datadir("exp_pro", "case1_myega_sampling.jld2"))["samp"]
+
+plot(samp, xlim=(-6, 6))
+samp[:Nfac]
+samp[2]
+
 # plot(samp)
 
