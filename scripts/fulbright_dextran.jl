@@ -203,6 +203,9 @@ pomc2 = @set pomc1.Tsh = Tsh2
 pop3 = @set pop1.Tsh = Tsh3
 @reset pop3.hf0 = 3u"mL"/A_p |> u"cm"
 pop4 = @set pop3.Tsh = Tsh4
+pomc3 = @set pomc1.Tsh = Tsh3
+@reset pomc3.hf0 = 3u"mL"/A_p |> u"cm"
+pomc4 = @set pomc3.Tsh = Tsh4
 end
 
 @df dat1nm exptfplot(:t, :T1, :T2, :T3, :T4, xlim=(1,2))
@@ -247,23 +250,29 @@ pls = map(cases_Rps) do case
     tendplot!(case.fitdat.t[case.fitdat.Tf_iend[1]], label="end useful")
     tendplot!(case.fitdat.t_end)
     modconvtplot!(case.sol_p, label="3PP fit, $(case.name)")
-    modconvtplot!(gen_sol_pd(rp_all.u, trans_Rp, case.pop), c=:purple, label="3PP fit, 1&2")
-    plot!(legend = :top, legend_columns=2)
+    modconvtplot!(gen_sol_pd(rp_all.u, trans_Rp, case.pop), c=:purple, label="3PP fit, all")
     plot!(ylim=(-45, 10))
-    plot!(case.pop.Tsh, tmax=case.fitdat.t[end], c=:black, label=L"T_\mathrm{sh}")
+    plot!(legend = :top, legend_columns=2)
+    plot!(case.pop.Tsh, tmax=case.fitdat.t[end], c=:black, label=L"T_sh")
     return plT
 end
-plot(pls..., layout=(2,2), size=(800, 600))
+plot(pls..., layout=(2,2), size=(800, 600), legend=:bottomright)
+# mathjax = KW(:include_mathjax=>"cdn")
+# plot!(extra_plot_kwargs=mathjax, legend=:right, ticks=:native) # For Plotly
+# plot!(subplot=4, right_margin=150Plots.px)
 end
+savefig(plotsdir("fulbright_dextran_T.svg"))
+savefig(plotsdir("fulbright_dextran_T.pdf"))
+# savefig("fulbright_dextran.html")
 
 l = range(0u"cm", hf0, length=100)
 begin
-marks = [:o, :x, :square, :diamond]
+marks = [:o, :utriangle, :square, :diamond]
 pls = map(cases_Rps) do case
     plr = blankplot_lRp(title=case.name)
     for (i, hRp) in enumerate(case.hRps)
         hdT, RpT = hRp
-        plot!(hdT, RpT, c=:gray, marker=marks[i], seriestype=:samplemarkers, step=20, offset=mod1(i, 4)*5, linealpha=0.8, label="Rp from T, $i")
+        plot!(hdT, RpT, c=:gray, marker=marks[i], seriestype=:samplemarkers, step=40, offset=mod1(i, 4)*10, alpha=0.8, label="Rp from T, $i")
     end
     plot!(l, case.Rp.(l), c=1, label="3PP fit directly to T")
     plot!(l, RpFormFit(transform(trans_Rp, rp_all.u).Rp...).(l), c=2, label="3PP fit to all T")
@@ -272,3 +281,19 @@ pls = map(cases_Rps) do case
 end
 plot(pls..., layout=(2,2), size=(800, 600))
 end
+
+begin
+marks = [:o, :utriangle, :square, :diamond]
+plr = blankplot_lRp()
+for case in cases_Rps[4:-1:1]
+    for (i, hRp) in enumerate(case.hRps)
+        hdT, RpT = hRp
+        plot!(hdT, RpT, c=tryparse(Int, case.name), marker=marks[i], 
+        seriestype=:samplemarkers, step=40, offset=mod1(i, 4)*10, 
+        alpha=0.7, label=(i==1 ? "Rp from T, $(case.name)" : nothing))
+    end
+end
+plot!(xlim=(0, 0.3), ylim=(0, 5))
+end
+savefig(plotsdir("fulbright_dextran_rawRp.svg"))
+savefig(plotsdir("fulbright_dextran_rawRp.pdf"))
