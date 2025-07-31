@@ -175,7 +175,7 @@ pomc1 = ParamObjMC([
 ])
 
 function new_Tp(po, Tsh, pch)
-    po_n = copy(po)
+    po_n = deepcopy(po)
     @reset po_n.pch = pch
     @reset po_n.Tsh = Tsh
     return po_n
@@ -207,7 +207,7 @@ obj_Rpf = OptimizationFunction((x,y)->obj_pd(x,y,tweight=1e-2), AutoForwardDiff(
 # obj_Rpf = OptimizationFunction(obj_pd, AutoForwardDiff(chunksize=3))
 @time obj_Rpf([0.0, 1.0, 0.0], (trans_Rp, pop1, fitdat1))
 
-obj_npf = OptimizationFunction(objn_pd, AutoForwardDiff(chunksize=3))
+obj_npf = OptimizationFunction((x,y)->objn_pd(x,y,tweight=1e-2), AutoForwardDiff(chunksize=3))
 
 single_Rps = map(cases) do case
     (;name, pop, fitdat, dat) = case
@@ -233,18 +233,34 @@ end
 plot(pls..., layout=(3,2), size=(800, 1000))
 
 l = range(0u"cm", hf0, length=100)
+begin
 pls = map(cases_Rps) do case
     plr = blankplot_lRp()
     plot!(case.dat.ld, case.dat.Rp, label="TDLAS")
     for i in 1:length(case.fitdat.Tfs)
         hdT, RpT = case.hRps[i]
-        plot!(hdT, RpT, c=i+1, label="Rp from T, $i")
+        plot!(hdT, RpT, c=i+1, label="Rp from TP$i")
     end
     plot!(l, case.Rp.(l), c=5, label="3PP fit directly to T")
     plot!(ylim=(0, 10), legend = :bottomright)
+    plot!(title="\$p_{ch}=\\mathrm{$(case.pop.pch(Inf*u"s")|>u"mTorr")}\$,\n \$T_{sh}=$(float(case.pop.Tsh(Inf*u"s")|>u"°C"))\$  ")
+    plot!(top_margin=20Plots.px)
+    plot!(bottom_margin=15Plots.px)
+    case.name ∈ ["1", "5"] && plot!(left_margin=20Plots.px)
+    plot!(legend=:none)
     return plr
 end
-plot(pls..., layout=(3,2), size=(800, 1000))
+explot = plot(framestyle=:none, legendfontsize=12, legend_position=:inside)
+plot!([Inf], [Inf], label="TDLAS", c=1)
+plot!([Inf], [Inf], label="Rp from TP1", c=2)
+plot!([Inf], [Inf], label="Rp from TP2", c=3)
+plot!([Inf], [Inf], label="Rp from TP3", c=4)
+plot!([Inf], [Inf], label="3PP fit directly to T", c=5)
+plot(pls..., explot, layout=(2,3), size=(900, 500))
+end
+savefig(plotsdir("simtra_suc_Rp.png"))
+savefig(plotsdir("simtra_suc_Rp.svg"))
+savefig(plotsdir("simtra_suc_Rp.pdf"))
 
 function make_Rp_pass(casenums)
     subdat = filter(x->parse(Int, x.name)∈casenums, cases_Rps)
@@ -256,7 +272,7 @@ function make_mc_pass(casenums)
 end
 
 rpfit_cases = Table(cases = [(1,), (2,), (3,), (5,), (8,), (1,8), (1,2,8)],
-        p0 = fill(zeros(3), 7),
+        p0 = fill([0.5, -0.3, 0], 7),
         trans = fill(trans_Rp, 7))
 rpfits = map(rpfit_cases) do case
     @time solve(OP(obj_npf, case.p0, (case.trans, make_Rp_pass(case.cases)...)), optalg;)
@@ -343,18 +359,27 @@ end
 fitnum = 11 # 1&8, sigmoid
 
 begin
-pls = map(cases_Rps, [1, 2, 3, 5, 8]) do case, i
-    pl = blankplot_hrC(title=i, legend=:bottomright)
+pls = map(cases_Rps[[1, 2, 3, 5, 4]]) do case
+    i = parse(Int, case.name)
+    pl = blankplot_hrC(title=case.name, legend=:bottomright)
     plot!(case.fitdat)
-    modconvtplot!(get_sol_mc(i, fitnum), label="PBM, fit to $(mcfit_cases[fitnum].cases)")
-    modconvtplot!(case.sol_p, c=:green, alpha=0.6, label="3PP, fit to $(case.name)")
-    modconvtplot!(get_sol_Rp(i, 6), c=:purple, label="3PP, fit to $(rpfit_cases[6].cases)")
+    # modconvtplot!(get_sol_mc(i, fitnum), label="PBM, fit to $(mcfit_cases[fitnum].cases)")
+    # modconvtplot!(case.sol_p, c=:green, alpha=0.6, label="3PP, fit to $(case.name)")
+    # modconvtplot!(get_sol_Rp(i, 6), c=:purple, label="3PP, fit to $(rpfit_cases[6].cases)")
     # plot!(xlim=(-1, 120), ylim=(-45, -28)) 
+    i ∈ [2, 3, 5] && plot!(ylabel="")
+    i ∈ [1, 2] && plot!(xlabel="")
+    if i ∈ [1, 8] 
+        plot!(left_margin=20Plots.px)
+    else
+        plot!(left_margin=0Plots.px)
+    end
+    i ∈ [5, 8] && plot!(bottom_margin=20Plots.px)
     return pl
 end
-plot(pls..., layout=(3,2), size=(800, 1000))
+plot(pls..., layout=(2,3), size=(900, 500))
 end
-savefig(plotsdir("simtra_suc_fitval.svg"))
+savefig(plotsdir("simtra_suc_fitval_m0.svg"))
 savefig(plotsdir("simtra_suc_fitval.pdf"))
 
 safesave(datadir("exp_pro", "simtra_sucrose_fitdata.jld2"), Dict("fitdats"=>cases.fitdat))

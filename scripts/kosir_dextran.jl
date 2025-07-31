@@ -206,9 +206,16 @@ myega_plots = map(cases_both, psols) do case, solp
     @info "check" obj_expT(case.sol_mc, case.pdfit, tweight=0) obj_expT(case.sol_mc, case.pdfit, tweight=1)
     blankplot_hrC(legend=:bottomright, title=case.name)
     plot!(Tsh, label=L"T_{sh}", c=:black)
-    modconvtplot!(case.sol_mc)
-    modconvtplot!(solp, c=:green, alpha=0.6, label=L"$T_f$, Pikal")
     plot!(case.pdfit)
+
+    modconvtplot!(case.sol_mc, label=L"$T_f$, PBM")
+    modconvtplot!(solp, c=:green, alpha=0.6, label=L"$T_f$, Pikal")
+    if case.name ∈ ["A3", "A5"]
+        plot!(xlabel="")
+    end
+    if case.name ∈ ["A5", "B"]
+        plot!(ylabel="")
+    end
     plot!(xlim=(-0.5, 21), ylim=(-45, -2))
 end
 plot(myega_plots..., size=(600, 500))
