@@ -5,12 +5,13 @@ import LeastSquaresOptim
 const NLSP = NonlinearLeastSquaresProblem
 const OP = OptimizationProblem
 LSOLM = LeastSquaresOptimJL(:lm; autodiff=:forward)
-pythonplot()
+# pythonplot()
 
+begin
 # ------------------
 # Load Kv function
 # Computed in scripts/kv.jl, because it is used elsewhere too
-@unpack K_shf = load(datadir("exp_pro", "simtra_kv.jld2"))
+Kshf = load(datadir("exp_pro", "simtra_kv.jld2"))["K_shf"]
 
 # --------------------------
 # Cycle 1
@@ -18,19 +19,18 @@ pythonplot()
 dat1raw = CSV.read(datadir("exp_raw", "Simtra_Rp", "Suc_Cycle1.csv"), Table)
 dat1 = map(simtra_rename, dat1raw)
 
-pch1_pir_der2 = savitzky_golay(dat1.pch_pir, 391, 3, deriv=2, rate=1/u"minute").y
-t_end1 = dat1.t[argmax(pch1_pir_der2[10u"hr" .< dat1.t .< 85u"hr"])] + 10u"hr"
+t_end1 = identify_pd_end_onoff(dat1, 391, 10u"hr", 85u"hr")
 
 pch1 = RampedVariable(100u"mTorr")
-@df dat1 plot(:t, :pch_cm, ylim=(0, 200))
-@df dat1 plot(:t, :pch_pir, ylim=(0, 200))
-plot!(pch1)
-tendplot!(t_end1)
+# @df dat1 plot(:t, :pch_cm, ylim=(0, 200))
+# @df dat1 plot(:t, :pch_pir, ylim=(0, 200))
+# plot!(pch1)
+# tendplot!(t_end1)
 
 # There's a slight delay before shelf temperature ramps
 Tsh1 = RampedVariable(uconvert.(u"K", [-40, -40, -25]u"°C"), [1u"K/minute", 0.5u"K/minute"], [23u"minute"])
-@df dat1 plot(:t, :Tsh, xlim=(0, 2))
-plot!(Tsh1)
+# @df dat1 plot(:t, :Tsh, xlim=(0, 2))
+# plot!(Tsh1)
 
 fitdat1 = PrimaryDryFit(dat1.t, (
     filter(x->(!isnan(x) && x<-32.5u"°C"), dat1.T1),
@@ -39,7 +39,7 @@ fitdat1 = PrimaryDryFit(dat1.t, (
     ),
     t_end1
 )
-plot(fitdat1)
+# plot(fitdat1)
 
 # ------------------------------
 # Cycle 2
@@ -48,30 +48,27 @@ dat2raw = CSV.read(datadir("exp_raw", "Simtra_Rp", "Suc_Cycle2.csv"), Table)
 dat2 = map(simtra_rename, dat2raw)
 filter!(x->x.t .> 0u"hr", dat2)
 
-begin
-@df dat1 exptfplot(:t, :T1, :T2, :T3)
-@df dat2 exptfplot!(:t, :T1, :T2, :T3, c=:red)
-plot!(ylim=(-40, -30))
-end
+# @df dat1 exptfplot(:t, :T1, :T2, :T3)
+# @df dat2 exptfplot!(:t, :T1, :T2, :T3, c=:red)
+# plot!(ylim=(-40, -30))
 
-pch2_pir_der2 = savitzky_golay(dat2.pch_pir, 391, 3, deriv=2, rate=1/u"minute").y
-t_end2 = dat2.t[argmax(pch2_pir_der2[10u"hr" .< dat2.t .< 120u"hr"])] + 10u"hr"
+t_end2 = identify_pd_end_onoff(dat2, 391, 10u"hr", 120u"hr")
 pch2 = RampedVariable(100u"mTorr")
-@df dat2 plot(:t, :pch_cm, ylim=(0, 200))
-@df dat2 plot(:t, :pch_pir, ylim=(0, 200))
-plot!(pch2)
-tendplot!(t_end2)
+# @df dat2 plot(:t, :pch_cm, ylim=(0, 200))
+# @df dat2 plot(:t, :pch_pir, ylim=(0, 200))
+# plot!(pch2)
+# tendplot!(t_end2)
 
 fitdat2 = @df dat2 PrimaryDryFit(:t, (
     # collect(filter(!isnan, :T1)),
     filter(!isnan, :T2[:t .< 85u"hr"]),
     filter(!isnan, :T3),),
     t_end2)
-plot(fitdat2)
+# plot(fitdat2)
 
-Tsh2 = Tsh1 - 5u"K"
-@df dat2 plot(:t, :Tsh, xlim=(0, 2))
-plot!(Tsh2)
+Tsh2 = RampedVariable(uconvert.(u"K", [-45, -45, -30]u"°C"), [1u"K/minute", 0.5u"K/minute"], [23u"minute"])
+# @df dat2 plot(:t, :Tsh, xlim=(0, 2))
+# plot!(Tsh2)
 
 # -------------------------------  
 # Cycle 3
@@ -80,148 +77,253 @@ dat3 = map(simtra_rename, dat3raw)
 @df dat3 exptfplot(:t, :T1, :T2, :T3)
 
 pch3 = RampedVariable(60u"mTorr")
-@df dat3 plot(:t, :pch_cm, ylim=(0, 200))
-plot!(pch3)
+t_end3 = identify_pd_end_onoff(dat3, 391, 10u"hr", 68u"hr")
+# @df dat3 plot(:t, :pch_cm, ylim=(0, 200))
+# @df dat3 plot!(:t, :pch_pir, ylim=(0, 200))
+# plot!(pch3)
+# tendplot!(t_end3)
+
 Tsh3 = RampedVariable(uconvert.(u"K", [-40, -25]u"°C"), 0.5u"K/minute")
-@df dat3 plot(:t, :Tsh, xlim=(0, 2))
-plot!(Tsh3)
-fitdat3 = @df dat3 PrimaryDryFit(:t, (filter(!isnan, :T1), filter(!isnan, :T2), :T3[:t.<45u"hr"]))
+# @df dat3 plot(:t, :Tsh, xlim=(0, 2))
+# plot!(Tsh3)
+fitdat3 = @df dat3 PrimaryDryFit(:t, (filter(!isnan, :T1), filter(!isnan, :T2), :T3[:t.<45u"hr"]), t_end3)
+# plot(fitdat3)
 
 # -----------------
 # Cycle 5
 dat5raw = CSV.read(datadir("exp_raw", "Simtra_Rp", "Suc_Cycle5.csv"), Table)
 dat5 = map(simtra_rename, dat5raw)
-@df dat5 exptfplot(:t, :T1, :T2, :T3)
 
 pch5 = RampedVariable(50u"mTorr")
-@df dat5 plot(:t, :pch_cm, ylim=(0, 200))
-plot!(pch5)
+t_end5 = identify_pd_end_onoff(dat5, 391, 10u"hr", 50u"hr")
+# @df dat5 plot(:t, :pch_cm, ylim=(0, 200))
+# @df dat5 plot!(:t, :pch_pir, ylim=(0, 200))
+# plot!(pch5)
+# tendplot!(t_end5)
+
 Tsh5 = RampedVariable(uconvert.(u"K", [-40, -40, -20]u"°C"), [1u"K/minute", 0.5u"K/minute"], [12u"minute"])
-@df dat5 plot(:t, :Tsh_i, xlim=(0, 2))
-plot!(Tsh5)
+# @df dat5 plot(:t, :Tsh_i, xlim=(0, 2))
+# plot!(Tsh5)
 
-fitdat5 = @df dat5 PrimaryDryFit(:t, (filter(!isnan, :T1), filter(!isnan, :T3), :T2[:t.<40u"hr"]))
-
+fitdat5 = @df dat5 PrimaryDryFit(:t, (filter(!isnan, :T1), filter(!isnan, :T3), :T2[:t.<40u"hr"]), t_end5)
+# plot(fitdat5)
 
 # -----------------
 # Cycle 8, high temperature
 dat8raw = CSV.read(datadir("exp_raw", "Simtra_Rp", "Suc_Cycle8.csv"), Table)
 dat8 = map(simtra_rename, dat8raw)
-@df dat8 exptfplot(:t, :T1, :T2, :T3)
-@df dat8 plot!(:t, :Tsh_i, xlim=(0, 20), ylim=(-40, -20))
+# @df dat8 exptfplot(:t, :T1, :T2, :T3)
+# @df dat8 plot!(:t, :Tsh_i, xlim=(0, 20), ylim=(-40, -20))
 
-pch8_pir_der2 = savitzky_golay(dat8.pch_pir, 391, 3, deriv=2, rate=1/u"minute").y
-t_end8 = dat8.t[argmax(pch8_pir_der2[10u"hr" .< dat8.t .< 41u"hr"])] + 10u"hr"
 pch8 = RampedVariable(100u"mTorr")
-@df dat8 plot(:t, :pch_cm, ylim=(0, 200))
-@df dat8 plot(:t, :pch_pir, ylim=(0, 200))
-plot!(pch8)
-tendplot!(t_end8)
+t_end8 = identify_pd_end_onoff(dat8, 391, 10u"hr", 41u"hr")
+# @df dat8 plot(:t, :pch_cm, ylim=(0, 200))
+# @df dat8 plot(:t, :pch_pir, ylim=(0, 200))
+# plot!(pch8)
+# tendplot!(t_end8)
 
 Tsh8 = RampedVariable(uconvert.(u"K", [-40, -40, -10]u"°C"), [1u"K/minute", 0.5u"K/minute"], [4u"minute"])
-@df dat8 plot(:t, :Tsh_i, xlim=(0, 2))
-plot!(Tsh8)
+# @df dat8 plot(:t, :Tsh_i, xlim=(0, 2))
+# plot!(Tsh8)
 
 fitdat8 = @df dat8 PrimaryDryFit(:t, (
     filter(!isnan, :T1),
     filter(!isnan, :T2[:t .< 17u"hr"]),
     filter(!isnan, :T3[:t .< 17u"hr"]),),
-    t_end8)
-plot(fitdat8)
+    t_end8);
+# plot(fitdat8)
+end
 
 # tcond = (termination_condition=NonlinearSolve.AbsTerminationMode(),)
 # -------------
-# Model setup
+# Parameter setup
 
+begin
 rad_i = 1.1u"cm"
 rad_o = 1.2u"cm"
-A_p = π*rad_i^2
-A_v = π*rad_o^2
+Ap = π*rad_i^2
+Av = π*rad_o^2
 fillvol = 5u"mL"
-hf0 = fillvol/A_p
+hf0 = fillvol/Ap
 
 Rp_g = RpFormFit(0.8u"cm^2*Torr*hr/g", 14u"cm*Torr*hr/g", 1u"1/cm")
 
 csolid = 0.04u"g/mL"
 ρsolution = 1u"g/mL"
 
-pb_pikal = ParamObjPikal([
-    (Rp_g, hf0, csolid, ρsolution),
-    (K_shf, A_v, A_p),
-    (pch1, Tsh1),
-])
+# pb_pikal = ParamObjPikal([
+#     (Rp_g, hf0, csolid, ρsolution),
+#     (K_shf, A_v, A_p),
+#     (pch1, Tsh1),
+# ])
 
-pop1 = pb_pikal
-pop2 = copy(pop1)
-@reset pop2.pch = pch2
-@reset pop2.Tsh = Tsh2
-pop8 = copy(pop1)
-@reset pop8.pch = pch8
-@reset pop8.Tsh = Tsh8
+# pop1 = pb_pikal
+# pop2 = copy(pop1)
+# @reset pop2.pch = pch2
+# @reset pop2.Tsh = Tsh2
+# pop8 = copy(pop1)
+# @reset pop8.pch = pch8
+# @reset pop8.Tsh = Tsh8
 
 
-function err_Rp(x, p; verbose=false)
-    if any(x .< 0)
-        return NaN
-    end
-    sol = gen_sol_Rp(x, p[1])
-    return err_expT(sol, p[2], tweight=1e-4, verbose=verbose)
-end
-# err_Rp(x,p; verbose=false) = LyoPronto.err_expT(gen_sol_Rp(x, p[1])[1], p[2]; verbose=verbose)
-@time err_Rp(fill(0.0, 3), (pop1, fitdat1))
+# @time opt_Rp1 = solve(OP(obj_Rpf, fill(0.0, 3), (pop1, fitdat1)),Optim.BFGS(), g_tol=1e-3)
+# # opt_Rp1 = solve(NLSP(obj_Rp, [0.8, 14, 1], p=(pop1, fitdat1)), LM(); reltol=1e-1, show_trace=Val(true))
 
-opt1p = solve(NLSP(err_Rp, fill(0.0, 3), p=(pop1, fitdat1)), LM(); maxiters = 100, abstol=1e-2, show_trace=Val(true), tcond...)
-@time opt_Rp1 = solve(OP(obj_Rpf, fill(0.0, 3), (pop1, fitdat1)),Optim.BFGS(), g_tol=1e-3)
-# opt_Rp1 = solve(NLSP(obj_Rp, [0.8, 14, 1], p=(pop1, fitdat1)), LM(); reltol=1e-1, show_trace=Val(true))
+# sol1_Rp1 = gen_sol_Rp(opt_Rp1.u, pop1);
+# Rp1_params = sol1_Rp1.prob.p
+# plot(u"hr", u"°C", xlim=(0, 60), ylim=(-40, -30))
+# modconvtplot!(sol1_Rp1)
+# @df dat1 exptfplot!(:t, :T1, :T2, :T3)
 
-sol1_Rp1 = gen_sol_Rp(opt_Rp1.u, pop1);
-Rp1_params = sol1_Rp1.prob.p
-plot(u"hr", u"°C", xlim=(0, 60), ylim=(-40, -30))
-modconvtplot!(sol1_Rp1)
-@df dat1 exptfplot!(:t, :T1, :T2, :T3)
+# # -------------- Provide guess values for new parameters
 
-# -------------- Provide guess values for new parameters
-
-# typical diameter: 50 μm
+# # typical diameter: 50 μm
 d_typical = 50u"μm"
-# typical total volume: 
 V_typical = 4/3*π*d_typical^3
 N_typical = 1/V_typical
-# Good guesses for Knudsen
+# Dummy values
 N = ConstPhysProp(N_typical)
 S = ConstPhysProp(V_typical) # = V_typ^2*N_typ
 C = 2e-1u"m^0.5"
 Rs = 0.5u"cm^2*Torr*hr/g"
 k0 = 1e-14u"1/s"
 
-pb_mc = (
+pop1 = ParamObjPikal([
+    (Rp_g, hf0, csolid, ρsolution),
+    (Kshf, Av, Ap),
+    (pch1, Tsh1),
+])
+pomc1 = ParamObjMC([
     (hf0, csolid, ρsolution),
-    (K_shf, A_v, A_p),
+    (Kshf, Av, Ap),
     (pch1, Tsh1),
     (ConstPhysProp(k0), C, N, S, Rs)
-)
-pomc1 = ParamObjMC(pb_mc)
-pomc2 = copy(pomc1)
-@reset pomc2.pch = pch2
-@reset pomc2.Tsh = Tsh2
-pomc8 = copy(pomc1)
-@reset pomc8.pch = pch8
-@reset pomc8.Tsh = Tsh8
+])
 
-# tprob = ODEProblem(pomc1)
-# tsol = solve(tprob, Rodas3(autodiff=true))
-# poreevolplot(tsol)
-function k_f_interp_suc(logk)
-    return InterpK(logk, [-45.0, -38, -32, -28]u"°C" .|> u"K", k0)
+function new_Tp(po, Tsh, pch)
+    po_n = deepcopy(po)
+    @reset po_n.pch = pch
+    @reset po_n.Tsh = Tsh
+    return po_n
+end
+pop2 = new_Tp(pop1, Tsh2, pch2)
+pop3 = new_Tp(pop1, Tsh3, pch3)
+pop5 = new_Tp(pop1, Tsh5, pch5)
+pop8 = new_Tp(pop1, Tsh8, pch8)
+pomc2 = new_Tp(pomc1, Tsh2, pch2)
+pomc3 = new_Tp(pomc1, Tsh3, pch3)
+pomc5 = new_Tp(pomc1, Tsh5, pch5)
+pomc8 = new_Tp(pomc1, Tsh8, pch8)
+dat1 = Table(dat1, (ld=FulbrightPores.calc_l(dat1, pop1.hf0)))
+dat2 = Table(dat2, (ld=FulbrightPores.calc_l(dat2, pop2.hf0)))
+dat3 = Table(dat3, (ld=FulbrightPores.calc_l(dat3, pop3.hf0)))
+dat5 = Table(dat5, (ld=FulbrightPores.calc_l(dat5, pop5.hf0)))
+dat8 = Table(dat8, (ld=FulbrightPores.calc_l(dat8, pop8.hf0)))
 end
 
-function err_MC_interp(x,p)
-    if ~(x[5] < x[6] < x[7] < x[8])
-        # count number of data points
-        return fill(NaN, sum(p[2].Tf_iend) + (ismissing(p[2].Tvws) ? 0 : sum(p[2].Tvw_iend)) + !ismissing(p[2].t_end))
+cases = Table([ (name="1", pop=pop1, pomc=pomc1, fitdat=fitdat1, dat=dat1),
+                (name="2", pop=pop2, pomc=pomc2, fitdat=fitdat2, dat=dat2),
+                (name="3", pop=pop3, pomc=pomc3, fitdat=fitdat3, dat=dat3),
+                (name="5", pop=pop5, pomc=pomc5, fitdat=fitdat5, dat=dat5),
+                (name="8", pop=pop8, pomc=pomc8, fitdat=fitdat8, dat=dat8),
+                ])
+
+trans_Rp = Rp_transform_basic(0.8u"cm^2*Torr*hr/g", 14.0u"cm*Torr*hr/g", 1e0u"1/cm")
+obj_Rpf = OptimizationFunction((x,y)->obj_pd(x,y,tweight=1e-2), AutoForwardDiff(chunksize=3))
+sqe_Rpf = NonlinearFunction{false}((x,y)->nls_pd(x,y,tweight=1e-2))
+# obj_Rpf = OptimizationFunction(obj_pd, AutoForwardDiff(chunksize=3))
+@time obj_Rpf([0.0, 1.0, 0.0], (trans_Rp, pop1, fitdat1))
+@time sqe_Rpf([0.0, 1.0, 0.0], (trans_Rp, pop1, fitdat1))
+
+@time opt1p = solve(NLSP(sqe_Rpf, fill(0.0, 3), p=(trans_Rp, pop1, fitdat1)), LevenbergMarquardt(); maxiters = 100, abstol=1e-2, show_trace=Val(true))
+obj_npf = OptimizationFunction((x,y)->objn_pd(x,y,tweight=1e-2), AutoForwardDiff(chunksize=3))
+
+single_Rps = map(cases) do case
+    (;name, pop, fitdat, dat) = case
+    u0 = [0., 0., 0.]
+    @time opt = solve(OP(obj_Rpf, u0, (trans_Rp, pop, fitdat)), optalg)#, g_tol=1e-6)
+    Rp = RpFormFit(transform(trans_Rp, opt.u).Rp...)
+    sol = gen_sol_pd(opt.u, trans_Rp, pop, fitdat)
+    @info "analyis" name opt Rp
+    hRps = map(x->calc_hRp_T(case.pop, case.fitdat, i=x), 1:length(case.fitdat.Tfs))
+    return (opt=opt, sol_p=sol, Rp, hRps)
+end;
+
+cases_Rps = Table(cases, single_Rps)
+
+pls = map(cases_Rps) do case 
+    plT = blankplot_hrC()
+    plot!(case.fitdat, title=case.name)
+    modconvtplot!(case.sol_p)
+    plot!(legend = :bottomright)
+    # plot!(case.pop.Tsh, tmax=case.fitdat.t_end, c=:black, label=L"T_\mathrm{sh}")
+    return plT
+end
+plot(pls..., layout=(3,2), size=(800, 1000))
+
+l = range(0u"cm", hf0, length=100)
+begin
+pls = map(cases_Rps) do case
+    plr = blankplot_lRp()
+    plot!(case.dat.ld, case.dat.Rp, label="TDLAS")
+    for i in 1:length(case.fitdat.Tfs)
+        hdT, RpT = case.hRps[i]
+        plot!(hdT, RpT, c=i+1, label="Rp from TP$i")
     end
-    sol = gen_sol_mc_arb(x, p[1], k_f_interp_suc)
-    return LyoPronto.err_expT(sol, p[2])
+    plot!(l, case.Rp.(l), c=5, label="3PP fit directly to T")
+    plot!(ylim=(0, 10), legend = :bottomright)
+    plot!(title="\$p_{ch}=\\mathrm{$(case.pop.pch(Inf*u"s")|>u"mTorr")}\$,\n \$T_{sh}=$(float(case.pop.Tsh(Inf*u"s")|>u"°C"))\$  ")
+    plot!(top_margin=20Plots.px)
+    plot!(bottom_margin=15Plots.px)
+    case.name ∈ ["1", "5"] && plot!(left_margin=20Plots.px)
+    plot!(legend=:none)
+    return plr
+end
+explot = plot(framestyle=:none, legendfontsize=12, legend_position=:inside)
+plot!([Inf], [Inf], label="TDLAS", c=1)
+plot!([Inf], [Inf], label="Rp from TP1", c=2)
+plot!([Inf], [Inf], label="Rp from TP2", c=3)
+plot!([Inf], [Inf], label="Rp from TP3", c=4)
+plot!([Inf], [Inf], label="3PP fit directly to T", c=5)
+plot(pls..., explot, layout=(2,3), size=(900, 500))
+end
+savefig(plotsdir("simtra_suc_Rp.png"))
+savefig(plotsdir("simtra_suc_Rp.svg"))
+savefig(plotsdir("simtra_suc_Rp.pdf"))
+
+function make_Rp_pass(casenums)
+    subdat = filter(x->parse(Int, x.name)∈casenums, cases_Rps)
+    (subdat.pop, subdat.fitdat)
+end
+function make_mc_pass(casenums)
+    subdat = filter(x->parse(Int, x.name)∈casenums, cases)
+    (subdat.pomc, subdat.fitdat)
+end
+
+rpfit_cases = Table(cases = [(1,), (2,), (3,), (5,), (8,), (1,8), (1,2,8)],
+        p0 = fill([0.5, -0.3, 0], 7),
+        trans = fill(trans_Rp, 7))
+rpfits = map(rpfit_cases) do case
+    @time solve(OP(obj_npf, case.p0, (case.trans, make_Rp_pass(case.cases)...)), optalg;)
+end
+
+# -----------------------------
+# Fit k by interpolating at four values
+# interp_nt = (kl1 = TV.Identity(),
+#             kl2 = TV.Identity(),
+#             kl3 = TV.Identity(),
+#             kl4 = TV.Identity())
+const TV = TransformVariables
+interp_nt = (kl1 = TV.Identity(),
+            kl2 = TVExp(),
+            kl3 = TVExp(),
+            kl4 = TVExp())
+function FulbrightPores.k_f_nt(nt::NamedTuple{(:kl1, :kl2, :kl3, :kl4)})
+    # return InterpK([nt...], [-45.0, -38, -32, -28]u"°C" .|> u"K", 1e-14u"s^-1")
+    # if nt.kl1 < nt.kl2 || nt.kl2 < nt.kl3 || nt.kl3 < nt.kl4
+    #     return 
+    # end
+    return InterpK(cumsum([nt...]), [-45.0, -38, -32, -22]u"°C" .|> u"K", 1e-14u"s^-1")
 end
 # opt2p = solve(NLSP(err_Rp, opt_Rp1.u, (pop2, fitdat2)), TR(); maxiters=200)
 # opt_MC2 = solve(NLSP(err_MC, opt_MC1.u, (pomc2, fitdat2)), TR(); maxiters=200)
