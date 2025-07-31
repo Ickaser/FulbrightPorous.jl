@@ -20,7 +20,7 @@ Kshf = load(datadir("exp_pro", "simtra_kv.jld2"))["K_shf"]
 dat1raw = CSV.read(datadir("exp_raw", "Simtra_Rp", "Suc_Cycle1.csv"), Table)
 dat1 = map(simtra_rename, dat1raw)
 
-t_end1 = identify_pd_end_2der(dat1, 391, 10u"hr", 85u"hr")
+t_end1 = identify_pd_end_onoff(dat1, 391, 10u"hr", 85u"hr")
 
 pch1 = RampedVariable(100u"mTorr")
 # @df dat1 plot(:t, :pch_cm, ylim=(0, 200))
@@ -53,7 +53,7 @@ filter!(x->x.t .> 0u"hr", dat2)
 # @df dat2 exptfplot!(:t, :T1, :T2, :T3, c=:red)
 # plot!(ylim=(-40, -30))
 
-t_end2 = identify_pd_end_2der(dat2, 391, 10u"hr", 120u"hr")
+t_end2 = identify_pd_end_onoff(dat2, 391, 10u"hr", 120u"hr")
 pch2 = RampedVariable(100u"mTorr")
 # @df dat2 plot(:t, :pch_cm, ylim=(0, 200))
 # @df dat2 plot(:t, :pch_pir, ylim=(0, 200))
@@ -67,7 +67,7 @@ fitdat2 = @df dat2 PrimaryDryFit(:t, (
     t_end2)
 # plot(fitdat2)
 
-Tsh2 = Tsh1 - 5u"K"
+Tsh2 = RampedVariable(uconvert.(u"K", [-45, -45, -30]u"°C"), [1u"K/minute", 0.5u"K/minute"], [23u"minute"])
 # @df dat2 plot(:t, :Tsh, xlim=(0, 2))
 # plot!(Tsh2)
 
@@ -77,7 +77,7 @@ dat3raw = CSV.read(datadir("exp_raw", "Simtra_Rp", "Suc_Cycle3.csv"), Table)
 dat3 = map(simtra_rename, dat3raw)
 
 pch3 = RampedVariable(60u"mTorr")
-t_end3 = identify_pd_end_2der(dat3, 391, 10u"hr", 68u"hr")
+t_end3 = identify_pd_end_onoff(dat3, 391, 10u"hr", 68u"hr")
 # @df dat3 plot(:t, :pch_cm, ylim=(0, 200))
 # @df dat3 plot!(:t, :pch_pir, ylim=(0, 200))
 # plot!(pch3)
@@ -95,7 +95,7 @@ dat5raw = CSV.read(datadir("exp_raw", "Simtra_Rp", "Suc_Cycle5.csv"), Table)
 dat5 = map(simtra_rename, dat5raw)
 
 pch5 = RampedVariable(50u"mTorr")
-t_end5 = identify_pd_end_2der(dat5, 391, 10u"hr", 50u"hr")
+t_end5 = identify_pd_end_onoff(dat5, 391, 10u"hr", 50u"hr")
 # @df dat5 plot(:t, :pch_cm, ylim=(0, 200))
 # @df dat5 plot!(:t, :pch_pir, ylim=(0, 200))
 # plot!(pch5)
@@ -116,7 +116,7 @@ dat8 = map(simtra_rename, dat8raw)
 # @df dat8 plot!(:t, :Tsh_i, xlim=(0, 20), ylim=(-40, -20))
 
 pch8 = RampedVariable(100u"mTorr")
-t_end8 = identify_pd_end_2der(dat8, 391, 10u"hr", 41u"hr")
+t_end8 = identify_pd_end_onoff(dat8, 391, 10u"hr", 41u"hr")
 # @df dat8 plot(:t, :pch_cm, ylim=(0, 200))
 # @df dat8 plot(:t, :pch_pir, ylim=(0, 200))
 # plot!(pch8)
