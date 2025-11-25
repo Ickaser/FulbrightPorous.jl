@@ -53,8 +53,8 @@ fitdat1 = @df dat1 PrimaryDryFit(:t,
     :T2[:t .< 5u"hr"],
     :T3[:t .< 5u"hr"],
     :T4[:t .< 5.9u"hr"],
-    ),
-    t_end1
+    );
+    t_end=t_end1
 )
 # plot(fitdat1)
 
@@ -83,8 +83,8 @@ fitdat2 = @df dat2 PrimaryDryFit(:t, (
     :T2[:t .< 7u"hr"],
     :T3[:t .< 4u"hr"],
     :T4[:t .< 3u"hr"],
-    ),
-    t_end2
+    );
+    t_end=t_end2
 )
 # plot(fitdat2)
 
@@ -113,8 +113,8 @@ fitdat3 = @df dat3 PrimaryDryFit(:t, (
     :T2[:t .< 4u"hr"],
     :T3[:t .< 3.5u"hr"],
     :T4[:t .< 3.5u"hr"],
-    ),
-    t_end3
+    );
+    t_end=t_end3
 )
 # plot(fitdat3)
 end

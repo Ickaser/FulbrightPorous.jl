@@ -76,7 +76,7 @@ dat1a = map(fissore_units1, CSV.read(datadir("exp_raw", "Fissore2015", "1_Tf.csv
 dat1b = map(fissore_units2, CSV.read(datadir("exp_raw", "Fissore2015", "1_Tsh.csv"), Table))
 # @df dat1a plot(:t, :Tf)
 
-fitdat1 = @df filter(x->(0u"s"<x.t<23u"hr"), dat1a) PrimaryDryFit(:t, :Tf, 25u"hr")
+fitdat1 = @df filter(x->(0u"s"<x.t<23u"hr"), dat1a) PrimaryDryFit(:t, :Tf; t_end=25u"hr")
 plot(fitdat1)
 
 Tsh1 = RampedVariable([-40, -20, -25, -30]u"°C".|>u"K", [1, 1, 1]u"K/minute", [1, 3.5]u"hr")
@@ -115,7 +115,7 @@ po_1p = ParamObjPikal([
 dat2a = map(fissore_units1, CSV.read(datadir("exp_raw", "Fissore2015", "2_Tf.csv"), Table))
 dat2b = map(fissore_units2, CSV.read(datadir("exp_raw", "Fissore2015", "2_Tsh.csv"), Table))
 # @df dat2a plot(:t, :Tf)
-fitdat2 = @df filter(x->(0u"s"<x.t<15u"hr"), dat2a) PrimaryDryFit(:t, :Tf, 17u"hr")
+fitdat2 = @df filter(x->(0u"s"<x.t<15u"hr"), dat2a) PrimaryDryFit(:t, :Tf; t_end=17u"hr")
 plot(fitdat2)
 
 Tsh2 = RampedVariable([-40, -20]u"°C".|>u"K", 1u"K/minute")
@@ -157,7 +157,7 @@ dat3a = map(fissore_units1, CSV.read(datadir("exp_raw", "Fissore2015", "3_Tf.csv
 dat3b = map(fissore_units2, CSV.read(datadir("exp_raw", "Fissore2015", "3_Tsh.csv"), Table))
 @df dat3a plot(:t, :Tf)
 
-fitdat3 = @df filter(x->(0u"s"<x.t<9u"hr"), dat3a) PrimaryDryFit(:t, :Tf, 12u"hr")
+fitdat3 = @df filter(x->(0u"s"<x.t<9u"hr"), dat3a) PrimaryDryFit(:t, :Tf; t_end=12u"hr")
 plot(fitdat3)
 
 # Match a ramped variable to the reported Tsh

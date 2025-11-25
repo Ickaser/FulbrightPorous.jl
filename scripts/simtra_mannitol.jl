@@ -35,8 +35,8 @@ fitdat1 = @df dat1[12:end] PrimaryDryFit(:t, (
     filter(!isnan, :T1),
     :T2[:t .< 22u"hr"],
     :T3[:t .< 20u"hr"],
-    ),
-    t_end1
+    );
+    t_end=t_end1
 )
 plot(fitdat1)
 
@@ -65,8 +65,8 @@ fitdat2 = @df dat2[10:end] PrimaryDryFit(:t, (
     filter(!isnan, :T1),
     filter(!isnan, :T2),
     :T3[:t .< 7.5u"hr"],
-    ),
-    t_end2
+    );
+    t_end=t_end2
 )
 plot(fitdat2)
 
@@ -98,8 +98,8 @@ fitdat3 = @df dat3[10:end] PrimaryDryFit(:t, (
     filter(!isnan, :T1),
     :T2[:t .< 13u"hr"],
     filter(!isnan, :T3),
-    ),
-    t_end3
+    );
+    t_end=t_end3
 )
 plot(fitdat3)
 
@@ -128,8 +128,8 @@ fitdat6 = @df dat6[20:end] PrimaryDryFit(:t, (
     filter(!isnan, :T1),
     :T2[:t .< 7u"hr"],
     filter(!isnan, :T3),
-    ),
-    t_end6
+    );
+    t_end=t_end6
 )
 plot(fitdat6)
 
@@ -158,8 +158,8 @@ fitdat7 = @df dat7[15:end] PrimaryDryFit(:t, (
     filter(!isnan, :T1),
     filter(!isnan, :T2),
     :T3[:t .< 9u"hr"],
-    ),
-    t_end7
+    );
+    t_end=t_end7
 )
 plot(fitdat7)
 end
