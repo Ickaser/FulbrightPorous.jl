@@ -1,10 +1,4 @@
-
-const OP = OptimizationProblem
-using LineSearches
-optalg = BFGS(linesearch=LineSearches.BackTracking())
-default(:linewidth, 3)
-default(:markersize, 5)
-using UnitfulLatexify
+fp_plot_defaults()
 
 casenames = ["A3", "A5", "A6", "B"]
 readcaseT(name) = CSV.read(datadir("Deck_et_al_2024", "$(name)_tT.csv"), Table, header=["t", "T"])

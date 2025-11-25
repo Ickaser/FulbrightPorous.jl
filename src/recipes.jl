@@ -1,11 +1,14 @@
-export blankplot_hrC
 blankplot_hrC(;kwargs...) = plot(u"hr", u"°C", xlabel="Time", ylabel="Temperature", unitformat=:square;kwargs...)
+
+blankplot_lRp(;kwargs...) = plot(u"cm", u"cm^2*Torr*hr/g", xlabel=L"h_d", ylabel=L"R_p", unitformat=(x,y)->"$x [$(latexify(y))]";kwargs...)
+
+function fp_plot_defaults()
+    default(:linewidth, 3)
+    default(:markersize, 5)
+end
 
 # ------------------------
 # Visualize the pore size evolution
-export blankplot_lRp
-blankplot_lRp(;kwargs...) = plot(u"cm", u"cm^2*Torr*hr/g", xlabel=L"h_d", ylabel=L"R_p", unitformat=(x,y)->"$x [$(latexify(y))]";kwargs...)
-
 public calc_moms
 public calc_moms_NS
 

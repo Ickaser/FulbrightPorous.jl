@@ -1,12 +1,4 @@
-using DrWatson
-@quickactivate :FulbrightPores
-
-const OP = OptimizationProblem
-using LineSearches
-optalg = BFGS(linesearch=LineSearches.BackTracking())
-default(:linewidth, 3)
-default(:markersize, 5)
-using UnitfulLatexify
+fp_plot_defaults()
 
 begin
 # ------------------

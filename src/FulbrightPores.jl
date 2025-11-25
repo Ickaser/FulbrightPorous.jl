@@ -12,27 +12,32 @@ import LyoPronto: ODEProblem
 @reexport using TypedTables
 @reexport using PrettyTables
 @reexport using Optim
-# @reexport using LeastSquaresOptim
 @reexport using NonlinearSolve
-@reexport using Optimization
 @reexport using OptimizationOptimJL
 @reexport using Accessors
 @reexport using DataInterpolations
-@reexport using UnitfulLatexify, Latexify
+@reexport using Latexify
 @reexport using SavitzkyGolay
 using ADTypes: AutoForwardDiff
 using DocStringExtensions
 using ConcreteStructs
 using LinearAlgebra: Diagonal
 
+export OP, optalg
+const OP = OptimizationProblem
+using LineSearches
+optalg = BFGS(linesearch=LineSearches.BackTracking())
 
 export odealg_chunk4
 const odealg_chunk4 = Rodas4(autodiff=AutoForwardDiff(chunksize=4))
 
+
 include("pikal_microcollapse.jl")
 include("kinetic_models.jl")
+export k_f_nt
 include("fitting.jl")
 include("table_renaming.jl")
+export blankplot_hrC, blankplot_lRp, fp_plot_defaults 
 include("recipes.jl")
 
 end

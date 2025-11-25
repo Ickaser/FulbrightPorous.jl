@@ -1,9 +1,4 @@
-const OP = OptimizationProblem
-using LineSearches
-optalg = BFGS(linesearch=LineSearches.BackTracking())
-default(:linewidth, 3)
-default(:markersize, 5)
-using UnitfulLatexify
+fp_plot_defaults()
 
 begin
 Kv = load(datadir("exp_pro", "gravimetric_kv.jld2"))["Kv"]
