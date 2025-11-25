@@ -22,8 +22,8 @@ overnightfix(dat1)
 
 # plot(dat1raw.Phase)
 
-# t_end1 = identify_pd_end_2der(dat1, 91, 1u"hr", 50u"hr")
-t_end1 = identify_pd_end_onoff(dat1, 91, 1u"hr", 50u"hr")
+# t_end1 = identify_pd_end(dat1.t, dat1.pch_pir, Val(:2der), window_width=91,  tmin=1u"hr",  tmax=50u"hr")
+t_end1 = identify_pd_end(dat1.t, dat1.pch_pir, Val(:onoff), window_width=91,  tmin=1u"hr",  tmax=50u"hr")
 
 pch1 = RampedVariable(100.0u"mTorr")
 # @df dat1 plot(:t, :pch_cm, ylim=(0, 200))
@@ -52,8 +52,8 @@ dat2pd = filter(x->x.Phase==4, dat2raw)
 dat2 = map(x->microfd_fulbright_columnrename(x, dat2pd.CycleTime[1]), dat2pd)
 overnightfix(dat2)
 
-# t_end2 = identify_pd_end_2der(dat2, 91, 1u"hr", 50u"hr")
-t_end2 = identify_pd_end_onoff(dat2, 91, 1u"hr", 50u"hr")
+# t_end2 = identify_pd_end(dat2.t, dat2.pch_pir, Val(:2der), window_width=91,  tmin=1u"hr",  tmax=50u"hr")
+t_end2 = identify_pd_end(dat2.t, dat2.pch_pir, Val(:onoff), window_width=91,  tmin=1u"hr",  tmax=50u"hr")
 
 pch2 = RampedVariable(100.0u"mTorr")
 # @df dat2 plot(:t, :pch_cm, ylim=(0, 200))
@@ -82,8 +82,8 @@ dat3pd = filter(x->x.Phase==4, dat3raw)
 dat3 = map(x->microfd_fulbright_columnrename(x, dat3pd.CycleTime[1]), dat3pd)
 overnightfix(dat3)
 
-# t_end3 = identify_pd_end_2der(dat3, 91, 1u"hr", 50u"hr")
-t_end3 = identify_pd_end_onoff(dat3, 91, 1u"hr", 50u"hr")
+# t_end3 = identify_pd_end(dat3.t, dat3.pch_pir, Val(:2der), window_width=91,  tmin=1u"hr",  tmax=50u"hr")
+t_end3 = identify_pd_end(dat3.t, dat3.pch_pir, Val(:onoff), window_width=91,  tmin=1u"hr",  tmax=50u"hr")
 
 pch3 = RampedVariable(100.0u"mTorr")
 # @df dat3 plot(:t, :pch_cm, ylim=(0, 200))
@@ -115,8 +115,8 @@ dat4pd = filter(x->x.Phase==4, dat4raw)
 dat4 = map(x->microfd_fulbright_columnrename(x, dat4pd.CycleTime[1]), dat4pd)
 overnightfix(dat4)
 
-# t_end4 = identify_pd_end_2der(dat4, 91, 1u"hr", 50u"hr")
-t_end4 = identify_pd_end_onoff(dat4, 91, 1u"hr", 50u"hr")
+# t_end4 = identify_pd_end(dat4.t, dat4.pch_pir, Val(:2der), window_width=91,  tmin=1u"hr",  tmax=50u"hr")
+t_end4 = identify_pd_end(dat4.t, dat4.pch_pir, Val(:onoff), window_width=91,  tmin=1u"hr",  tmax=50u"hr")
 
 pch4 = RampedVariable(100.0u"mTorr")
 # @df dat4 plot(:t, :pch_cm, ylim=(0, 200))
@@ -145,8 +145,8 @@ dat5pd = filter(x->x.Phase==4, dat5raw)
 dat5 = map(x->microfd_fulbright_columnrename(x, dat5pd.CycleTime[1]), dat5pd)
 overnightfix(dat5)
 
-# t_end5 = identify_pd_end_2der(dat5, 91, 1u"hr", 50u"hr")
-t_end5 = identify_pd_end_onoff(dat5, 91, 1u"hr", 50u"hr")
+# t_end5 = identify_pd_end(dat5.t, dat5.pch_pir, Val(:2der), window_width=91,  tmin=1u"hr",  tmax=50u"hr")
+t_end5 = identify_pd_end(dat5.t, dat5.pch_pir, Val(:onoff), window_width=91,  tmin=1u"hr",  tmax=50u"hr")
 
 pch5 = RampedVariable(100.0u"mTorr")
 # @df dat5 plot(:t, :pch_cm, ylim=(0, 200))
@@ -175,8 +175,8 @@ dat6pd = filter(x->x.Phase==4, dat6raw)
 dat6 = map(x->microfd_fulbright_columnrename(x, dat6pd.CycleTime[1]), dat6pd)
 overnightfix(dat6)
 
-# t_end5 = identify_pd_end_2der(dat5, 91, 1u"hr", 50u"hr")
-t_end6 = identify_pd_end_onoff(dat6, 91, 1u"hr", 50u"hr")
+# t_end5 = identify_pd_end(dat5.t, dat5.pch_pir, Val(:2der), window_width=91,  tmin=1u"hr",  tmax=50u"hr")
+t_end6 = identify_pd_end(dat6.t, dat6.pch_pir, Val(:onoff), window_width=91,  tmin=1u"hr",  tmax=50u"hr")
 
 pch6 = RampedVariable(100.0u"mTorr")
 # @df dat6 plot(:t, :pch_cm, ylim=(0, 200))
@@ -205,8 +205,8 @@ dat7pd = filter(x->x.Phase==4, dat7raw)
 dat7 = map(x->microfd_fulbright_columnrename(x, dat7pd.CycleTime[1]), dat7pd)
 overnightfix(dat7)
 
-# t_end5 = identify_pd_end_2der(dat5, 91, 1u"hr", 50u"hr")
-t_end7 = identify_pd_end_onoff(dat7, 91, 1u"hr", 50u"hr")
+# t_end5 = identify_pd_end(dat5.t, dat5.pch_pir, Val(:2der), window_width=91,  tmin=1u"hr",  tmax=50u"hr")
+t_end7 = identify_pd_end(dat7.t, dat7.pch_pir, Val(:onoff), window_width=91,  tmin=1u"hr",  tmax=50u"hr")
 
 pch7 = RampedVariable(100.0u"mTorr")
 # @df dat7 plot(:t, :pch_cm, ylim=(0, 200))

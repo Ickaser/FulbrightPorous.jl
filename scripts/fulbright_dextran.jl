@@ -11,8 +11,8 @@ overnightfix(dat1)
 
 # plot(dat1raw.Phase)
 
-# t_end1 = identify_pd_end_2der(dat1, 91, 1u"hr", 50u"hr")
-# t_end1 = identify_pd_end_onoff(dat1, 91, 1u"hr", 50u"hr")
+# t_end1 = identify_pd_end(dat1.t, dat1.pch_pir, Val(:2der), window_width=91,  tmin=1u"hr",  tmax=50u"hr")
+# t_end1 = identify_pd_end(dat1.t, dat1.pch_pir, Val(:onoff), window_width=91,  tmin=1u"hr",  tmax=50u"hr")
 t_end1 = missing
 
 pch1 = RampedVariable(100.0u"mTorr")
@@ -46,8 +46,8 @@ overnightfix(dat2)
 
 # plot(dat2raw.Phase)
 
-# t_end2 = identify_pd_end_2der(dat2, 91, 1u"hr", 50u"hr")
-t_end2 = identify_pd_end_onoff(dat2, 91, 1u"hr", 50u"hr")
+# t_end2 = identify_pd_end(dat2.t, dat2.pch_pir, Val(:2der), window_width=91,  tmin=1u"hr",  tmax=50u"hr")
+t_end2 = identify_pd_end(dat2.t, dat2.pch_pir, Val(:onoff), window_width=91,  tmin=1u"hr",  tmax=50u"hr")
 
 pch2 = RampedVariable(100.0u"mTorr")
 # @df dat2 plot(:t, :pch_cm, ylim=(0, 200))
@@ -82,8 +82,8 @@ overnightfix(dat3)
 
 # plot(dat3raw.Phase)
 
-# t_end3 = identify_pd_end_2der(dat3, 91, 1u"hr", 50u"hr")
-t_end3 = identify_pd_end_onoff(dat3, 91, 1u"hr", 50u"hr")
+# t_end3 = identify_pd_end(dat3.t, dat3.pch_pir, Val(:2der), window_width=91,  tmin=1u"hr",  tmax=50u"hr")
+t_end3 = identify_pd_end(dat3.t, dat3.pch_pir, Val(:onoff), window_width=91,  tmin=1u"hr",  tmax=50u"hr")
 
 pch3 = RampedVariable(100.0u"mTorr")
 # @df dat3 plot(:t, :pch_cm, ylim=(0, 200))
@@ -119,8 +119,8 @@ overnightfix(dat4)
 
 # plot(dat4raw.Phase)
 
-# t_end4 = identify_pd_end_2der(dat4, 91, 1u"hr", 50u"hr")
-t_end4 = identify_pd_end_onoff(dat4, 91, 5u"hr", 50u"hr")
+# t_end4 = identify_pd_end(dat4.t, dat4.pch_pir, Val(:2der), window_width=91,  tmin=1u"hr",  tmax=50u"hr")
+t_end4 = identify_pd_end(dat4.t, dat4.pch_pir, Val(:onoff), window_width=91,  tmin=5u"hr",  tmax=50u"hr")
 
 pch4 = RampedVariable(100.0u"mTorr")
 @df dat4 plot(:t, :pch_cm, ylim=(0, 200))
