@@ -18,10 +18,12 @@ import LyoPronto: ODEProblem
 @reexport using DataInterpolations
 @reexport using Latexify
 @reexport using SavitzkyGolay
+@reexport using TransformVariables
 using ADTypes: AutoForwardDiff
 using DocStringExtensions
 using ConcreteStructs
 using LinearAlgebra: Diagonal
+using NaNMath
 
 export OP, optalg
 const OP = OptimizationProblem

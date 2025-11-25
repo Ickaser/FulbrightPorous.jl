@@ -23,15 +23,6 @@ function lyo_mc_dae!(du, u, params, t, rp_ret = Val(false))
     μ0 = u[3]
     μ2 = u[4]*u"mm^6"
 
-    # exit hatch for bad parameter guesses
-    if Tf < 0u"K"
-        du .= NaN
-        if rp_ret isa Val{true}
-            return NaN*u"m/s"
-        else
-            return
-        end
-    end
 
     hd = hf0 - hf
     ϕ = (ρsolution - csolid)/ρsolution
@@ -40,16 +31,36 @@ function lyo_mc_dae!(du, u, params, t, rp_ret = Val(false))
     Tsub = Tf - Qshf/k_ice/Ap*hf
     k = k_f(Tsub)
 
-    if μ1 < 0u"cm^3" || μ0 < 0.0 || μ2 <= 0u"mm^6"
-        Rp = 0.0u"m/s" # No pores to resist flow
-    else
-        # μ32 = μ0^(-1//8)*μ1^(3//4)*μ2^(3//8)
-        # Rp = R0 + C * sqrt(R*Tf/Mw) * μ1*hd/μ32/ϕ # Knudsen
-        Rp = C*sqrt(R*Tsub/Mw)/ϕ*hd * sqrt(sqrt(sqrt(μ1^2*μ0/μ2^3))) |> u"m/s" # Knudsen, rewritten to avoid runtime dispatch
-        # Rp = R0 + C*η*R*Tf/Mw/((calc_psub(Tsub)+pch(td))/2) * μ1*hd/μ2/ϕ # Viscous
+    # exit hatch for bad parameter guesses or solver iterations
+    if Tf < 0u"K" || Tsub < 0u"K"
+        du .= NaN
+        if rp_ret isa Val{true}
+            return NaN*u"m/s"
+        else
+            return
+        end
     end
+
+    porefac = μ1^2*μ0/μ2^3 # Knudsen
+    # porefac = μ1/μ2 # Viscous but double check this
+
+    # # Compute Rp, checking for negative pore structure first
+    # # if μ1 <= 0u"cm^3" || μ0 <= 0.0 || μ2 <= 0u"mm^6" # This interacts weirdly with ForwardDiff: cares about derivatives, not only value
+    # if (hasproperty(porefac, :value) ? porefac.value <= zero(porefac.value) : porefac <= zero(porefac)) # Manually check for ForwardDiff
+    #     Rp = 0.0u"m/s" # No pores to resist flow
+    # else
+    #     Rp = C*sqrt(R*Tsub/Mw)/ϕ*hd * sqrt(sqrt(sqrt(porefac))) |> u"m/s" 
+    #     # Rp = C*η*R*Tf/Mw/((calc_psub(Tsub)+pch(td))/2) * hd/ϕ*porefac # Viscous but double check
+    # end
+
+    # Compute Rp with NaNs for aphysical inputs, then check for NaN 
+    Rp = C*NaNMath.sqrt(R*Tsub/Mw)/ϕ*hd * sqrt(sqrt(NaNMath.sqrt(porefac))) |> u"m/s" 
+    if !isfinite(Rp)
+        Rp = 0.0u"m/s" # No pores to resist flow
+    end
+
     Rsp = Rs + Rp
-    dmdt = - Ap*(calc_psub(Tsub)-pch(td))/Rsp
+    dmdt = - Ap*(LyoPronto.calc_psub(Tsub)-pch(td))/Rsp
     Qsub = uconvert(u"W", dmdt*ΔHsub)
 
     dhf_dt = min(0.0u"cm/hr", dmdt/(ρsolution-csolid)/Ap |>u"cm/hr" ) # Cap dhf_dt at 0: no desublimation

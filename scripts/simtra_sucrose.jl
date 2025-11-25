@@ -216,7 +216,7 @@ cases_Rps = Table(cases, single_Rps)
 
 pls = map(cases_Rps) do case 
     plT = blankplot_hrC()
-    plot!(case.fitdat, title=case.name)
+    plot!(case.fitdat, nmarks=15, title=case.name)
     modconvtplot!(case.sol_p)
     plot!(legend = :bottomright)
     # plot!(case.pop.Tsh, tmax=case.fitdat.t_end, c=:black, label=L"T_\mathrm{sh}")
@@ -320,6 +320,18 @@ sigma_guess = [-1.0, 1, 0, 0, 0, 0, 0, 0]
 mcfit_cases = Table(cases = repeat([(1,), (8,), (1, 8), (1, 2, 8)], 3),
         p0 = vcat(fill(interp_guess, 4), fill(myega_guess, 4), fill(sigma_guess, 4)),
         trans = vcat(fill(trans_interp, 4), fill(trans_myega, 4), fill(trans_sigma, 4)))
+# debug
+mcfits = map(mcfit_cases[1:1]) do case
+    po, fitdat = make_mc_pass(case.cases)
+    po = po[1]
+    fitdat = fitdat[1]
+    newp = setproperties(po, transform(case.trans, case.p0))
+    prob = ODEProblem(newp)
+    solve(prob, odealg_chunk4)
+
+    # newp = setproperties(
+    # @time gen_nsol_pd(case.p0, case.trans, make_mc_pass(case.cases)...)
+end
 
 mcfits = map(mcfit_cases) do case
     @time solve(OP(obj_nmc, case.p0, (case.trans, make_mc_pass(case.cases)...)), optalg;)
@@ -347,16 +359,17 @@ function get_sol_Rp(casenum, fitnum)
 end
 
 # Choose a favored fit for plotting, etc.
+fitnum = 3 # 1&8, interp
 # fitnum = 7 # 1&8, MYEGA
-fitnum = 11 # 1&8, sigmoid
+# fitnum = 11 # 1&8, sigmoid
 
 begin
 pls = map(cases_Rps[[1, 2, 3, 5, 4]]) do case
     i = parse(Int, case.name)
     pl = blankplot_hrC(title=case.name, legend=:bottomright)
-    plot!(case.fitdat)
-    # modconvtplot!(get_sol_mc(i, fitnum), label="PBM, fit to $(mcfit_cases[fitnum].cases)")
-    # modconvtplot!(case.sol_p, c=:green, alpha=0.6, label="3PP, fit to $(case.name)")
+    plot!(case.fitdat, nmarks=15)
+    modconvtplot!(get_sol_mc(i, fitnum), label="PBM, fit to $(mcfit_cases[fitnum].cases)")
+    modconvtplot!(case.sol_p, c=:green, alpha=0.6, label="3PP, fit to $(case.name)")
     # modconvtplot!(get_sol_Rp(i, 6), c=:purple, label="3PP, fit to $(rpfit_cases[6].cases)")
     # plot!(xlim=(-1, 120), ylim=(-45, -28)) 
     i ∈ [2, 3, 5] && plot!(ylabel="")
