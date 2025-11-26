@@ -1,4 +1,5 @@
 fp_plot_defaults()
+using StatsPlots: groupedbar, groupedbar!
 
 begin
 # ------------------
@@ -277,7 +278,7 @@ end
 #             kl3 = TV.Identity(),
 #             kl4 = TV.Identity())
 const TV = TransformVariables
-interp_nt = (kl1 = TV.Identity(),
+interp_nt = as((;k_f=as((kl1 = TV.Identity(),
             kl2 = TVExp(),
             kl3 = TVExp(),
             kl4 = TVExp()))))
@@ -311,7 +312,7 @@ trans_sigma = merge(porous_nt, sigma_nt)
 obj_nmc = OptimizationFunction((x,y)->objn_pd(x,y; badprms=FulbrightPores.badNS, tweight=1e-2), AutoForwardDiff(chunksize=4))
 
 
-interp_guess = [-1.0, 1, 0, 0, -1, 1.5, 0, 2]
+interp_guess = [-1.0, 1, 0, 0, -1, 0, 1, 1]
 # plot(u"°C", u"s^-1")
 # kineticplot!(transform(trans_interp, interp_guess),  label="Interp guess")
 myega_guess = [0.1, 0.1, 0, 0, -10, 0, 0]
@@ -323,17 +324,14 @@ mcfit_cases = Table(cases = repeat([(1,), (8,), (1, 8), (1, 2, 8)], 3),
         p0 = vcat(fill(interp_guess, 4), fill(myega_guess, 4), fill(sigma_guess, 4)),
         trans = vcat(fill(trans_interp, 4), fill(trans_myega, 4), fill(trans_sigma, 4)))
 # debug
-mcfits = map(mcfit_cases[1:1]) do case
-    po, fitdat = make_mc_pass(case.cases)
-    po = po[1]
-    fitdat = fitdat[1]
-    newp = setproperties(po, transform(case.trans, case.p0))
-    prob = ODEProblem(newp)
-    solve(prob, odealg_chunk4)
-
-    # newp = setproperties(
-    # @time gen_nsol_pd(case.p0, case.trans, make_mc_pass(case.cases)...)
-end
+# mcfits = map(mcfit_cases[1:1]) do case
+#     po, fitdat = make_mc_pass(case.cases)
+#     po = po[1]
+#     fitdat = fitdat[1]
+#     newp = setproperties(po, transform(case.trans, case.p0))
+#     prob = ODEProblem(newp)
+#     solve(prob, odealg_chunk4)
+# end
 
 mcfits = map(mcfit_cases) do case
     @time solve(OP(obj_nmc, case.p0, (case.trans, make_mc_pass(case.cases)...)), optalg;)
@@ -361,9 +359,50 @@ function get_sol_Rp(casenum, fitnum)
 end
 
 # Choose a favored fit for plotting, etc.
-fitnum = 3 # 1&8, interp
+# fitnum = 3 # 1&8, interp
 # fitnum = 7 # 1&8, MYEGA
-# fitnum = 11 # 1&8, sigmoid
+fitnum = 11 # 1&8, sigmoid
+
+bestfit = transform(mcfit_cases[fitnum].trans, mcfits[fitnum].u)
+@info "Chosen fit" bestfit
+bestfit.N.val |> u"μm^-3"
+bestfit.S.val/fillvol |> NoUnits
+bestfit.C |> u"m^0.5"
+
+errs = Table(map(cases_Rps[[1, 2, 3, 5, 4]]) do case
+    i = parse(Int, case.name)
+    PBM = get_sol_mc(i, fitnum)
+    PP = get_sol_Rp(i, 6)
+    PPi = case.sol_p
+    errf = (model, tweight)->obj_expT(model, case.fitdat; tweight)
+    PBM_T = sqrt(errf(PBM, 0))*u"K"
+    PP_T = sqrt(errf(PP, 0))*u"K"
+    PPi_T = sqrt(errf(PPi, 0))*u"K"
+    t_end_est = ustrip(u"hr", sum(case.fitdat.t_end)/2)
+    PBM_t = sqrt(errf(PBM, 1) - errf(PBM, 0))/t_end_est
+    @info "check" PBM_t PBM.t[end] t_end_est
+    PP_t = sqrt(errf(PP, 1) - errf(PP, 0))/t_end_est
+    PPi_t = sqrt(errf(PPi, 1) - errf(PPi, 0))/t_end_est
+    return (;name=case.name, PBM_T, PBM_t, PP_T, PP_t, PPi_T, PPi_t)
+end)
+
+begin
+labs = ["PBM fit to $(join(mcfit_cases[fitnum].cases, ", ", " & "))" "3PP individual fits " "3PP fit to $(join(rpfit_cases[6].cases, " & "))"]
+Terr = groupedbar(errs.name, 
+    [errs.PBM_T errs.PPi_T errs.PP_T ], 
+    label=labs, 
+    c=[2 3 4], lw=1)
+plot!(xlabel="Case", ylabel=L"$T_\mathrm{f}$ error", yunitformat=:square, legend=:topleft)
+plot!(xgrid=false, xminorticks=2, xtickdir=:none, xminortickdir=:none, xminorgrid=true, minorgridalpha=0.1, ygridalpha=0.2)
+terr = groupedbar(errs.name, 
+    [errs.PBM_t errs.PPi_t errs.PP_t ], 
+    label=labs, 
+    c=[2 3 4], lw=1)
+plot!(xlabel="Case", ylabel=L"$t$ rel. err.", yunitformat=:square, legend=:topleft)
+plot!(xgrid=false, xminorticks=2, xtickdir=:none, xminortickdir=:none, xminorgrid=true, minorgridalpha=0.1, ygridalpha=0.2)
+
+err_plot = plot(Terr, terr, layout=(2,1), size=(600,600))
+end
 
 begin
 pls = map(cases_Rps[[1, 2, 3, 5, 4]]) do case
@@ -372,7 +411,7 @@ pls = map(cases_Rps[[1, 2, 3, 5, 4]]) do case
     plot!(case.fitdat, nmarks=15)
     modconvtplot!(get_sol_mc(i, fitnum), label="PBM, fit to $(mcfit_cases[fitnum].cases)")
     modconvtplot!(case.sol_p, c=:green, alpha=0.6, label="3PP, fit to $(case.name)")
-    # modconvtplot!(get_sol_Rp(i, 6), c=:purple, label="3PP, fit to $(rpfit_cases[6].cases)")
+    modconvtplot!(get_sol_Rp(i, 6), c=:purple, label="3PP, fit to $(rpfit_cases[6].cases)")
     # plot!(xlim=(-1, 120), ylim=(-45, -28)) 
     i ∈ [2, 3, 5] && plot!(ylabel="")
     i ∈ [1, 2] && plot!(xlabel="")
@@ -384,23 +423,27 @@ pls = map(cases_Rps[[1, 2, 3, 5, 4]]) do case
     i ∈ [5, 8] && plot!(bottom_margin=20Plots.px)
     return pl
 end
-plot(pls..., layout=(2,3), size=(900, 500))
+plot!(err_plot, legend=:none)
+plot!(err_plot[1], xlabel="")
+plot!(err_plot[2], bottom_margin=20Plots.px)
+plot(pls..., err_plot, layout=(2,3), size=(1000, 500))
 end
-savefig(plotsdir("simtra_suc_fitval_m0.svg"))
+# savefig(plotsdir("simtra_suc_fitval_m0.svg"))
+savefig(plotsdir("simtra_suc_fitval.svg"))
 savefig(plotsdir("simtra_suc_fitval.pdf"))
 
 safesave(datadir("exp_pro", "simtra_sucrose_fitdata.jld2"), Dict("fitdats"=>cases.fitdat))
-safesave(datadir("exp_pro", "simtra_sucrose_fitresults.jld2"), @strdict mcfit_cases mcfits rpfit_cases rpfits)
+safesave(datadir("exp_pro", "simtra_sucrose_fitresults.jld2"), @strdict errs mcfit_cases mcfits rpfit_cases rpfits)
 
 begin
 plot!(palette=:default)
 rpattr = (seriestype=:samplemarkers, linestyle=:dash)
-poreevolplot( get_sol_mc(1, fitnum), label="PBM 1&2&8, Cycle 1", c=1, marker=:circle)
+poreevolplot( get_sol_mc(1, fitnum), label="PBM 1&2&8, Cycle 1", c=2, marker=:circle)
 poreevolplot!(get_sol_mc(2, fitnum), label="PBM 1&2&8, Cycle 2", c=2, marker=:square)
-poreevolplot!(get_sol_mc(8, fitnum), label="PBM 1&2&8, Cycle 8", c=3, marker=:utriangle)
-plot!(l, cases_Rps[1].Rp.(l), subplot=4, label="3PP 1"; c=4, marker=:circle, rpattr...)
-plot!(l, cases_Rps[2].Rp.(l), subplot=4, label="3PP 2"; c=4, marker=:square, rpattr...)
-plot!(l, cases_Rps[5].Rp.(l), subplot=4, label="3PP 8"; c=4, marker=:utriangle, rpattr...)
+poreevolplot!(get_sol_mc(8, fitnum), label="PBM 1&2&8, Cycle 8", c=2, marker=:utriangle)
+plot!(l, cases_Rps[1].Rp.(l), subplot=4, label="3PP 1"; c=3, marker=:circle, rpattr...)
+plot!(l, cases_Rps[2].Rp.(l), subplot=4, label="3PP 2"; c=3, marker=:square, rpattr...)
+plot!(l, cases_Rps[5].Rp.(l), subplot=4, label="3PP 8"; c=3, marker=:utriangle, rpattr...)
     
 end
 
@@ -408,17 +451,20 @@ end
 # Inspect fit results in Rp space rather than temperature space
 
 begin
-pls = map(cases_Rps[[1, 2, 4, 5]], [1,2,5,8]) do case, i
-    pl = blankplot_lRp(ylims=(0, 12), xlims=(0, 1.3), legend=:bottomright)
-    plot!(title="Cycle $i, \$T_{sh}=$(float(case.pop.Tsh(Inf*u"s")|>u"°C"))\$")
+locs = [(0.4, 2), (0.4, 2), (0.4, 2), (0.1, 6)]
+pls = map(cases_Rps[[1, 2, 4, 5]], [1,2,5,8], locs) do case, i, loc
+    pl = blankplot_lRp(ylims=(0, 12), xlims=(0, 1.3), legend=:topleft)
     pbmtdlas!(get_sol_mc(i, fitnum), case.dat, case.Rp)
-    i ∈ [1, 2] && plot!(xlabel="", xformatter=:none)
-    i ∈ [2, 8] && plot!(ylabel="", yformatter=:none)
+    Tfmax = maximum([maximum(Tfi) for Tfi in case.fitdat.Tfs])
+    annotate!(loc..., text("Cycle $i \n\$\\max(T_\\mathrm{f})=$(float(Tfmax|>u"°C"))\$", :left, 12))
+    i ∈ [1, 2] && plot!(xlabel="")#, xformatter=:none)
+    i ∈ [2, 8] && plot!(ylabel="")#, yformatter=:none)
     pl
 end
 plot(pls..., layout=(2,2), size=(600,500))
 end
 savefig(plotsdir("suc18_Rp_val.svg"))
+savefig(plotsdir("suc18_Rp_val.pdf"))
 
 # ------------------------
 # MYEGA temparature dependence of viscosity
