@@ -121,24 +121,25 @@ end
     # xlabel --> "Dry layer thickness"
     # ylabel --> "Rp"
     @series begin
-        c --> 1
+        c --> palette(:Blues_5,)[4]
+        seriestype := :samplemarkers
+        marker --> :o
+        lw --> 1
+        step --> length(Rpd) ÷ 30
+        label --> "TDLAS"
+        return ld, Rpd
+    end
+    @series begin
+        c --> palette(:Oranges_4)[end]
         seriestype := :line
         label --> "PBM"
         return l, Rp_mc
     end
     @series begin
-        c --> 2
+        c --> :green
         seriestype := :line
         label --> "3PP"
         return ld, Rp_pikal
-    end
-    @series begin
-        c --> 3
-        seriestype := :samplemarkers
-        marker --> :o
-        step --> length(Rpd) ÷ 20
-        label --> "TDLAS"
-        return ld, Rpd
     end
 end
 

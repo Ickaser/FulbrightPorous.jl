@@ -54,6 +54,7 @@ function lyo_mc_dae!(du, u, params, t, rp_ret = Val(false))
     # end
 
     # Compute Rp with NaNs for aphysical inputs, then check for NaN 
+    # This happens when μ0, μ1, or μ2 are negative or zero
     Rp = C*NaNMath.sqrt(R*Tsub/Mw)/ϕ*hd * sqrt(sqrt(NaNMath.sqrt(porefac))) |> u"m/s" 
     if !isfinite(Rp)
         Rp = 0.0u"m/s" # No pores to resist flow
