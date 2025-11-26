@@ -1,31 +1,39 @@
 
 # ---------------------------------
 function sigmoid_transform_basic(k0, kf, K1, K2)
-tr = as((
-    k = as((
-        k0 = TVScale(k0) ∘ TVExp(),
-        kf = TVScale(kf) ∘ TVExp(),
-        K1 = TVScale(K1) ∘ TVExp(),
-        K2 = TVScale(K2) ∘ TVExp(),
+    tr = as((
+        k = as((
+            k0 = TVScale(k0) ∘ TVExp(),
+            kf = TVScale(kf) ∘ TVExp(),
+            K1 = TVScale(K1) ∘ TVExp(),
+            K2 = TVScale(K2) ∘ TVExp(),
         )),
     ))
 end
 function myega_transform_basic(k0, K1, K2)
-tr = as((
-    k = as((
-        k0 = TVScale(k0) ∘ TVExp(),
-        K1 = TVScale(K1) ∘ TVExp(),
-        K2 = TVScale(K2) ∘ TVExp(),
+    tr = as((
+        k = as((
+            k0 = TVScale(k0) ∘ TVExp(),
+            K1 = TVScale(K1) ∘ TVExp(),
+            K2 = TVScale(K2) ∘ TVExp(),
         )),
     ))
 end
-function porous_transform_basic(Ng, Sg, Cg, Rsg)
-tr = as((
-    N = ConstWrapTV() ∘ TVScale(Ng) ∘ TVExp(),
-    S = ConstWrapTV() ∘ TVScale(Sg) ∘ TVExp(),
-    C = TVScale(Cg) ∘ TVExp(),
-        Rs = TVScale(Rsg) ∘ TVExp(),
+function porous_transform_bounded(Vfill)
+    tr = as((
+        N = ConstWrapTV() ∘ TVScale(1.0u"μm^-3") ∘ TVLogistic() ∘ TVShift(TransformVariables.logit(1e-3)),
+        S = ConstWrapTV() ∘ TVScale(Vfill) ∘ TVLogistic() ∘ TVShift(TransformVariables.logit(1e-7)),
+        C = TVScale(3π/sqrt(8) * 10 * sqrt(1.0u"mm")) ∘ TVLogistic() ∘ TVShift(TransformVariables.logit(1e-1)),
+        Rs = TVScale(1.0u"cm^2*Torr*hr/g") ∘ TVLogistic(),
         ))
+end
+function porous_transform_basic(Ng, Sg, Cg, Rsg)
+    tr = as((
+        N = ConstWrapTV() ∘ TVScale(Ng) ∘ TVExp(),
+        S = ConstWrapTV() ∘ TVScale(Sg) ∘ TVExp(),
+        C = TVScale(Cg) ∘ TVExp(),
+        Rs = TVScale(Rsg) ∘ TVExp(),
+    ))
 end
 
 function badNS(nt) 
