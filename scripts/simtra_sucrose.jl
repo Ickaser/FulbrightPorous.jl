@@ -280,7 +280,7 @@ const TV = TransformVariables
 interp_nt = (kl1 = TV.Identity(),
             kl2 = TVExp(),
             kl3 = TVExp(),
-            kl4 = TVExp())
+            kl4 = TVExp()))))
 function FulbrightPores.k_f_nt(nt::NamedTuple{(:kl1, :kl2, :kl3, :kl4)})
     # return InterpK([nt...], [-45.0, -38, -32, -28]u"°C" .|> u"K", 1e-14u"s^-1")
     # if nt.kl1 < nt.kl2 || nt.kl2 < nt.kl3 || nt.kl3 < nt.kl4
@@ -289,22 +289,24 @@ function FulbrightPores.k_f_nt(nt::NamedTuple{(:kl1, :kl2, :kl3, :kl4)})
     return InterpK(cumsum([nt...]), [-45.0, -38, -32, -22]u"°C" .|> u"K", 1e-14u"s^-1")
 end
 const TV = TransformVariables
-porous_nt = (N = ConstWrapTV() ∘ TVScale(3e7u"cm^-3") ∘ TVExp(),
-               S = ConstWrapTV() ∘ TVScale(2e-5u"cm^3") ∘ TVExp(), # If I could enforce S > ϕ/N, would be great...
-               C = TVScale(4e-1u"m^0.5") ∘ TVExp(),
-               Rs = TVScale(0.5u"cm^2*Torr*hr/g") ∘ TVShift(0.01) ∘ TVLogistic()
-               )
-myega_nt = (k0 = TVScale(1e11u"s^-1") ∘ TVExp(),
+# porous_nt = (N = ConstWrapTV() ∘ TVScale(3e7u"cm^-3") ∘ TVExp(),
+#                S = ConstWrapTV() ∘ TVScale(2e-5u"cm^3") ∘ TVExp(), 
+#                C = TVScale(4e-1u"m^0.5") ∘ TVExp(),
+#                Rs = TVScale(0.5u"cm^2*Torr*hr/g") ∘ TVShift(0.01) ∘ TVLogistic()
+#                )
+porous_nt = FulbrightPores.porous_transform_bounded(fillvol)
+myega_nt = as((;k_f=as((k0 = TVScale(1e11u"s^-1") ∘ TVExp(),
             K1 = TVScale(5e4u"K") ∘ TVShift(0.001) ∘ TVLogistic() ∘ TVShift(TV.logit(0.05)),
-            K2 = TVScale(6e2u"K") ∘ TVShift(0.01) ∘ TVLogistic() ,)
+            K2 = TVScale(6e2u"K") ∘ TVShift(0.01) ∘ TVLogistic() ,))))
 # plot(Tran, FulbrightPores.k_f_nt(transform(as(myega_nt), zeros(3))).(Tran), yscale=:log10, label="MYEGA, def")
-sigma_nt = (k0 = TVScale(1e-15u"s^-1") ∘ TVExp(),
+sigma_nt = as((;k_f=as((k0 = TVScale(1e-15u"s^-1") ∘ TVExp(),
             kf = TVScale(1e-8u"s^-1") ∘ TVExp(),
             K1 = TVScale(0.8u"K") ∘ TVExp(),
             K2 = TVScale(1.0u"K") ∘ TVShift(216.0) ∘ TVScale(45.0) ∘ TVLogistic() ∘TVScale(0.1) ,)
-trans_interp = as(merge(porous_nt, (;k_f=as(interp_nt))))
-trans_myega = as(merge(porous_nt, (;k_f=as(myega_nt))))
-trans_sigma = as(merge(porous_nt, (;k_f=as(sigma_nt))))
+)))
+trans_interp = merge(porous_nt, interp_nt)
+trans_myega = merge(porous_nt, myega_nt)
+trans_sigma = merge(porous_nt, sigma_nt)
 
 obj_nmc = OptimizationFunction((x,y)->objn_pd(x,y; badprms=FulbrightPores.badNS, tweight=1e-2), AutoForwardDiff(chunksize=4))
 
