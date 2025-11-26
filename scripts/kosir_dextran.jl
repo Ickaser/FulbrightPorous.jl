@@ -167,13 +167,7 @@ trans_ns = as((separate=as(Vector, as((N=NTV, S=STV)), 4),
                 shared=as((C=CTV, Rs=RsTV, k_f=as(sigma_nt))),))
 
 
-function badNS(nt) 
-    if hasproperty(nt, :N) && hasproperty(nt, :S)
-        return (nt.N(0) < 1/nt.S(0))
-    end
-    error("Unhandled nt in badNS")
-end
-objnf_mc = OptimizationFunction((x,y)->objn_pd(x,y,tweight=1e-1, badprms=badNS), AutoForwardDiff())
+objnf_mc = OptimizationFunction((x,y)->objn_pd(x,y,tweight=1e-1, badprms=FulbrightPores.badNS), AutoForwardDiff())
 
 @time opt1234myega = solve(OP(objnf_mc, zeros(14), (trans_ns, cases_Rp.pomc, cases_Rp.pdfit)), optalg)
 

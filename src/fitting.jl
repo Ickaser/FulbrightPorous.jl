@@ -28,6 +28,13 @@ tr = as((
         ))
 end
 
+function badNS(nt) 
+    if hasproperty(nt, :N) && hasproperty(nt, :S)
+        return (nt.N(0) < 1/nt.S(0))
+    end
+    error("Unhandled nt in badNS")
+end
+
 """
     $(SIGNATURES)
 

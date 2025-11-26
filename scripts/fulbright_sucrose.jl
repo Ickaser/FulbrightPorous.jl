@@ -391,14 +391,8 @@ sigma_nt = (k0 = TVScale(1e-12u"s^-1") ∘ TVExp(),
 trans_myega = as(merge(porous_nt, (;k_f=as(myega_nt))))
 trans_sigma = as(merge(porous_nt, (;k_f=as(sigma_nt))))
 
-function badNS(nt) 
-    if hasproperty(nt, :N) && hasproperty(nt, :S)
-        return (nt.N(0) < 1/nt.S(0))
-    end
-    error("Unhandled nt in badNS")
-end
 # objn_myega(fitprm, pf) = objn_mc(fitprm, (trans_myega, pf...), tweight=1e-2)
-obj_mc(fitprm, tpf) = objn_pd(fitprm, tpf; badprms=badNS, tweight=1e-2)
+obj_mc(fitprm, tpf) = objn_pd(fitprm, tpf; badprms=FulbrightPores.badNS, tweight=1e-2)
 objf_mc = OptimizationFunction(obj_mc, AutoForwardDiff(chunksize=4))
 objf_mc(rand(7), (trans_myega, pass123...))
 
@@ -436,7 +430,7 @@ trans_2s = as((separate=as(Vector, as((N=NTV, S=STV)), 3),
                 shared=as((C=CTV, Rs=RsTV, k_f=as(sigma_nt))),))
 # trans_2m = as((p1=as(porous_nt), p2=as(porous_nt), k_f=as(myega_nt)))
 # trans_2s = as((p1=as(porous_nt), p2=as(porous_nt), k_f=as(sigma_nt)))
-objf_mc_c5 = OptimizationFunction((x,y)->LyoPronto.objn_pd(x,y; badprms=badNS, tweight=1e-1), AutoForwardDiff(chunksize=6))
+objf_mc_c5 = OptimizationFunction((x,y)->LyoPronto.objn_pd(x,y; badprms=FulbrightPores.badNS, tweight=1e-1), AutoForwardDiff(chunksize=6))
 
 p0_2m = remap_vars(p0_myega)
 @time opt_2m = solve(OP(objf_mc_c5, p0_2m, (trans_2m, cases_Rps.pomc, cases_Rps.fitdat)), optalg, time_limit=15)

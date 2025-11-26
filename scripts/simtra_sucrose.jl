@@ -306,7 +306,7 @@ trans_interp = as(merge(porous_nt, (;k_f=as(interp_nt))))
 trans_myega = as(merge(porous_nt, (;k_f=as(myega_nt))))
 trans_sigma = as(merge(porous_nt, (;k_f=as(sigma_nt))))
 
-obj_nmc = OptimizationFunction((x,y)->objn_pd(x,y, tweight=1e-2), AutoForwardDiff(chunksize=4))
+obj_nmc = OptimizationFunction((x,y)->objn_pd(x,y; badprms=FulbrightPores.badNS, tweight=1e-2), AutoForwardDiff(chunksize=4))
 
 
 interp_guess = [-1.0, 1, 0, 0, -1, 1.5, 0, 2]
