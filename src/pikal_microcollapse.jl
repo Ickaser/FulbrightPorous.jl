@@ -7,6 +7,8 @@ import LyoPronto: Mw, k_ice, ΔHsub
 const η = LyoPronto.μ_vap # Water vapor viscosity
 export R, ΔHsub, Mw, η
 
+_getval(x) = hasproperty(x, :value) ? x.value : x
+
 """
     $(SIGNATURES)
 """
@@ -32,7 +34,7 @@ function lyo_mc_dae!(du, u, params, t, rp_ret = Val(false))
     k = k_f(Tsub)
 
     # exit hatch for bad parameter guesses or solver iterations
-    if Tf < 0u"K" || Tsub < 0u"K"
+    if Tf < 0u"K"# || Tsub < 0u"K"
         du .= NaN
         if rp_ret isa Val{true}
             return NaN*u"m/s"
@@ -41,12 +43,14 @@ function lyo_mc_dae!(du, u, params, t, rp_ret = Val(false))
         end
     end
 
+
+    # Compute Rp, checking for negative pore structure first
     porefac = μ1^2*μ0/μ2^3 # Knudsen
     # porefac = μ1/μ2 # Viscous but double check this
 
-    # # Compute Rp, checking for negative pore structure first
-    # # if μ1 <= 0u"cm^3" || μ0 <= 0.0 || μ2 <= 0u"mm^6" # This interacts weirdly with ForwardDiff: cares about derivatives, not only value
-    # if (hasproperty(porefac, :value) ? porefac.value <= zero(porefac.value) : porefac <= zero(porefac)) # Manually check for ForwardDiff
+    # # Direct comparison with 0 interacts weirdly with ForwardDiff: cares about derivatives, not only value
+    # # if _getval(μ1) <= 0u"cm^3" || _getval(μ0) <= 0.0 || _getval(μ2) <= 0u"mm^6" 
+    # if isnan(porefac) || (hasproperty(porefac, :value) ? porefac.value : porefac) <= 0.0u"mm^-12" # Manually check for ForwardDiff
     #     Rp = 0.0u"m/s" # No pores to resist flow
     # else
     #     Rp = C*sqrt(R*Tsub/Mw)/ϕ*hd * sqrt(sqrt(sqrt(porefac))) |> u"m/s" 

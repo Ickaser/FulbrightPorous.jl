@@ -289,7 +289,7 @@ function FulbrightPores.k_f_nt(nt::NamedTuple{(:kl1, :kl2, :kl3, :kl4)})
     # end
     return InterpK(cumsum([nt...]), [-45.0, -38, -32, -22]u"°C" .|> u"K", 1e-14u"s^-1")
 end
-const TV = TransformVariables
+# const TV = TransformVariables
 # porous_nt = (N = ConstWrapTV() ∘ TVScale(3e7u"cm^-3") ∘ TVExp(),
 #                S = ConstWrapTV() ∘ TVScale(2e-5u"cm^3") ∘ TVExp(), 
 #                C = TVScale(4e-1u"m^0.5") ∘ TVExp(),
@@ -312,7 +312,7 @@ trans_sigma = merge(porous_nt, sigma_nt)
 obj_nmc = OptimizationFunction((x,y)->objn_pd(x,y; badprms=FulbrightPores.badNS, tweight=1e-2), AutoForwardDiff(chunksize=4))
 
 
-interp_guess = [-1.0, 1, 0, 0, -1, 0, 1, 1]
+interp_guess = [-1.0, 1, 0, 0, -1, 0, 0, 0]
 # plot(u"°C", u"s^-1")
 # kineticplot!(transform(trans_interp, interp_guess),  label="Interp guess")
 myega_guess = [0.1, 0.1, 0, 0, -10, 0, 0]
