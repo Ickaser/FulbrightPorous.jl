@@ -277,6 +277,7 @@ end
 #             kl2 = TV.Identity(),
 #             kl3 = TV.Identity(),
 #             kl4 = TV.Identity())
+
 const TV = TransformVariables
 interp_nt = as((;k_f=as((kl1 = TV.Identity(),
             kl2 = TVExp(),
@@ -438,9 +439,10 @@ safesave(datadir("exp_pro", "simtra_sucrose_fitresults.jld2"), @strdict errs mcf
 begin
 plot!(palette=:default)
 rpattr = (seriestype=:samplemarkers, linestyle=:dash)
-poreevolplot( get_sol_mc(1, fitnum), label="PBM 1&2&8, Cycle 1", c=2, marker=:circle)
-poreevolplot!(get_sol_mc(2, fitnum), label="PBM 1&2&8, Cycle 2", c=2, marker=:square)
-poreevolplot!(get_sol_mc(8, fitnum), label="PBM 1&2&8, Cycle 8", c=2, marker=:utriangle)
+labs = ["PBM fit to $(join(mcfit_cases[fitnum].cases, ", ", " & "))" "3PP individual fits " "3PP fit to $(join(rpfit_cases[6].cases, " & "))"]
+poreevolplot( get_sol_mc(1, fitnum), label="PBM $(join(mcfit_cases[fitnum].cases, ", ", " & ")), Cycle 1", c=2, marker=:circle)
+poreevolplot!(get_sol_mc(2, fitnum), label="PBM $(join(mcfit_cases[fitnum].cases, ", ", " & ")), Cycle 2", c=2, marker=:square)
+poreevolplot!(get_sol_mc(8, fitnum), label="PBM $(join(mcfit_cases[fitnum].cases, ", ", " & ")), Cycle 8", c=2, marker=:utriangle)
 plot!(l, cases_Rps[1].Rp.(l), subplot=4, label="3PP 1"; c=3, marker=:circle, rpattr...)
 plot!(l, cases_Rps[2].Rp.(l), subplot=4, label="3PP 2"; c=3, marker=:square, rpattr...)
 plot!(l, cases_Rps[5].Rp.(l), subplot=4, label="3PP 8"; c=3, marker=:utriangle, rpattr...)
@@ -465,6 +467,18 @@ plot(pls..., layout=(2,2), size=(600,500))
 end
 savefig(plotsdir("suc18_Rp_val.svg"))
 savefig(plotsdir("suc18_Rp_val.pdf"))
+
+# ------------------------
+# Knudsen numbers
+FulbrightPores.calc_Kn(get_sol_mc(8, fitnum))
+FulbrightPores.calc_Kn(get_sol_mc(1, fitnum))
+Table(vcat(map([1,2,3,5,8]) do i
+    sol = get_sol_mc(i, fitnum)
+    Kn_tab = FulbrightPores.calc_Kn(sol)[[begin+1, end]]
+end...))
+
+
+
 
 # ------------------------
 # MYEGA temparature dependence of viscosity
@@ -531,23 +545,45 @@ using Turing
 
 @model function sigma_likelihood(pf)
 
-    Nfac ~ Uniform(-6, 6)
-    Sfac ~ Uniform(-6, 6)
-    Cfac ~ Uniform(-6, 6)
-    Rfac ~ Uniform(-6, 6)
-    k0fac ~ Uniform(-6, 6)
-    kffac ~ Uniform(-6, 6)
-    K1fac ~ Uniform(-6, 6)
-    K2fac ~ Uniform(-6, 6)
+    Nv ~ LogUniform(1e-6, 1e0) # μm^-3
+    Sv ~ LogUniform(1e-16, 1e0) # cm^3
+    Cv ~ LogUniform(1e-5, 1e0) # m^(1//2)
+    Rv ~ LogUniform(1e-10, 1e0) # cm^2*Torr*hr/g
+    k0v ~ LogUniform(1e-20, 1e-10) # s^-1
+    kfv ~ LogUniform(1e-20, 1e-5) # s^-1
+    K1v ~ Uniform(0.1, 10.0) # K
+    K2v ~ Uniform(216, 270) # K
+
 
     # k_args = exp10.([kfac, Kfac, θfac]) .* fit_guess[5:7]
-    allvals = [Nfac, Sfac, Cfac, Rfac, k0fac, kffac, K1fac, K2fac]
+    # allvals = [Nfac, Sfac, Cfac, Rfac, k0fac, kffac, K1fac, K2fac]
+    newps = (;
+        N = ConstPhysProp(Nv * u"μm^-3"),
+        S = ConstPhysProp(Sv * u"cm^3"),
+        C = Cv * u"m^0.5",
+        Rs = Rv * u"cm^2*Torr*hr/g",
+        k_f = Sigmoid_k(
+            k0v * u"s^-1",
+            kfv * u"s^-1",
+            K1v * u"K",
+            K2v * u"K",
+        )
+    )
+    
 
-    if pf[1] isa PrimaryDryFit
-        sqerr = obj_pd(allvals, (trans_sigma, pf...), tweight=1e-2)
-    else
-        sqerr = objn_pd(allvals, (trans_sigma, pf...), tweight=1e-2)
-    end
+    # if pf[2] isa PrimaryDryFit
+    #     p = setproperties(pf[1], newps)
+    #     sol = solve(ODEProblem(p), odealg_chunk4)
+    #     sqerr = obj_expT(sol, pf[2], tweight=1e-2)
+    # else
+        sqerr = mapreduce(+, pf...) do pomc, fitdat
+            p = setproperties(pomc, newps)
+            @info "check1" p.N
+            sol = solve(ODEProblem(p), odealg_chunk4)
+            @info "check2" sol[end] sol.retcode
+            obj_expT(sol, fitdat, tweight=1e-2)
+        end
+    # end
 
     if !isnan(sqerr)
         Turing.@addlogprob! -sqerr
@@ -555,14 +591,28 @@ using Turing
     #     # @info "check" newpo.N.val newpo.S.val newpo.C.val newpo.Rs.val sol.t[end] sol[1,end]
         Turing.@addlogprob! -Inf
     end
+    return newps
 end
 
 case1_params = sigma_likelihood(make_mc_pass([1]))
 case128_params = sigma_likelihood(make_mc_pass([1, 2, 8]))
+
     
 smallalg = NUTS(10, 0.65)
-init_single = [rand(8).-0.5]
-smallsamp = @time sample(case1_params, smallalg, MCMCSerial(), 20, 1; initial_params=init_single)
+# guess_params = (Nv = 1e-4, Sv = 1e-8, Cv = 0.1, Rv = 1e-2, k0v = 1e-14, kfv = 1e-10, K1v = 1.0, K2v = 250.0)
+# init_single = [InitFromParams(guess_params)]
+# Turing.DynamicPPL.TestUtils.AD.run_ad(case1_params, AutoForwardDiff(); test=false, benchmark=false)
+smallsamp = @time sample(case1_params, smallalg, MCMCSerial(), 20, 1; initial_params=init_single, adtype=AutoForwardDiff())
+
+bad_params = (Nv = 0.00025055, Sv = 7.344991e-8, Cv = 0.02147, Rv = 3.96238e-10, k0v = 8.38e-16, kfv = 1.444e-9, K1v = 0.3905, K2v = 239.8)
+init_single = [InitFromParams(bad_params)]
+pomc_bad = setproperties(pomc1, (case1_params | bad_params)())
+sol_bad = solve(ODEProblem(pomc_bad), odealg_chunk4)
+
+
+
+
+
 nthreads = 4
 init_set = [(rand(8).-0.5) for i in 1:nthreads]
 smallsamp128 = @time sample(case128_params, smallalg, MCMCSerial(), 20, nthreads, initial_params = init_set)

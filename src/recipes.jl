@@ -110,6 +110,40 @@ function calc_lRp(sol)
     return l, Rp_mc
 end
 
+function calc_visc(T)
+    Tc = 647.096u"K"
+    Tb = T / Tc
+    ai = [3.933738e-2,  -2.361739e-1, 1.059696, -2.300709, 
+          2.786190, -1.852813, 6.352538e-1, -8.803352e-2]
+    ii = 0:7
+    den = sum(@. ai * Tb ^(-ii/2))
+    η0 = sqrt(Tb)*den * u"μPa*s"
+end
+calc_mfp_visc(p, T) = calc_visc(T|>u"K")/p * sqrt(π/2*u"R"/LyoPronto.Mw*(T|>u"K")) |> u"μm"
+calc_mfp_visc(T) = calc_mfp_visc(LyoPronto.calc_psub(T|>u"K"), T|>u"K")
+calc_mfp_dref(p, T; dref=0.346u"nm") = u"k"*(T|>u"K")/(sqrt(2)*π*dref^2*p) |> u"μm"
+function calc_Kn(sol)
+    Kns = map(sol.t, sol.u) do t, u
+        po = sol.prob.p
+        mean, var = calc_moms(u, po)
+        radii = cbrt.([mean, mean+2sqrt(var)] .*(0.75/π)) .|> u"μm"
+        td = t*u"hr" # Dimensional time
+        hf = u[1]*u"cm"
+        Tf = u[2]*u"K"
+        Qshf = po.Av*po.Kshf(po.pch(td))*(po.Tsh(td) - Tf)
+        Tsub = Tf - Qshf/LyoPronto.k_ice/po.Ap*hf
+        mfp_sub_visc = calc_mfp_visc(Tsub)
+        mfp_pch_visc = calc_mfp_visc(po.pch(td), Tsub)
+        mfp_sub_dref = calc_mfp_dref(LyoPronto.calc_psub(Tsub), Tsub)
+        mfp_pch_dref = calc_mfp_dref(po.pch(td), Tsub)
+        # mfp2 > mfp1 because pch(td) < psub(Tsub)
+        Kn_max = mfp_pch_dref/radii[1]
+        Kn_min = mfp_sub_dref/radii[2]
+        (;t=td, l_mean=radii[1], l_2sdev=radii[2], Kn_min, Kn_max, mfp_pch_dref, mfp_sub_dref, mfp_sub_visc, )
+    end
+    return Table(Kns)
+end
+
 @userplot PBMTDLAS
 @recipe function f(pt::PBMTDLAS)
     pbmsol, dat, Rpp = pt.args
