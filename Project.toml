@@ -33,3 +33,8 @@ TransformVariables = "84d833dd-6860-57f9-a1a7-6da5db126cff"
 Turing = "fce5fe82-541a-59a6-adf8-730c64b5f9a0"
 TypedTables = "9d95f2ec-7b3d-5a63-8d20-e2491e220bb9"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
+
+[sources]
+LyoPronto = {path = "C:\\Users\\iwheeler\\.julia\\dev\\LyoPronto"}
+TransformVariables = {path = "C:\\Users\\iwheeler\\.julia\\dev\\TransformVariables"}
+Unitful = {path = "C:\\Users\\iwheeler\\.julia\\dev\\Unitful"}
