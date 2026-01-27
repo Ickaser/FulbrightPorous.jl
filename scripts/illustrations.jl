@@ -1,3 +1,41 @@
+using Distributions
+
+# Example pore size distribution
+begin
+cmap = cgrad(:viridis, 10, categorical=true)[4:4+3]
+plot(LogNormal(0.8, 0.2), label="", fillrange=0, fillalpha=0.4, c=cmap[1])
+plot!(LogNormal(1.2, 0.3), label="", fillrange=0,fillalpha=0.4, c=cmap[2])
+plot!(LogNormal(1.5, 0.4), label="", fillrange=0,fillalpha=0.4, c=cmap[3])
+xx = range(4, 7.5, length=200)
+yy = 0.03(xx .- 8).^2 .+ 0.2
+plot!(xx, yy, arrow=true, c=:black, label="", lw=2, ls=:dash, markersize=2)
+plot!([8], [0.4], text=Plots.text("drying", 12), label="")
+plot!(xlims=(0, 10), ylims=(0, Inf), xticks=[], yticks=[],)
+plot!(ylabel="Probability Density", xlabel="Pore Size")
+plot!(left_margin=15Plots.px, size=(240,200))
+end
+savefig(plotsdir("schematic_pore_size_distribution.svg"))
+begin
+p1 = plot(LogNormal(0.8, 0.3), label="", fillrange=0, fillalpha=0.4, c=1)
+# plot!([10], [0.4], text=Plots.text("drying", 12), label="")
+plot!([5], [0.3], text=L"t_1", label="")
+plot!(ylabel="Probability Density", xlabel="Pore Size")
+plot!(left_margin=15Plots.px)
+p2 = plot(LogNormal(1.5, 0.4), label="", fillrange=0,fillalpha=0.4, c=1)
+# plot!(xlabel="Pore Size")
+plot!([5], [0.3], text=L"t_2", label="")
+plot!(ylabel="Probability Density", xlabel="Pore Size")
+plot!(left_margin=15Plots.px, size=(240,200))
+plot!(left_margin=50Plots.px, )
+plot(p1, p2, size=(400,200))
+plot!(xlims=(0, 10), ylims=(0, 0.8), xticks=[], yticks=[],)
+end
+savefig(plotsdir("schematic_2pore_size_distribution.svg"))
+
+
+using Latexify
+Latexify.set_default(labelformat=:square)
+
 hf0 = 1u"cm"
 l = range(0u"cm", hf0, length=101)
 uf = (;unitformat=(x,y)->"$x [$(latexify(y))]")
@@ -22,9 +60,10 @@ savefig(plotsdir("cryst_v_amorph.svg"))
 # ---------------------------
 # Typical cycle data
 
-using Latexify
 
 begin
+Kv = load(datadir("exp_pro", "gravimetric_kv.jld2"))["Kv"]
+
 dat1raw = CSV.read(datadir("exp_raw", "Fulbright2025", "2025-01-20-10_MFD_ISW.csv"), Table; header=8)
 dat1full = map(x->microfd_fulbright_columnrename(x, dat1raw.CycleTime[1]), dat1raw)
 overnightfix(dat1full)
@@ -153,12 +192,14 @@ end
 
 begin
 twinx(plot(xwiden=false, size=(450, 280)))
-cycledataplot!(dat2full, (:T1, :T2, :T3, :T4), (:Tsh_i), (:pch_pir, :pch_cm), pcolor=:green)
+cycledataplot!(dat2full, (:T1, :T2, :T3, :T4), (:Tsh_i), (:pch_pir, :pch_cm), nmarks=15, sampmarks=true, pcolor=:green)
 modconvtplot!(model2, lw=3, alpha=0.8)
 plot!(subplot=1, legend=(0.65, 0.38), ylim=(-52, 25))
 plot!(subplot=2, legend=(0.63, 0.85), ylim=(1, 200))
+plot!(size=(800, 400))
+plot!(bottom_margin=15Plots.px, left_margin=15Plots.px, right_margin=15Plots.px)
 end
-savefig(plotsdir("example_cycle_data.svg"))
+savefig(plotsdir("example_cycle_data_wide.svg"))
 
 l = range(0u"cm", hf0, length=101)
 hRps = [calc_hRp_T(pop2, fitdat2; i) for i in 1:4]
@@ -182,3 +223,63 @@ plot!(1:3, [2.5, 1.5, 0.5], fillrange=0, color=:blue, alpha=0.5)
 plot!(size=(100, 100))
 end
 savefig(plotsdir("cartoon_designspace.svg"))
+
+Ts = range(-52.0u"°C", 0u"°C", step=1u"K")
+ps = LyoPronto.calc_psub.(Ts) .|>u"mTorr"
+ps = max.(ps, 50.0u"mTorr") # make the curve flat at left end
+arrowTs = repeat(range(-35u"°C", -10u"°C", step=5u"K"), 1,2)'
+arrowps = LyoPronto.calc_psub.(arrowTs) .|>u"mTorr"
+arrowps[2,:] .= 50u"mTorr"
+
+Latexify.set_default(labelformat=:square)
+begin
+# plot()
+plot(Ts, ps, xunit=u"°C", fillrange=2000u"mTorr", c=:black, alpha=0.4, lw=0)
+plot!(yticks=[ 50, 200, 1000, 2000]u"mTorr", )
+plot!(ylimits=(-200u"mTorr",2000u"mTorr"), formatter=x->string(round(x)))
+plot!(xlim=(-45, -5))
+plot!(ylabel="p_\\mathrm{sub}", xlabel="T\\quad  ", unitformat=latexify)
+plot!(legend=:none)
+# vspan!([-7, 0], c=:orange, alpha=0.4)
+hspan!([-200, 50]u"mTorr", c=:black, alpha=0.4)
+FulbrightPores.calc_mfp_dref(50u"mTorr", -45u"°C")
+plot!(arrowTs, arrowps, arrow=true, c=:black)
+plot!(size=(400,300))
+
+for point in [(-40u"°C", 50u"mTorr", -1), (-10u"°C", 50u"mTorr", -1), (-30u"°C", 280u"mTorr", 1),
+    (-20u"°C", 750u"mTorr", 1), (-10u"°C", 1900u"mTorr", -1)]
+    scatter!([point[1]], [point[2]], marker=:star5, ms=8, c=:blue)
+    plot!([point[1]], [point[2]].+point[3]*150u"mTorr", text=Plots.text("$(round(typeof(1u"μm"), FulbrightPores.calc_mfp_dref(point[2], point[1])))", 12) )
+end
+plot!()
+end
+savefig(plotsdir("accessible_conditions.svg"))
+savefig(plotsdir("accessible_conditions.pdf"))
+
+Latexify.set_default(labelformat=:square)
+plot(Ts, ps, xunit=u"°C", unitformat=latexify, xlabel="T")
+plot(xlabel=L"T / \degree ^\circ C")
+plot(xlabel=L"T / \degree    ^\circ C")
+plot(xlabel=latexify("T", u"°C"))
+
+plot(map([
+     L"T / ^\circ C", 
+    #  L"T /\; ^\circ C", 
+    #  L"T\; /\;; ^\circ C", 
+    #  L"T\; /  _\circ C", 
+    #  L"T\; /\;  _\circ C", 
+     ]) do l
+    plot(xlabel=l)
+end..., layout=(5,1), size=(300,400), include_mathjax="cdn")
+savefig(plotsdir("xlabel_spacing.html"))
+plot(xlabel=L"T / ^\circ C")
+plot(xlabel=L"T /\; ^\circ C")
+plot(xlabel=L"T\; /\;;  ^\circ C")
+plot(xlabel=L"T\; /\;;  ^\circ C")
+latexify(u"°C")
+latexify("T", u"°C")
+
+FulbrightPores.calc_mfp_dref(50u"mTorr", -45u"°C")
+FulbrightPores.calc_mfp_dref(50u"mTorr", -15u"°C")
+FulbrightPores.calc_mfp_dref(100u"mTorr", -15u"°C")
+FulbrightPores.calc_mfp_dref(2000u"mTorr", -10u"°C")
