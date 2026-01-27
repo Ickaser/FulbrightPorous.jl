@@ -1,4 +1,6 @@
 fp_plot_defaults()
+Latexify.set_default(labelformat=:square)
+using StatsPlots: groupedbar
 
 begin
 Kv = load(datadir("exp_pro", "gravimetric_kv.jld2"))["Kv"]
@@ -35,22 +37,29 @@ Tsh1 = RampedVariable(uconvert.(u"K", [-47.0, -20]u"°C"), 0.5u"K/minute")
 # @df dat1 plot(:t, :Tsh_i, xlim=(0, 2))
 # plot!(Tsh1)
 
-# @df dat1 exptfplot(:t, :T1, :T2, :T3, :T4)
+@df dat1 exptfplot(:t, :T1, :T2, :T3, :T4)
 
 fitdat1 = @df dat1 PrimaryDryFit(:t, 
-    (:T1[:t .< 5u"hr"],
+    (:T1[:t .< 4.8u"hr"],
     :T2[:t .< 5u"hr"],
     :T3[:t .< 5u"hr"],
-    :T4[:t .< 5.9u"hr"],
+    :T4[:t .< 5.7u"hr"],
     );
     t_end=t_end1
 )
-# plot(fitdat1)
+plot(fitdat1)
 
 dat2raw = CSV.read(datadir("exp_raw", "Fulbright2025", "2025-01-28-10_MFD_ISW.csv"), Table; header=8)
 dat2pd = filter(x->x.Phase==4, dat2raw)
 dat2 = map(x->microfd_fulbright_columnrename(x, dat2pd.CycleTime[1]), dat2pd)
 overnightfix(dat2)
+# begin
+# @df filter(x->x.Phase == 1, dat2raw) exptfplot(:CycleTime, :TP1, :TP2, :TP3, :TP4, sampmarks=true)
+# plot!(xlim=(Dates.Time("11:30"), Dates.Time("11:55")))
+# plot!(ylim=(-10, 0))
+# end
+# dat2.T1 .+= 1u"K" # Fudge to account for TC calibration
+# dat2.T4 .-= 0.5u"K"
 
 # t_end2 = identify_pd_end(dat2.t, dat2.pch_pir, Val(:2der), window_width=91,  tmin=1u"hr",  tmax=50u"hr")
 t_end2 = identify_pd_end(dat2.t, dat2.pch_pir, Val(:onoff), window_width=91,  tmin=1u"hr",  tmax=50u"hr")
@@ -230,19 +239,22 @@ fitdat7 = @df dat7 PrimaryDryFit(:t, (
     );
     t_end=t_end7
 )
-plot(fitdat7)
+# plot(fitdat7)
 
-end
+end;
+
+
+
 
 blankplot_hrC()
-plot!(fitdat1, c=1)
-plot!(fitdat2, c=2)
-plot!(fitdat3, c=3)
+plot!(fitdat1, c=1, nmarks=15)
+plot!(fitdat2, c=2, nmarks=15)
+plot!(fitdat3, c=3, nmarks=15)
 # plot!(fitdat6, c=6)
-plot!(fitdat7, c=7)
+plot!(fitdat7, c=7, nmarks=15)
 blankplot_hrC()
-plot!(fitdat4, c=4)
-plot!(fitdat5, c=5)
+plot!(fitdat4, c=4, nmarks=15)
+plot!(fitdat5, c=5, nmarks=15)
 # plot!(xlim=(0, 10), ylim=(-36,-30))
 
 # ------------- Check Pirani
@@ -372,24 +384,23 @@ end
 
 pass123 = make_mcpass([1, 2, 3])
 pass45 = make_mcpass([4, 5])
+pass7 = make_mcpass([7])
 
 NTV = ConstWrapTV() ∘ TVScale(2e6u"cm^-3") ∘ TVExp()
 STV = ConstWrapTV() ∘ TVScale(5e-7u"cm^3") ∘ TVExp()
 CTV = TVScale(2e-1u"m^0.5") ∘ TVExp()
 RsTV = TVScale(1.5u"cm^2*Torr*hr/g") ∘ TVShift(0.01) ∘ TVLogistic()
-porous_nt = (N = NTV, S = STV, # If I could enforce S > ϕ/N, would be great...
-               C = CTV, Rs = RsTV,)
-myega_nt = (k0 = TVScale(1e42u"s^-1") ∘ TVExp(),
+# porous_nt = as((N = NTV, S = STV, # If I could enforce S > ϕ/N, would be great...
+#                C = CTV, Rs = RsTV,))
+porous_nt = FulbrightPores.porous_transform_bounded(fillvol)
+myega_nt = as((k_f=as((k0 = TVScale(1e42u"s^-1") ∘ TVExp(),
             K1 = TVScale(2.0e4u"K") ∘ TVExp(),
-            K2 = TVScale(1e2u"K") ∘ TVExp() ,)
+            K2 = TVScale(1e2u"K") ∘ TVExp() ,)),))
 # plot(Tran, FulbrightPores.k_f_nt(transform(as(myega_nt), zeros(3))).(Tran), yscale=:log10, label="MYEGA, def")
-sigma_nt = (k0 = TVScale(1e-12u"s^-1") ∘ TVExp(),
-            kf = TVScale(1e-8u"s^-1") ∘ TVExp(),
-            K1 = TVScale(1.0u"K") ∘ TVExp(),
-            K2 = TVScale(1.0u"K") ∘ TVShift(216.0) ∘ TVScale(45.0) ∘ TVLogistic() ∘TVScale(0.1) ,)
+sigma_nt = FulbrightPores.sigmoid_transform_bounded(1e-10u"s^-1", 1.0u"K")
 # plot(Tran, FulbrightPores.k_f_nt(transform(as(sigma_nt), zeros(4))).(Tran), yscale=:log10, label="MYEGA, def")
-trans_myega = as(merge(porous_nt, (;k_f=as(myega_nt))))
-trans_sigma = as(merge(porous_nt, (;k_f=as(sigma_nt))))
+trans_myega = merge(porous_nt, myega_nt)
+trans_sigma = merge(porous_nt, sigma_nt)
 
 # objn_myega(fitprm, pf) = objn_mc(fitprm, (trans_myega, pf...), tweight=1e-2)
 obj_mc(fitprm, tpf) = objn_pd(fitprm, tpf; badprms=FulbrightPores.badNS, tweight=1e-2)
@@ -405,13 +416,14 @@ objf_mc(rand(7), (trans_myega, pass123...))
 # # p0_sigm = vcat(fill(0.1, 4), 5, 0.1, 2, -5)
 
 
-p0_sigma = [3, 6, 0, 0.1, -2, 2, -1, -1]
+p0_sigma = [0, 0, -1, 0.1, 0, 1, 1, 1]
 @time opt123sigm = solve(OP(objf_mc, p0_sigma, (trans_sigma, pass123...)), optalg, time_limit=15)
 # @time opt45sigm = solve(OP(objnf_sigma, p0_sigma, pass45, lb=lb_sigm, ub=ub_sigm), optalg, maxiters=50, time_limit=15)
 @time opt45sigm = solve(OP(objf_mc, p0_sigma, (trans_sigma, pass45...)), optalg, time_limit=15)
+@time opt7sigm = solve(OP(objf_mc, p0_sigma, (trans_sigma, pass7...)), optalg, time_limit=15)
 
 # @time opt123myega = solve(OP(objnf_myega, p0_myega, pass123, lb=lb_myega, ub=ub_myega), optalg, maxiters=50, time_limit=15, show_trace=true)
-p0_myega = [3, 6, 0, 0.1, 1, 0, 0]
+p0_myega = [0, 0, -1, 0.1, 1, 0, 0]
 @time opt123myega = solve(OP(objf_mc, p0_myega, (trans_myega, pass123...)), optalg, time_limit=15, g_tol=1e-6)
 @time opt45myega = solve(OP(objf_mc, p0_myega, (trans_myega, pass45...)), optalg, time_limit=15, g_tol=1e-6)
 
@@ -422,12 +434,23 @@ p0_myega = [3, 6, 0, 0.1, 1, 0, 0]
 # split_fit_prms(fitprm_plus) = vcat(fitprm_plus[1:2], fitprm_plus[5:end]), vcat(fitprm_plus[3:4], fitprm_plus[5:end])
 remap_vars(fitprm) = vcat(fitprm[1:2], fitprm[1:2], fitprm[1:2], fitprm[3:end])
 # trans_2m = as((p1=as((porous_nt[1], porous_nt[2])), p2=as(porous_nt), k_f=as(myega_nt)))
-trans_2m = as((separate=as(Vector, as((N=NTV, S=STV)), 3),
+trans_2m = as((separate=as(Vector, as((N=porous_nt.N, S=porous_nt.S)), 3),
                 sep_inds=Constant([1, 1, 1, 2, 2, 3]),
-                shared=as((C=CTV, Rs=RsTV, k_f=as(myega_nt))),))
-trans_2s = as((separate=as(Vector, as((N=NTV, S=STV)), 3),
+                shared=merge(as((C=porous_nt.C, Rs=porous_nt.Rs)), myega_nt),))
+trans_2s = as((separate=as(Vector, as((N=porous_nt.N, S=porous_nt.S)), 3),
                 sep_inds=Constant([1, 1, 1, 2, 2, 3]),
-                shared=as((C=CTV, Rs=RsTV, k_f=as(sigma_nt))),))
+                shared=merge(as((C=porous_nt.C, Rs=porous_nt.Rs)), sigma_nt),))
+function gen_pbmsols(opt, tr)
+    sols = if hasproperty(tr, :shared)
+        gen_nsol_pd(opt, tr, cases.pomc)
+    else
+        map(cases_Rps) do case
+            sol = gen_sol_pd(opt, tr, case.pomc)
+        end
+    end
+    return Table((sol_mc=sols,))
+end
+
 # trans_2m = as((p1=as(porous_nt), p2=as(porous_nt), k_f=as(myega_nt)))
 # trans_2s = as((p1=as(porous_nt), p2=as(porous_nt), k_f=as(sigma_nt)))
 objf_mc_c5 = OptimizationFunction((x,y)->LyoPronto.objn_pd(x,y; badprms=FulbrightPores.badNS, tweight=1e-1), AutoForwardDiff(chunksize=6))
@@ -436,12 +459,16 @@ p0_2m = remap_vars(p0_myega)
 @time opt_2m = solve(OP(objf_mc_c5, p0_2m, (trans_2m, cases_Rps.pomc, cases_Rps.fitdat)), optalg, time_limit=15)
 
 p0_2s = remap_vars(p0_sigma)
+# p0_2s = remap_vars(opt123sigm.u)
+p0_2s[5] -= 1.0
+p0_2s[6] += 1.0
 @time opt_2s = solve(OP(objf_mc_c5, p0_2s, (trans_2s, cases_Rps.pomc, cases_Rps.fitdat)), optalg, time_limit=15)
 
 
-fits = Table((opt=[opt123sigm, opt123myega, opt45sigm, opt45myega, opt_2m, opt_2s], 
-              tr=[trans_sigma, trans_myega, trans_sigma, trans_myega, trans_2m, trans_2s],
-              cases=[(1,2,3), (1,2,3), (4,5), (4,5), (1,2,3,4,5, 6), (1,2,3,4,5, 6)],))
+
+fits = Table((opt=[opt123sigm, opt123myega, opt45sigm, opt45myega, opt_2m, opt_2s, opt7sigm], 
+              tr=[trans_sigma, trans_myega, trans_sigma, trans_myega, trans_2m, trans_2s, trans_sigma],
+              cases=[(1,2,3), (1,2,3), (4,5), (4,5), (1,2,3,4,5, 6), (1,2,3,4,5, 6), (7)],))
 fits = Table(fits, (kf= map(fits) do x
     fitprm = transform(x.tr, x.opt.u)
     if hasproperty(fitprm, :shared)
@@ -454,29 +481,55 @@ fits = Table(fits, (k_type = map(x->(x.kf isa Sigmoid_k ? Sigmoid_k : MYEGA_k), 
 # push!(fits, (opt=opt_2m, tr=trans_myega, cases=(1,2,3,4,5), kf=FulbrightPores.k_f_nt(transform(trans_myega, opt_2m.u[end-6:end]).k_f)))
 # push!(fits, (opt=opt_2s, tr=trans_sigma, cases=(1,2,3,4,5), kf=FulbrightPores.k_f_nt(transform(trans_sigma, opt_2s.u[end-7:end]).k_f)))
 
-function gen_pbmsols(opt, tr)
-    if hasproperty(tr.transformations, :shared)
-        sols = gen_nsol_pd(opt, tr, cases.pomc)
-    else
-        sols = map(cases_Rps) do case
-            sol = gen_sol_mc_arb(opt, tr, case.pomc)
-        end
-    end
-    return Table((sol_mc=sols,))
-end
-
 # new_sols = vcat(gen_pbmsols(opt123myega, trans_myega)[1:3], gen_pbmsols(opt45myega, trans_myega)[4:5])
-# new_sols = vcat(gen_pbmsols(opt123sigm, trans_sigma)[1:3], gen_pbmsols(opt45sigm, trans_sigma)[4:5])
-# new_sols = 
+# new_sols = vcat(gen_pbmsols(opt123sigm, trans_sigma)[1:3], gen_pbmsols(opt45sigm, trans_sigma)[4:5], gen_pbmsols(opt7sigm, trans_sigma)[6:6])
 # new_sols = gen_pbmsols(opt_2m, trans_2m)
 new_sols = gen_pbmsols(opt_2s, trans_2s)
-# new_sols = gen_pbmsols(opt_2s, k_f_sigm)
 cases_both = Table(cases, single_Rps, new_sols)
+
+errs = Table(map(cases_both) do case
+    PBM = case.sol_mc
+    PP = case.sol_p
+    errf = (model, tweight)->obj_expT(model, case.fitdat; tweight)
+    PBM_T = sqrt(errf(PBM, 0))*u"K"
+    PP_T = sqrt(errf(PP, 0))*u"K"
+    t_end_est = ustrip(u"hr", sum(case.fitdat.t_end)/2)
+    PBM_t = sqrt(errf(PBM, 1) - errf(PBM, 0))/t_end_est
+    PP_t = sqrt(errf(PP, 1) - errf(PP, 0))/t_end_est
+    return (;name=case.name, PBM_T, PP_T, PBM_t, PP_t)
+end)
+
+# Plot N and S for different fits
+begin
+i = 1
+# myega_or_sig = [1, 2, 1, 2, 2, 2, 2, 1, 1, 1]
+cs = cgrad(:viridis)
+markers = [:circle, :square, :diamond, :utriangle, :dtriangle, :ltriangle, :rtriangle, :hexagon, :pentagon, :heptagon, :octagon]
+styles = Table((marker=markers, markersize=fill(10, 11)))
+plot(u"μm^-3", u"μm^3", xlabel="N", ylabel="S", xscale=:log10, yscale=:log10, unitformat=latexify)
+pl_fitNS = map(fits[[1,3,6,7]]) do fit # just sigmoid cases
+    fitprm = transform(fit.tr, fit.opt.u)
+    if hasproperty(fitprm, :shared)
+        N_vals = fitprm.separate .|> x->x.N.val .|> u"μm^-3"
+        S_vals = fitprm.separate .|> x->x.S.val .|> u"μm^3"
+        for (N, S, nums) in zip(N_vals, S_vals, [(1,2,3), (4,5), (7)])
+            scatter!([N], [S], label="$nums, fit to all"; styles[i]...)
+            @info "fits" fitprm.shared.C
+            global i += 1
+        end
+    else
+        scatter!([fitprm.N.val], [fitprm.S.val], label="$(fit.cases)"; styles[i]...)
+        @info "fits" fitprm.C
+        global i += 1
+    end
+end
+plot!(legend=:left)
+end
 
 begin
 pls_T1 = map(cases_both[1:3]) do case
     pl = blankplot_hrC(legend=:bottomright, title="$(case.name), Tsh=$(case.pop.Tsh(Inf*u"s")|>u"°C")")
-    plot!(case.fitdat)
+    plot!(case.fitdat, nmarks=15)
     modconvtplot!(case.sol_mc, c=2, label="PBM: 1&2&3")
     modconvtplot!(case.sol_p, c=:green, linealpha=0.7, label="3PP $(case.name)")
     modconvtplot!(gen_sol_pd(rp123.u, trans_Rp, case.pop), c=:purple, label="3PP 1&2&3")
@@ -487,35 +540,38 @@ end
 # plot!(pls_T1[1], ylabel="Temperature [°C]")
 plot(pls_T1..., layout=(1,3), size=(1000, 400), bottom_margin=20Plots.px)
 end
-savefig(plotsdir("fulbright_sucrose5_T.svg"))
-savefig(plotsdir("fulbright_sucrose5_T.pdf"))
+savefig(plotsdir("fulbright_sucrose123_T.svg"))
+savefig(plotsdir("fulbright_sucrose123_T.pdf"))
+
 
 begin
+e1 = groupedbar(errs.name, [errs.PBM_T errs.PP_T], label="", ylabel=L"$T_\mathrm{f}$ error", c=[2 3], lw=1)
+e2 = groupedbar(errs.name, [errs.PBM_t errs.PP_t], label="", ylabel=L"$t_\mathrm{end}$ rel. error", c=[2 3], lw=1)
 pls_T1 = map(cases_both[1:3]) do case
-    pl = blankplot_hrC(legend=:outerright, title=case.name)
-    plot!(case.fitdat)
-    modconvtplot!(case.sol_mc, case.sol_p, c=[2 :green], linealpha=0.7, markeralpha=0, labels=["PBM: S 1&2&3" "3PP $(case.name)"])
+    pl = blankplot_hrC(legend=:outerright, title=case.name, ylabel="T", xlabel="t")
+    plot!(case.fitdat, nmarks=15)
+    modconvtplot!(case.sol_mc, case.sol_p, c=[2 3], linealpha=0.7, labels=["PBM-S 1&2&3" "3PP $(case.name)"])
     plot!(xlim=(0, 16), ylim=(-40, -30))
     return pl
 end
 pls_T2 = map(cases_both[4:5]) do case
-    pl = blankplot_hrC(legend=:outerright, title=case.name)
-    plot!(case.fitdat)
-    modconvtplot!(case.sol_mc, case.sol_p, c=[2 :green], linealpha=0.7, markeralpha=0, labels=["PBM: S 4&5" "3PP $(case.name)"])
+    pl = blankplot_hrC(legend=:outerright, title=case.name, ylabel="T", xlabel="t")
+    plot!(case.fitdat, nmarks=15)
+    modconvtplot!(case.sol_mc, case.sol_p, c=[2 3], linealpha=0.7,labels=["PBM-S 4&5" "3PP $(case.name)"])
     # plot!(xlim=(0, 65), ylim=(-40, -30))
     plot!(ylim=(-40,-30))
     return pl
 end
 pl_T3 = map(cases_both[6:6]) do case
-    pl = blankplot_hrC(legend=:outerright, title=case.name)
-    plot!(case.fitdat)
-    modconvtplot!(case.sol_mc, case.sol_p, c=[2 :green], linealpha=0.7, markeralpha=0, labels=["PBM: S 7" "3PP $(case.name)"])
+    pl = blankplot_hrC(legend=:outerright, title=case.name, ylabel="T", xlabel="t")
+    plot!(case.fitdat, nmarks=15)
+    modconvtplot!(case.sol_mc, case.sol_p, c=[2 3], linealpha=0.7, labels=["PBM-S 7" "3PP $(case.name)"])
     # plot!(xlim=(0, 65), ylim=(-40, -30))
     plot!(ylim=(-40,-30))
     return pl
 end
 # plot!(pls_T[5], legend=:bottomright)
-plot(pls_T1..., pls_T2..., pl_T3..., layout=(6,1), size=(500, 1000))
+plot(pls_T1..., pls_T2..., pl_T3..., e1, e2, layout=(4,2), size=(800, 800))
 end
 savefig(plotsdir("fulbright_sucrose_T.svg"))
 savefig(plotsdir("fulbright_sucrose_T.pdf"))
@@ -532,26 +588,30 @@ end
 # plot!(Tran, FulbrightPores.k_f_nt(transform(trans_sigma, p0_sigma).k_f).(Tran), label="Sigmoid, guess")
 # plot!(Tran, FulbrightPores.k_f_nt(transform(as(myega_nt), zeros(3))).(Tran), label="MYEGA, def")
 # plot!(Tran, FulbrightPores.k_f_nt(transform(as(sigma_nt), zeros(4))).(Tran), label="Sigmoid, def")
-plot!(ylim=(1e-20, 1e10), legend=:bottomright)
+plot!(ylim=(1e-16, 1e-5), legend=:bottomright)
 plot!()
 end
 
 l = range(0u"cm", hf0, length=100)
 begin
-poreevolplot(cases_both[1].sol_mc, label="PBM 1, 1&2&3", marker=:o, kind=:stats, yscale=[:log10 :log10 :log10 :identity])
-plot!(subplot=1, ylims=(1e4, 1e7))
-poreevolplot!(cases_both[2].sol_mc, label="PBM 2, 1&2&3", marker=:square, kind=:stats)
-poreevolplot!(cases_both[3].sol_mc, label="PBM 3, 1&2&3", marker=:d, kind=:stats)
+kind = :stats
+poreevolplot(cases_both[1].sol_mc, label="PBM 1, 1&2&3"; marker=:o, kind, yscale=[:log10 :log10 :log10 :identity])
+plot!(subplot=1, ylims=(1e7, Inf))
+plot!(subplot=2, ylims=(1e0, Inf))
+plot!(subplot=3, ylims=(0, Inf), yscale=:identity)
+plot!(subplot=4, yunitformat=latexify)
+poreevolplot!(cases_both[2].sol_mc, label="PBM 2, 1&2&3"; marker=:square, kind)
+poreevolplot!(cases_both[3].sol_mc, label="PBM 3, 1&2&3"; marker=:d, kind)
 # poreevolplot!(cases_both[4].sol_mc, label="PBM 4, 4&5", marker=:square, kind=:stats)
 # poreevolplot!(cases_both[5].sol_mc, label="PBM 5, 4&5", marker=:d, kind=:stats)
-poreevolplot!(cases_both[6].sol_mc, label="PBM 7, 7", marker=:d, kind=:stats)
-for case in cases_both[[1,6]]
-    # plot!(subplot=4, l, case.Rp.(l), ls=:dash, c=parse(Int, case.name), label="3PP $(case.name)")
-    for i in 1:4
-        hdT, RpT = case.hRps[i]
-        plot!(subplot = 4, hdT, RpT, alpha=0.5, c=parse(Int, case.name), label=(i==1 ? "Rp from T, $(case.name)" : ""))
-    end
-end
+poreevolplot!(cases_both[6].sol_mc, label="PBM 7, 7"; marker=:utriangle, kind)
+# for case in cases_both[[1,6]]
+#     # plot!(subplot=4, l, case.Rp.(l), ls=:dash, c=parse(Int, case.name), label="3PP $(case.name)")
+#     for i in 1:4
+#         hdT, RpT = case.hRps[i]
+#         plot!(subplot = 4, hdT, RpT, alpha=0.5, c=parse(Int, case.name), label=(i==1 ? "Rp from T, $(case.name)" : ""))
+#     end
+# end
 plot!()
 end
 savefig(plotsdir("fulbright_suc_moments.svg"))
@@ -559,7 +619,7 @@ savefig(plotsdir("fulbright_suc_moments.pdf"))
 
 begin
 blankplot_lRp()
-for case in cases_both[[1, 6]]
+for case in cases_both[[1, 2, 3]]
     # plot!(subplot=4, l, case.Rp.(l), ls=:dash, c=parse(Int, case.name), label="3PP $(case.name)")
     mcrpplot!(case.sol_mc, c=parse(Int, case.name), label="PBM mixed-all")
     for i in 1:4
@@ -569,17 +629,18 @@ for case in cases_both[[1, 6]]
     plot!(l, case.Rp.(l), ls=:dash, c=parse(Int, case.name), label="3PP $(case.name)")
 end
 # plot!(xlim=(0, 0.3), ylim=(0.5, 2.5))
-plot!()
+plot!(size=(300, 400))
 end
 savefig(plotsdir("fulbright_sucrose_Rp.svg"))
 savefig(plotsdir("fulbright_sucrose_Rp.pdf"))
 
 # timedistplot(cases_both[5].sol_mc; ywiden=false, scale=:log10, disttype=:beta, legend=:outerright)
 begin
-plot(u"mm^3", NoUnits, ywiden=false, ylabel="Approx. Prob. Dens.", xlabel=L"Pore Size", unitformat=latexsquareunitlabel)
+plot(u"μm^3", NoUnits, ywiden=false, ylabel="Approx. Prob. Dens.", xlabel="Pore Size", unitformat=latexify)
 for case in cases_both[[1, 2, 3, 6, 4, 5]]
-    distplot!(case.sol_mc;  disttype=:normal, label=case.name)
-    plot!(yscale=:log10)
+    distplot!(case.sol_mc;  disttype=:lognormal, label=case.name)
+    # plot!(yscale=:log10)
+    plot!(xscale=:log10)
 end
 # plot!(scale=:log10)
 plot!()
@@ -594,70 +655,120 @@ res_fit = cases_both[4].sol_mc.prob.p
 res_fit = cases_both[6].sol_mc.prob.p
 @info "Best fit params, 7:" res_fit.N res_fit.S res_fit.C res_fit.Rs res_fit.k_f
 
-function eval_about_myega(new, opt, pass)
-    objn_myega(new .* opt.u, pass)
+
+## temp: debugging
+
+meanT = fill(0.0u"K", maximum(fitdat1.Tf_iend))
+for (i) in eachindex(meanT)
+    Ts = [T[i] for (T, iend) in zip(fitdat1.Tfs, fitdat1.Tf_iend) if i<=iend]
+    meanT[i] = sum(Ts.|>u"K")/length(Ts)
 end
-function eval_many(ranges...)
-    ndims = length(ranges)
-    eval_points = [[u..., fill(1.0, 7-ndims)...] for u in Iterators.product(ranges...)]
-    eval_about_myega.(eval_points, [opt123myega], [pass123])
+blankplot_hrC()
+plot!(fitdat1)
+plot!(fitdat1.t[eachindex(meanT)], meanT)
+modconvtplot!(cases_both.sol_mc[2])
+
+sol2 = cases_both.sol_mc[2]
+prob2 = sol2.prob
+dus = hcat(map(sol2.u, sol2.t) do u, t
+    du = similar(u)
+    FulbrightPores.lyo_mc_dae!(du, u, prob2.p, t)
+    du
+end...)
+
+k2 = prob2.p.k_f
+newprob = @set prob2.p.k_f.k0 = 1e-11u"s^-1"
+sol2n = solve(newprob, Rodas3P())
+plot(sol2n.t, dus[3,:])
+plot(sol2n.t, sol2n[2,:])
+plot(sol2n.t, newprob.p.k_f.(sol2n[2,:]*u"K"))
+
+sol1 = cases_both.sol_mc[1]
+k1 = sol1.prob.p.k_f
+
+plot(sol1.t, k1.(sol1[2,:]*u"K"))
+plot(sol1.t, sol1[3,:])
+
+function examine_Q(u, p, t)
+    hf = u[1]*u"cm"
+    Tf = u[2]*u"K"
+    td = t*u"hr"
+    k_ice = LyoPronto.k_ice
+    (;Av, Ap, Kshf, pch, Tsh) = p
+    Qshf = Av*Kshf(pch(td))*(Tsh(td) - Tf)
+    Tsub = Tf - Qshf/k_ice/Ap*hf
 end
+Tsub = examine_Q.(sol1.u, (sol1.prob.p,), sol1.t)
+plot(sol1.t, k1.(Tsub))
 
-# spread = [[exp(i), exp(j), fill(1.0,5)...] for i in -5:5, j in -5:5]
-
-integ_dims(dims...) = dropdims(sum(probs, dims=dims), dims=dims)
-# @time sqerrs = eval_about_myega.(spread, [opt123myega], [pass123])
-begin
-Nr = range(-30, 40, length=11)
-Sr = range(-16, 16, length=12)
-Cr = range(-10, 20, length=5)
-Rsr = range(-2, 10, length=4)
-@time sqerrs = eval_many(Nr, Sr, Cr, Rsr)
-minsqerr = minimum(filter(!isnan, sqerrs)) 
-opt123myega.minimum
-probs = exp.(-map(x->(isnan(x) ? Inf : x-minsqerr), sqerrs))
-probs ./= sum(probs)
-end;
-# contourf(sqerrs[:,:,1,1], cmap=:thermal, lw=0)
-
-## Bayesian, Turing
-using Turing
-
-@model function myega_posterior(opt, pass)
-
-    Nfac ~ LogUniform(1e-15, 1e20)
-    Sfac ~ LogUniform(1e-6, 1e6)
-    Cfac ~ LogUniform(1e-5, 1e10)
-    Rfac ~ LogUniform(1e-1, 1e5)
-    kfac ~ LogUniform(1e-3, 1e3)
-    Kfac ~ LogUniform(1e-3, 1e3)
-    θfac ~ LogUniform(1e-3, 1e3)
-
-    prmfacs = [Nfac, Sfac, Cfac, Rfac, kfac, Kfac, θfac]
-    sqerr = eval_about_myega(prmfacs, opt, pass)
-
-    if !isnan(sqerr)
-        Turing.@addlogprob! -sqerr
-    else
-    #     # @info "check" newpo.N.val newpo.S.val newpo.C.val newpo.Rs.val sol.t[end] sol[1,end]
-        Turing.@addlogprob! -Inf
-    end
-end
-
-case123_model = myega_posterior(opt123myega, pass123);
-
-nthreads = 1
-init_set = [exp.(rand(7).-0.5) for i in 1:nthreads]
-@time smallsamp = sample(case123_model, NUTS(), MCMCThreads(), 50, nthreads, initial_params=init_set)
-nthreads = 4
-init_set = [exp.(rand(7).-0.5) for i in 1:nthreads]
-samp_alg = NUTS(100, 0.65; init_ϵ=0.01)
-@time samp = sample(case123_model, samp_alg, MCMCThreads(), 500, nthreads, initial_params=init_set)
-
-safesave(datadir("exp_pro", "fulbright123_myega_sampling.jld2"), @strdict smallsamp samp )
-
-@unpack samp = load(datadir("exp_pro", "fulbright123_myega_sampling.jld2"))
-plot(samp, yscale=:log10)
+## MCMC
 
 
-@time bigsamp = sample(case123_model, NUTS(), MCMCThreads(), 2000, nthreads, initial_params=init_set)
+
+# function eval_about_myega(new, opt, pass)
+#     objn_myega(new .* opt.u, pass)
+# end
+# function eval_many(ranges...)
+#     ndims = length(ranges)
+#     eval_points = [[u..., fill(1.0, 7-ndims)...] for u in Iterators.product(ranges...)]
+#     eval_about_myega.(eval_points, [opt123myega], [pass123])
+# end
+
+# # spread = [[exp(i), exp(j), fill(1.0,5)...] for i in -5:5, j in -5:5]
+
+# integ_dims(dims...) = dropdims(sum(probs, dims=dims), dims=dims)
+# # @time sqerrs = eval_about_myega.(spread, [opt123myega], [pass123])
+# begin
+# Nr = range(-30, 40, length=11)
+# Sr = range(-16, 16, length=12)
+# Cr = range(-10, 20, length=5)
+# Rsr = range(-2, 10, length=4)
+# @time sqerrs = eval_many(Nr, Sr, Cr, Rsr)
+# minsqerr = minimum(filter(!isnan, sqerrs)) 
+# opt123myega.minimum
+# probs = exp.(-map(x->(isnan(x) ? Inf : x-minsqerr), sqerrs))
+# probs ./= sum(probs)
+# end;
+# # contourf(sqerrs[:,:,1,1], cmap=:thermal, lw=0)
+
+# ## Bayesian, Turing
+# using Turing
+
+# @model function myega_posterior(opt, pass)
+
+#     Nfac ~ LogUniform(1e-15, 1e20)
+#     Sfac ~ LogUniform(1e-6, 1e6)
+#     Cfac ~ LogUniform(1e-5, 1e10)
+#     Rfac ~ LogUniform(1e-1, 1e5)
+#     kfac ~ LogUniform(1e-3, 1e3)
+#     Kfac ~ LogUniform(1e-3, 1e3)
+#     θfac ~ LogUniform(1e-3, 1e3)
+
+#     prmfacs = [Nfac, Sfac, Cfac, Rfac, kfac, Kfac, θfac]
+#     sqerr = eval_about_myega(prmfacs, opt, pass)
+
+#     if !isnan(sqerr)
+#         Turing.@addlogprob! -sqerr
+#     else
+#     #     # @info "check" newpo.N.val newpo.S.val newpo.C.val newpo.Rs.val sol.t[end] sol[1,end]
+#         Turing.@addlogprob! -Inf
+#     end
+# end
+
+# case123_model = myega_posterior(opt123myega, pass123);
+
+# nthreads = 1
+# init_set = [exp.(rand(7).-0.5) for i in 1:nthreads]
+# @time smallsamp = sample(case123_model, NUTS(), MCMCThreads(), 50, nthreads, initial_params=init_set)
+# nthreads = 4
+# init_set = [exp.(rand(7).-0.5) for i in 1:nthreads]
+# samp_alg = NUTS(100, 0.65; init_ϵ=0.01)
+# @time samp = sample(case123_model, samp_alg, MCMCThreads(), 500, nthreads, initial_params=init_set)
+
+# safesave(datadir("exp_pro", "fulbright123_myega_sampling.jld2"), @strdict smallsamp samp )
+
+# @unpack samp = load(datadir("exp_pro", "fulbright123_myega_sampling.jld2"))
+# plot(samp, yscale=:log10)
+
+
+# @time bigsamp = sample(case123_model, NUTS(), MCMCThreads(), 2000, nthreads, initial_params=init_set)

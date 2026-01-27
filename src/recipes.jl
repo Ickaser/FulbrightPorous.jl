@@ -29,6 +29,9 @@ public calc_moms_NS
     μ1 = hd*ϕ*po.Ap .|> u"mm^3"
     mean = μ1 ./ μ0
     var = μ2 ./ μ0 .- mean.^2
+    # meandiam = @. cbrt(mean*6/π) - var/9*cbrt(6/π)*(mean^(-5/3)) .|> u"μm"
+    meandiam = @. cbrt(mean*3/4/π) |> u"μm"
+    vardiam = @. (cbrt(6/π)/3*mean^(-2/3))^2 * var
     Rp = map(sol.t, sol.u) do t,u
         lyo_mc_dae!(fill(0.0, 4), u, sol.prob.p, t, Val(true)) |> u"cm^2*Torr*hr/g"
     end
@@ -53,8 +56,7 @@ public calc_moms_NS
         xformatter -->  _->""
         if kind == :stats
             ylabel --> "typical \npore diameter\n" #*", total pore volume"
-            diam = @. cbrt(mean*3/4/π) |> u"μm"
-            return hd, diam
+            return hd, meandiam
         elseif kind == :moms
             ylabel --> "μ1" 
             return hd, μ1
@@ -65,8 +67,8 @@ public calc_moms_NS
         xlabel --> "Dry layer thickness"
         legend --> :none
         if kind == :stats
-            ylabel --> "pore size \nvariance\n" #*", pore size second moment"
-            return hd, var
+            ylabel --> "pore diameter \nstdev\n" #*", pore size second moment"
+            return hd, sqrt.(vardiam) .|> u"μm"
         elseif kind == :moms
             ylabel --> "μ2"
             return hd, μ2
@@ -233,9 +235,9 @@ function calc_moms_NS(po)
     var = (po.S(0)/po.N(0) - ϕ^2/po.N(0)^2)
     return mean, var, po
 end
-function make_dist(mean, var, po, disttype)
+function make_dist(mean, var, po, disttype=:lognormal)
     ϕ = 1 - po.csolid/po.ρsolution
-    maxV = ϕ*po.hf0*po.Ap |> u"mm^3"
+    maxV = ϕ*po.hf0*po.Ap |> u"μm^3"
     mean = mean/maxV |> NoUnits
     var = var/maxV^2 |> NoUnits
     if disttype == :gamma
@@ -244,6 +246,10 @@ function make_dist(mean, var, po, disttype)
         return Gamma(α, θ), maxV
     elseif disttype == :normal
         return Truncated(Normal(mean, sqrt(var)), 0, Inf), maxV
+    elseif disttype == :lognormal
+        μ = log((mean^2)/sqrt(var + mean^2))
+        σ = sqrt(log(1 + var/mean^2))
+        return LogNormal(μ, σ), maxV
     elseif disttype == :beta
         v = mean*(1-mean)/var - 1
         α = mean*v
@@ -257,11 +263,12 @@ end
 @recipe function f(dp::DistPlot; disttype=:normal)
     mean, var, po = dp.args
     dist, maxV = make_dist(mean, var, po, disttype)
-    xs = logrange(max(1e-16, quantile(dist, 1e-4)), quantile(dist, 1-1e-4), length=100)
+    xs = logrange(max(1e-20, quantile(dist, 1e-16)), quantile(dist, 1-1e-16), length=100)
     vs = xs .* maxV
     ps = pdf(dist, xs)
     @series begin
         vs, ps
+        # dist
     end
 end
 function DistPlot(tupsol::Tuple{ODESolution})

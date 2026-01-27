@@ -1,8 +1,9 @@
 fp_plot_defaults()
+using StatsPlots: groupedbar, groupedbar!
 
 casenames = ["A3", "A5", "A6", "B"]
-readcaseT(name) = CSV.read(datadir("Deck_et_al_2024", "$(name)_tT.csv"), Table, header=["t", "T"])
-readcaseD(name) = CSV.read(datadir("Deck_et_al_2024", "$(name)_Df.csv"), Table, header=["D", "f"])
+readcaseT(name) = CSV.read(datadir("Kosir_et_al_2024", "$(name)_tT.csv"), Table, header=["t", "T"])
+readcaseD(name) = CSV.read(datadir("Kosir_et_al_2024", "$(name)_Df.csv"), Table, header=["D", "f"])
 
 
 data = Table(map(casenames) do case
@@ -29,7 +30,7 @@ hf0 = Vfill/Ap
 Tsh = RampedVariable([-40.0, -5]u"°C" .|> u"K", 1u"K/minute")
 pch = RampedVariable(10.0u"Pa")
 Kshf_g = ConstPhysProp(10.0u"W/m^2/K")
-Rp_g = RpFormFit(0.1u"cm^2*Torr*hr/g", 14.0u"cm*Torr*hr/g", 0.1u"cm^-1")
+Rp_g = RpFormFit(0.1u"cm^2*Torr*hr/g", 30.0u"cm*Torr*hr/g", 0.1u"cm^-1")
 ρsolution = 1.0u"g/mL"
 cbase = 0.05u"g/mL"
 
@@ -140,31 +141,29 @@ end
 # pass123 = make_mcpass([1, 2, 3])
 # pass45 = make_mcpass([4, 5])
 
-NTV = ConstWrapTV() ∘ TVScale(4e7u"cm^-3") ∘ TVExp()
-STV = ConstWrapTV() ∘ TVScale(2e-4u"cm^3") ∘ TVExp()
-CTV = TVScale(1.2u"m^0.5") ∘ TVExp()
-RsTV = TVScale(1.5u"cm^2*Torr*hr/g") ∘ TVShift(0.01) ∘ TVLogistic()
-porous_nt = (N = NTV, S = STV, C = CTV, Rs = RsTV,) # If I could enforce S > ϕ/N, would be great...
-myega_nt = (k0 = TVScale(1e42u"s^-1") ∘ TVExp(),
+# NTV = ConstWrapTV() ∘ TVScale(4e7u"cm^-3") ∘ TVExp()
+# STV = ConstWrapTV() ∘ TVScale(2e-4u"cm^3") ∘ TVExp()
+# CTV = TVScale(1.2u"m^0.5") ∘ TVExp()
+# RsTV = TVScale(1.5u"cm^2*Torr*hr/g") ∘ TVShift(0.01) ∘ TVLogistic()
+# porous_nt = as((N = NTV, S = STV, C = CTV, Rs = RsTV,)) # If I could enforce S > ϕ/N, would be great...
+porous_nt = FulbrightPores.porous_transform_bounded(Vfill)
+myega_nt = as((k0 = TVScale(1e42u"s^-1") ∘ TVExp(),
             K1 = TVScale(2.0e4u"K") ∘ TVExp(),
-            K2 = TVScale(1e2u"K") ∘ TVExp() ,)
+            K2 = TVScale(1e2u"K") ∘ TVExp() ,))
 # plot(Tran, FulbrightPores.k_f_nt(transform(as(myega_nt), zeros(3))).(Tran), yscale=:log10, label="MYEGA, def")
-sigma_nt = (k0 = TVScale(1e-15u"s^-1") ∘ TVExp(),
-            kf = TVScale(1e-8u"s^-1") ∘ TVExp(),
-            K1 = TVScale(1.0u"K") ∘ TVExp(),
-            K2 = TVScale(1.0u"K") ∘ TVShift(216.0) ∘ TVScale(45.0) ∘ TVLogistic(),)
+sigma_nt = FulbrightPores.sigmoid_transform_bounded(1e-8u"s^-1", 1.0u"K")
 # plot(Tran, FulbrightPores.k_f_nt(transform(as(sigma_nt), zeros(4))).(Tran), yscale=:log10, label="MYEGA, def")
-trans_myega = as(merge(porous_nt, (;k_f=as(myega_nt))))
-trans_sigma = as(merge(porous_nt, (;k_f=as(sigma_nt))))
+trans_myega = merge(porous_nt, as((;k_f=myega_nt)))
+trans_sigma = merge(porous_nt, as((;k_f=sigma_nt)))
 
 remap_vars(fitprm) = vcat(repeat(fitprm[1:2], 4), fitprm[3:end])
 trans_nm = as((separate=as(Vector, as((N=NTV, S=STV)), 4),
-                shared=as((C=CTV, Rs=RsTV, k_f=as(myega_nt))),))
-trans_ns_sem_s = as((C=CTV, Rs=RsTV, k_f=as(sigma_nt)))
+                shared=as((C=CTV, Rs=RsTV, k_f=myega_nt)),))
+trans_ns_sem_s = as((C=CTV, Rs=RsTV, k_f=sigma_nt))
 trans_ns_sem = as((separate=as(Vector, as((C=CTV,)), 4),
-                shared=as((Rs=RsTV, k_f=as(sigma_nt))),))
+                shared=as((Rs=RsTV, k_f=sigma_nt)),))
 trans_ns = as((separate=as(Vector, as((N=NTV, S=STV)), 4),
-                shared=as((C=CTV, Rs=RsTV, k_f=as(sigma_nt))),))
+                shared=as((C=CTV, Rs=RsTV, k_f=sigma_nt)),))
 
 
 objnf_mc = OptimizationFunction((x,y)->objn_pd(x,y,tweight=1e-1, badprms=FulbrightPores.badNS), AutoForwardDiff())
@@ -177,7 +176,7 @@ blankplot_hrC()
 modconvtplot!(LyoPronto.gen_nsol_pd(p0_sem, trans_ns_sem, cases_Rp.pomc, cases_Rp.pdfit)..., c=[1 2 3 4])
 
 @time opt1234myegasem = solve(OP(objnf_pd, p0_sem, (trans_ns_sem, cases_Rp.pomc, cases_Rp.pdfit)), optalg, show_trace=true)
-@time opt1234myegasems = solve(OP(objnf_pd, zeros(6), (trans_ns_sem_s, cases_Rp.pomc, cases_Rp.pdfit)), optalg, show_trace=true)
+@time opt1234myegasems = solve(OP(objnf_pd, [0.0, -3.0, 0.0, -5, 0.0, 0.0], (trans_ns_sem_s, cases_Rp.pomc, cases_Rp.pdfit)), optalg, show_trace=true)
 
 fit_mc = transform(trans_ns, opt1234myega.u)
 fit_mc_sem = transform(trans_ns_sem, opt1234myegasem.u)
@@ -193,11 +192,11 @@ begin
 myega_plots = map(cases_both, psols) do case, solp
     @info "check" obj_expT(case.sol_mc, case.pdfit, tweight=0) obj_expT(case.sol_mc, case.pdfit, tweight=1)
     blankplot_hrC(legend=:bottomright, title=case.name)
-    plot!(Tsh, label=L"T_{sh}", c=:black)
-    plot!(case.pdfit)
+    plot!(Tsh, label=L"T_\mathrm{sh}", c=:black)
+    plot!(case.pdfit, nmarks=15)
 
-    modconvtplot!(case.sol_mc, label=L"$T_f$, PBM")
-    modconvtplot!(solp, c=:green, alpha=0.6, label=L"$T_f$, Pikal")
+    modconvtplot!(case.sol_mc, label=L"$T_\mathrm{f}$, PBM")
+    modconvtplot!(solp, c=:green, alpha=0.6, label=L"$T_\mathrm{f}$, Pikal")
     if case.name ∈ ["A3", "A5"]
         plot!(xlabel="")
     end
@@ -208,8 +207,32 @@ myega_plots = map(cases_both, psols) do case, solp
 end
 plot(myega_plots..., size=(600, 500))
 end
+
+errs = Table(map(cases_both) do case
+    PBM = case.sol_mc
+    PP = solve(ODEProblem(case.po), Rodas3())
+    errf = (model, tweight)->obj_expT(model, case.pdfit; tweight)
+    PBM_T = sqrt(errf(PBM, 0))*u"K"
+    PP_T = sqrt(errf(PP, 0))*u"K"
+    t_end_est = ustrip(u"hr", sum(case.pdfit.t_end)/2)
+    PBM_t = sqrt(errf(PBM, 1) - errf(PBM, 0))/t_end_est
+    PP_t = sqrt(errf(PP, 1) - errf(PP, 0))/t_end_est
+    return (;name=case.name, PBM_T, PP_T, PBM_t, PP_t)
+end)
+
+begin
+e1 = groupedbar(errs.name, [errs.PBM_T errs.PP_T], label="", ylabel=L"$T_\mathrm{f}$ error", c=[2 3], lw=1)
+# e2 = groupedbar(errs.name, [errs.PBM_t errs.PP_t], ylabel=L"$t$ rel. error", c=[2 3], lw=1)
+plot(myega_plots..., e1, layout=@layout([grid(2,2) e{0.2w}]), size=(800,400))
+plot!(subplot=1, left_margin=20Plots.px)
+plot!(subplot=2, left_margin=-10Plots.px, )
+plot!(subplot=3, bottom_margin=20Plots.px)
+plot!(subplot=4, left_margin=-10Plots.px,)
+# plot!(subplot=2, ylabel="hh")
+end
 savefig(plotsdir("dextran_T_semC.svg"))
 savefig(plotsdir("dextran_T_semC.pdf"))
+
 
 l = range(0u"cm", hf0, length=100)
 begin
@@ -233,8 +256,8 @@ ns_SEM = Table(map(cases_Rp, fit_mc.separate, fit_mc_sem.separate) do case, fit,
     # μ1 = π/6*sum(case.Df.f .* case.Df.D.^3)/sum(case.Df.f)
     # N_sem = 1/μ1 |> u"mL^-1"
     # S_sem = π^2/36 * sum(case.Df.f .* case.Df.D.^6)/sum(case.Df.f) / Vfill |> u"mL"
-    N_sem = case.pomc.N(0) |> u"mL^-1"
-    S_sem = case.pomc.S(0) |> u"mL"
+    N_sem = case.pomc.N(0) |> u"μm^-3"
+    S_sem = case.pomc.S(0) |> u"μm^3"
     C_sem = fitsem.C
 
     # N_mod = case.sol_mc[3,end] / Vfill
@@ -245,7 +268,7 @@ ns_SEM = Table(map(cases_Rp, fit_mc.separate, fit_mc_sem.separate) do case, fit,
     C_shared = fit_mc_sem_s.C
     # @info "check" N S sum(case.Df.f)
     # return (;N_sem,N_mod, N_fit, S_sem, S_mod, S_fit, C_sem, C_fit)
-    return (;N_sem, N_fit, S_sem, S_fit, C_fit, C_sem, C_shared)
+    return (;case.name, N_sem, N_fit, S_sem, S_fit, C_fit, C_sem, C_shared)
 end)
 
 # @df ns_SEM scatter(:N_sem, :S_sem, scale=:log10)
@@ -257,3 +280,19 @@ plot!([10^6.4, 10^7.4], [1e-6, 1e-7], ls=:dash, label="slope -1", c=:gray)
 @df ns_SEM scatter((:S_sem)', (:C_sem)', label=permutedims(cases_both.name), scale=:log10)
 plot!(xlabel="S", ylabel="C")
 # plot!([1e-15, 1e-13], [10^-1.5, 10^-0.5], label="slope 2")
+
+CSV.write(datadir("exp_pro", "dextran_ns_semC.csv"), ns_SEM)
+
+begin
+relevant_params = [:N_sem, :S_sem]
+tab_filtered = hcat([getproperty(ns_SEM, p) for p in relevant_params]...)
+row_labels = LaTeXString.("{".*ns_SEM.name .*"}")
+column_labels = LaTeXString.(["{\$$(string(key)[1])\$, "*latexify(unit(getproperty(ns_SEM[1], key)), fmt=SiunitxNumberFormatter())*"}" for key in relevant_params])
+clipboard(latextabular(ustrip.(tab_filtered),
+    side=row_labels, 
+    adjustment=[Symbol("@{}"), :r, :S, :S, Symbol("@{}")],
+    head=column_labels,
+    fmt=SiunitxNumberFormatter(),
+    latex=false,
+    booktabs=true))
+end

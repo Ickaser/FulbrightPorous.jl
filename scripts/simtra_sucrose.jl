@@ -268,7 +268,8 @@ rpfit_cases = Table(cases = [(1,), (2,), (3,), (5,), (8,), (1,8), (1,2,8)],
         p0 = fill([0.5, -0.3, 0], 7),
         trans = fill(trans_Rp, 7))
 rpfits = map(rpfit_cases) do case
-    @time solve(OP(obj_npf, case.p0, (case.trans, make_Rp_pass(case.cases)...)), optalg;)
+    sol = @time solve(OP(obj_npf, case.p0, (case.trans, make_Rp_pass(case.cases)...)), optalg;)
+    # SciMLBase.strip_solution(sol) # make this serialize nicer
 end
 
 # -----------------------------
@@ -301,11 +302,12 @@ myega_nt = as((;k_f=as((k0 = TVScale(1e11u"s^-1") ∘ TVExp(),
             K1 = TVScale(5e4u"K") ∘ TVShift(0.001) ∘ TVLogistic() ∘ TVShift(TV.logit(0.05)),
             K2 = TVScale(6e2u"K") ∘ TVShift(0.01) ∘ TVLogistic() ,))))
 # plot(Tran, FulbrightPores.k_f_nt(transform(as(myega_nt), zeros(3))).(Tran), yscale=:log10, label="MYEGA, def")
-sigma_nt = as((;k_f=as((k0 = TVScale(1e-15u"s^-1") ∘ TVExp(),
-            kf = TVScale(1e-8u"s^-1") ∘ TVExp(),
-            K1 = TVScale(0.8u"K") ∘ TVExp(),
-            K2 = TVScale(1.0u"K") ∘ TVShift(216.0) ∘ TVScale(45.0) ∘ TVLogistic() ∘TVScale(0.1) ,)
-)))
+# sigma_nt = as((;k_f=as((k0 = TVScale(1e-15u"s^-1") ∘ TVExp(),
+#             kf = TVScale(1e-8u"s^-1") ∘ TVExp(),
+#             K1 = TVScale(0.8u"K") ∘ TVExp(),
+#             K2 = TVScale(1.0u"K") ∘ TVShift(216.0) ∘ TVScale(45.0) ∘ TVLogistic() ∘TVScale(0.1) ,)
+# )))
+sigma_nt = FulbrightPores.sigmoid_transform_bounded(1e-8u"s^-1", 0.8u"K")
 trans_interp = merge(porous_nt, interp_nt)
 trans_myega = merge(porous_nt, myega_nt)
 trans_sigma = merge(porous_nt, sigma_nt)
@@ -335,8 +337,9 @@ mcfit_cases = Table(cases = repeat([(1,), (8,), (1, 8), (1, 2, 8)], 3),
 # end
 
 mcfits = map(mcfit_cases) do case
-    @time solve(OP(obj_nmc, case.p0, (case.trans, make_mc_pass(case.cases)...)), optalg;)
+    sol = @time solve(OP(obj_nmc, case.p0, (case.trans, make_mc_pass(case.cases)...)), optalg;)
     # @time solve(OP(obj_nmc, case.p0, (case.trans, make_mc_pass(case.cases)...)), optalg; show_trace=true)
+    # SciMLBase.strip_solution(sol) # make this serialize nicer
 end
 
 begin
@@ -440,14 +443,18 @@ begin
 plot!(palette=:default)
 rpattr = (seriestype=:samplemarkers, linestyle=:dash)
 labs = ["PBM fit to $(join(mcfit_cases[fitnum].cases, ", ", " & "))" "3PP individual fits " "3PP fit to $(join(rpfit_cases[6].cases, " & "))"]
-poreevolplot( get_sol_mc(1, fitnum), label="PBM $(join(mcfit_cases[fitnum].cases, ", ", " & ")), Cycle 1", c=2, marker=:circle)
-poreevolplot!(get_sol_mc(2, fitnum), label="PBM $(join(mcfit_cases[fitnum].cases, ", ", " & ")), Cycle 2", c=2, marker=:square)
-poreevolplot!(get_sol_mc(8, fitnum), label="PBM $(join(mcfit_cases[fitnum].cases, ", ", " & ")), Cycle 8", c=2, marker=:utriangle)
+poreevolplot( get_sol_mc(1, fitnum), label="PBM $(join(mcfit_cases[fitnum].cases, ", ", " & ")), Cycle 1", c=2, kind=:stats, marker=:circle)
+poreevolplot!(get_sol_mc(2, fitnum), label="PBM $(join(mcfit_cases[fitnum].cases, ", ", " & ")), Cycle 2", c=2, kind=:stats, marker=:square)
+poreevolplot!(get_sol_mc(8, fitnum), label="PBM $(join(mcfit_cases[fitnum].cases, ", ", " & ")), Cycle 8", c=2, kind=:stats, marker=:utriangle)
+plot!(subplot=2, ylim=(0, Inf))
+plot!(subplot=3, ylim=(0, Inf))
 plot!(l, cases_Rps[1].Rp.(l), subplot=4, label="3PP 1"; c=3, marker=:circle, rpattr...)
 plot!(l, cases_Rps[2].Rp.(l), subplot=4, label="3PP 2"; c=3, marker=:square, rpattr...)
 plot!(l, cases_Rps[5].Rp.(l), subplot=4, label="3PP 8"; c=3, marker=:utriangle, rpattr...)
     
 end
+savefig(plotsdir("simtra_suc_poreevol.svg"))
+savefig(plotsdir("simtra_suc_poreevol.pdf"))
 
 # -----------------
 # Inspect fit results in Rp space rather than temperature space
@@ -538,104 +545,104 @@ end...))
 # safesave(datadir("exp_pro", "fit_arb.html"), pretty_table(HTML, rep, header = ["Fit", "N", "S", "C", "Rs", "kf"]))
 # # pretty_table(report, header = ["Fit", "N", "S", "k0", "E", "C", "Rs"])
 
-# ---------------------
-# MCMC sampling
-using Turing
+# # ---------------------
+# # MCMC sampling
+# using Turing
 
 
-@model function sigma_likelihood(pf)
+# @model function sigma_likelihood(pf)
 
-    Nv ~ LogUniform(1e-6, 1e0) # μm^-3
-    Sv ~ LogUniform(1e-16, 1e0) # cm^3
-    Cv ~ LogUniform(1e-5, 1e0) # m^(1//2)
-    Rv ~ LogUniform(1e-10, 1e0) # cm^2*Torr*hr/g
-    k0v ~ LogUniform(1e-20, 1e-10) # s^-1
-    kfv ~ LogUniform(1e-20, 1e-5) # s^-1
-    K1v ~ Uniform(0.1, 10.0) # K
-    K2v ~ Uniform(216, 270) # K
+#     Nv ~ LogUniform(1e-6, 1e0) # μm^-3
+#     Sv ~ LogUniform(1e-16, 1e0) # cm^3
+#     Cv ~ LogUniform(1e-5, 1e0) # m^(1//2)
+#     Rv ~ LogUniform(1e-10, 1e0) # cm^2*Torr*hr/g
+#     k0v ~ LogUniform(1e-20, 1e-10) # s^-1
+#     kfv ~ LogUniform(1e-20, 1e-5) # s^-1
+#     K1v ~ Uniform(0.1, 10.0) # K
+#     K2v ~ Uniform(216, 270) # K
 
 
-    # k_args = exp10.([kfac, Kfac, θfac]) .* fit_guess[5:7]
-    # allvals = [Nfac, Sfac, Cfac, Rfac, k0fac, kffac, K1fac, K2fac]
-    newps = (;
-        N = ConstPhysProp(Nv * u"μm^-3"),
-        S = ConstPhysProp(Sv * u"cm^3"),
-        C = Cv * u"m^0.5",
-        Rs = Rv * u"cm^2*Torr*hr/g",
-        k_f = Sigmoid_k(
-            k0v * u"s^-1",
-            kfv * u"s^-1",
-            K1v * u"K",
-            K2v * u"K",
-        )
-    )
+#     # k_args = exp10.([kfac, Kfac, θfac]) .* fit_guess[5:7]
+#     # allvals = [Nfac, Sfac, Cfac, Rfac, k0fac, kffac, K1fac, K2fac]
+#     newps = (;
+#         N = ConstPhysProp(Nv * u"μm^-3"),
+#         S = ConstPhysProp(Sv * u"cm^3"),
+#         C = Cv * u"m^0.5",
+#         Rs = Rv * u"cm^2*Torr*hr/g",
+#         k_f = Sigmoid_k(
+#             k0v * u"s^-1",
+#             kfv * u"s^-1",
+#             K1v * u"K",
+#             K2v * u"K",
+#         )
+#     )
     
 
-    # if pf[2] isa PrimaryDryFit
-    #     p = setproperties(pf[1], newps)
-    #     sol = solve(ODEProblem(p), odealg_chunk4)
-    #     sqerr = obj_expT(sol, pf[2], tweight=1e-2)
-    # else
-        sqerr = mapreduce(+, pf...) do pomc, fitdat
-            p = setproperties(pomc, newps)
-            @info "check1" p.N
-            sol = solve(ODEProblem(p), odealg_chunk4)
-            @info "check2" sol[end] sol.retcode
-            obj_expT(sol, fitdat, tweight=1e-2)
-        end
-    # end
+#     # if pf[2] isa PrimaryDryFit
+#     #     p = setproperties(pf[1], newps)
+#     #     sol = solve(ODEProblem(p), odealg_chunk4)
+#     #     sqerr = obj_expT(sol, pf[2], tweight=1e-2)
+#     # else
+#         sqerr = mapreduce(+, pf...) do pomc, fitdat
+#             p = setproperties(pomc, newps)
+#             @info "check1" p.N
+#             sol = solve(ODEProblem(p), odealg_chunk4)
+#             @info "check2" sol[end] sol.retcode
+#             obj_expT(sol, fitdat, tweight=1e-2)
+#         end
+#     # end
 
-    if !isnan(sqerr)
-        Turing.@addlogprob! -sqerr
-    else
-    #     # @info "check" newpo.N.val newpo.S.val newpo.C.val newpo.Rs.val sol.t[end] sol[1,end]
-        Turing.@addlogprob! -Inf
-    end
-    return newps
-end
+#     if !isnan(sqerr)
+#         Turing.@addlogprob! -sqerr
+#     else
+#     #     # @info "check" newpo.N.val newpo.S.val newpo.C.val newpo.Rs.val sol.t[end] sol[1,end]
+#         Turing.@addlogprob! -Inf
+#     end
+#     return newps
+# end
 
-case1_params = sigma_likelihood(make_mc_pass([1]))
-case128_params = sigma_likelihood(make_mc_pass([1, 2, 8]))
+# case1_params = sigma_likelihood(make_mc_pass([1]))
+# case128_params = sigma_likelihood(make_mc_pass([1, 2, 8]))
 
     
-smallalg = NUTS(10, 0.65)
-# guess_params = (Nv = 1e-4, Sv = 1e-8, Cv = 0.1, Rv = 1e-2, k0v = 1e-14, kfv = 1e-10, K1v = 1.0, K2v = 250.0)
-# init_single = [InitFromParams(guess_params)]
-# Turing.DynamicPPL.TestUtils.AD.run_ad(case1_params, AutoForwardDiff(); test=false, benchmark=false)
-smallsamp = @time sample(case1_params, smallalg, MCMCSerial(), 20, 1; initial_params=init_single, adtype=AutoForwardDiff())
+# smallalg = NUTS(10, 0.65)
+# # guess_params = (Nv = 1e-4, Sv = 1e-8, Cv = 0.1, Rv = 1e-2, k0v = 1e-14, kfv = 1e-10, K1v = 1.0, K2v = 250.0)
+# # init_single = [InitFromParams(guess_params)]
+# # Turing.DynamicPPL.TestUtils.AD.run_ad(case1_params, AutoForwardDiff(); test=false, benchmark=false)
+# smallsamp = @time sample(case1_params, smallalg, MCMCSerial(), 20, 1; initial_params=init_single, adtype=AutoForwardDiff())
 
-bad_params = (Nv = 0.00025055, Sv = 7.344991e-8, Cv = 0.02147, Rv = 3.96238e-10, k0v = 8.38e-16, kfv = 1.444e-9, K1v = 0.3905, K2v = 239.8)
-init_single = [InitFromParams(bad_params)]
-pomc_bad = setproperties(pomc1, (case1_params | bad_params)())
-sol_bad = solve(ODEProblem(pomc_bad), odealg_chunk4)
-
-
+# bad_params = (Nv = 0.00025055, Sv = 7.344991e-8, Cv = 0.02147, Rv = 3.96238e-10, k0v = 8.38e-16, kfv = 1.444e-9, K1v = 0.3905, K2v = 239.8)
+# init_single = [InitFromParams(bad_params)]
+# pomc_bad = setproperties(pomc1, (case1_params | bad_params)())
+# sol_bad = solve(ODEProblem(pomc_bad), odealg_chunk4)
 
 
 
-nthreads = 4
-init_set = [(rand(8).-0.5) for i in 1:nthreads]
-smallsamp128 = @time sample(case128_params, smallalg, MCMCSerial(), 20, nthreads, initial_params = init_set)
-# smallsamp128 = @time sample(case128_params, smallalg, MCMCThreads(), 20, nthreads, initial_params = init_set)
-# @profview sample(case1_params, smallalg, MCMCSerial(), 20, 1)
-# plot(smallsamp)
 
-alg = NUTS(75, 0.65)
-samp = @time sample(case1_params, alg, MCMCThreads(), 500, 4)
-safesave(datadir("exp_pro", "case1_myega_sampling.jld2"), Dict("samp" => samp, "smallsamp" => smallsamp))
-samp128 = @time sample(case128_params, alg, MCMCThreads(), 500, 4)
-safesave(datadir("exp_pro", "case128_myega_sampling.jld2"), @strdict smallsamp128 samp128 )
 
-# # safesave(datadir("exp_pro", "case1_myega_sampling.jld2"), Dict("samp" => samp, "smallsamp" => smallsamp))
+# nthreads = 4
+# init_set = [(rand(8).-0.5) for i in 1:nthreads]
+# smallsamp128 = @time sample(case128_params, smallalg, MCMCSerial(), 20, nthreads, initial_params = init_set)
+# # smallsamp128 = @time sample(case128_params, smallalg, MCMCThreads(), 20, nthreads, initial_params = init_set)
+# # @profview sample(case1_params, smallalg, MCMCSerial(), 20, 1)
+# # plot(smallsamp)
 
-# samp = load(datadir("exp_pro", "case1_myega_sampling_#1.jld2"))["samp"]
+# alg = NUTS(75, 0.65)
+# samp = @time sample(case1_params, alg, MCMCThreads(), 500, 4)
+# safesave(datadir("exp_pro", "case1_myega_sampling.jld2"), Dict("samp" => samp, "smallsamp" => smallsamp))
+# samp128 = @time sample(case128_params, alg, MCMCThreads(), 500, 4)
+# safesave(datadir("exp_pro", "case128_myega_sampling.jld2"), @strdict smallsamp128 samp128 )
 
-using Turing
-samp = load(datadir("exp_pro", "case1_myega_sampling.jld2"))["samp"]
+# # # safesave(datadir("exp_pro", "case1_myega_sampling.jld2"), Dict("samp" => samp, "smallsamp" => smallsamp))
 
-plot(samp, xlim=(-6, 6))
-samp[:Nfac]
-samp[2]
+# # samp = load(datadir("exp_pro", "case1_myega_sampling_#1.jld2"))["samp"]
 
-# plot(samp)
+# using Turing
+# samp = load(datadir("exp_pro", "case1_myega_sampling.jld2"))["samp"]
+
+# plot(samp, xlim=(-6, 6))
+# samp[:Nfac]
+# samp[2]
+
+# # plot(samp)
 

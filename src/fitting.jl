@@ -2,7 +2,7 @@
 # ---------------------------------
 function sigmoid_transform_basic(k0, kf, K1, K2)
     tr = as((
-        k = as((
+        k_f = as((
             k0 = TVScale(k0) ∘ TVExp(),
             kf = TVScale(kf) ∘ TVExp(),
             K1 = TVScale(K1) ∘ TVExp(),
@@ -10,9 +10,23 @@ function sigmoid_transform_basic(k0, kf, K1, K2)
         )),
     ))
 end
+function sigmoid_transform_bounded(kf, K1; extrafac=1)
+    Nmin = 1e0u"μm^-3"
+    Vmin=0.5u"cm^3"
+    tmin=1.0u"hr"
+    k0_max = 1/Nmin/Vmin/tmin *extrafac|> u"s^-1" 
+    tr = as((
+        k_f = as((
+            k0 = TVScale(k0_max) ∘ TVLogistic(),
+            kf = TVScale(kf) ∘ TVExp(),
+            K1 = TVScale(K1) ∘ TVExp(),
+            K2 = TVScale(1.0u"K") ∘ TVShift(216.0) ∘ TVScale(45.0) ∘ TVLogistic() ∘TVScale(0.1),
+        )),
+    ))
+end
 function myega_transform_basic(k0, K1, K2)
     tr = as((
-        k = as((
+        k_f = as((
             k0 = TVScale(k0) ∘ TVExp(),
             K1 = TVScale(K1) ∘ TVExp(),
             K2 = TVScale(K2) ∘ TVExp(),
