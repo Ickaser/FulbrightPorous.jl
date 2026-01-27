@@ -399,3 +399,4 @@ poreevolplot!(cases_both[4].sol_mc, label="6", c=6)
 poreevolplot!(cases_both[5].sol_mc, label="7", c=4)
 end
 savefig(plotsdir("man_pores.svg"))
+savefig(plotsdir("man_pores.pdf"))
