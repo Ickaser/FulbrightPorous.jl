@@ -36,5 +36,3 @@ Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [sources]
 LyoPronto = {path = "C:\\Users\\iwheeler\\.julia\\dev\\LyoPronto"}
-TransformVariables = {path = "C:\\Users\\iwheeler\\.julia\\dev\\TransformVariables"}
-Unitful = {path = "C:\\Users\\iwheeler\\.julia\\dev\\Unitful"}
