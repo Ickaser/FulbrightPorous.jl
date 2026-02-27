@@ -1,5 +1,4 @@
 fp_plot_defaults()
-using StatsPlots: groupedbar, groupedbar!
 
 casenames = ["A3", "A5", "A6", "B"]
 readcaseT(name) = CSV.read(datadir("Kosir_et_al_2024", "$(name)_tT.csv"), Table, header=["t", "T"])

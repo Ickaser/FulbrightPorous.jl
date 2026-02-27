@@ -1,5 +1,4 @@
 fp_plot_defaults()
-using StatsPlots: groupedbar, groupedbar!
 
 begin
 # ------------------

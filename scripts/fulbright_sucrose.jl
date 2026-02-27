@@ -1,6 +1,5 @@
 fp_plot_defaults()
 Latexify.set_default(labelformat=:square)
-using StatsPlots: groupedbar
 
 begin
 Kv = load(datadir("exp_pro", "gravimetric_kv.jld2"))["Kv"]
