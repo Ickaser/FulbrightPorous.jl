@@ -1,19 +1,34 @@
 fp_plot_defaults()
 
 casenames = ["A3", "A5", "A6", "B"]
+casecolors = [
+    RGB(157/255, 14/255, 20/255),
+    RGB(4/255, 73/255, 148/255),
+    RGB(56/255, 160/255, 86/255),
+    RGB(0, 0, 0),
+]
 readcaseT(name) = CSV.read(datadir("Kosir_et_al_2024", "$(name)_tT.csv"), Table, header=["t", "T"])
 readcaseD(name) = CSV.read(datadir("Kosir_et_al_2024", "$(name)_Df.csv"), Table, header=["D", "f"])
 
-
-data = Table(map(casenames) do case
+data = Table(map(casenames, casecolors) do case, color
     tT = map(readcaseT.(case)) do ti
         (t = ti.t*u"hr", T = ti.T*u"°C")
     end
     Df = map(readcaseD.(case)) do di
         (D = di.D*u"μm", f = di.f*u"μm^-1")
     end
-    (;name=case, tT, Df)
+    (;name=case, tT, Df, color)
 end)
+
+# Re-plot pore distributions for presentation
+begin
+plot(u"μm", u"μm^-1", xlabel=L"pore size, $D_p$ [$\mu$m]", ylabel=L"prob. density, $f_D$ [$\mu$m$^{-1}$]", guidefontfamily="Computer Modern", unitformat=(x,y)->x)
+for case in data
+    plot!(case.Df.D, case.Df.f, label="Exp. $(case.name)", color=case.color, lw=4)
+end
+plot!(size=(300, 250), ylims=(0, 0.03), yticks=0:0.01:0.03,)
+end
+savefig(plotsdir("dextran_Df.svg"))
 
 # Hard-coded for A3, A5, A6, B
 t_end = [(18.0u"hr", 24.0u"hr"),
@@ -125,8 +140,8 @@ psols = [solve(ODEProblem(po), Rodas3()) for po in cases_Rp.po]
 begin
 KRp_plots = map(cases_Rp, psols) do case, sol
     blankplot_hrC(legend=:bottomright, title=case.name)
-    modconvtplot!(sol)
-    plot!(case.pdfit)
+    modconvtplot!(sol, c=:crimson)
+    plot!(case.pdfit, c=case.color, nmarks=15)
     plot!(xlim=(-0.5, 21), ylim=(-45, -15))
 end
 plot(KRp_plots...)
@@ -146,23 +161,24 @@ end
 # RsTV = TVScale(1.5u"cm^2*Torr*hr/g") ∘ TVShift(0.01) ∘ TVLogistic()
 # porous_nt = as((N = NTV, S = STV, C = CTV, Rs = RsTV,)) # If I could enforce S > ϕ/N, would be great...
 porous_nt = FulbrightPores.porous_transform_bounded(Vfill)
-myega_nt = as((k0 = TVScale(1e42u"s^-1") ∘ TVExp(),
+myega_nt = as((;k_f=as((k0 = TVScale(1e42u"s^-1") ∘ TVExp(),
             K1 = TVScale(2.0e4u"K") ∘ TVExp(),
-            K2 = TVScale(1e2u"K") ∘ TVExp() ,))
+            K2 = TVScale(1e2u"K") ∘ TVExp() ,))))
 # plot(Tran, FulbrightPores.k_f_nt(transform(as(myega_nt), zeros(3))).(Tran), yscale=:log10, label="MYEGA, def")
 sigma_nt = FulbrightPores.sigmoid_transform_bounded(1e-8u"s^-1", 1.0u"K")
 # plot(Tran, FulbrightPores.k_f_nt(transform(as(sigma_nt), zeros(4))).(Tran), yscale=:log10, label="MYEGA, def")
-trans_myega = merge(porous_nt, as((;k_f=myega_nt)))
-trans_sigma = merge(porous_nt, as((;k_f=sigma_nt)))
+trans_myega = merge(porous_nt, myega_nt)
+trans_sigma = merge(porous_nt, sigma_nt)
 
+NTV, STV, CTV, RsTV = map(key->getproperty(porous_nt, key), (:N, :S, :C, :Rs))
 remap_vars(fitprm) = vcat(repeat(fitprm[1:2], 4), fitprm[3:end])
 trans_nm = as((separate=as(Vector, as((N=NTV, S=STV)), 4),
-                shared=as((C=CTV, Rs=RsTV, k_f=myega_nt)),))
-trans_ns_sem_s = as((C=CTV, Rs=RsTV, k_f=sigma_nt))
+                shared=as((C=CTV, Rs=RsTV, k_f=myega_nt.k_f)),))
+trans_ns_sem_s = as((C=CTV, Rs=RsTV, k_f=sigma_nt.k_f))
 trans_ns_sem = as((separate=as(Vector, as((C=CTV,)), 4),
-                shared=as((Rs=RsTV, k_f=sigma_nt)),))
+                shared=as((Rs=RsTV, k_f=sigma_nt.k_f)),))
 trans_ns = as((separate=as(Vector, as((N=NTV, S=STV)), 4),
-                shared=as((C=CTV, Rs=RsTV, k_f=sigma_nt)),))
+                shared=as((C=CTV, Rs=RsTV, k_f=sigma_nt.k_f)),))
 
 
 objnf_mc = OptimizationFunction((x,y)->objn_pd(x,y,tweight=1e-1, badprms=FulbrightPores.badNS), AutoForwardDiff())
@@ -187,26 +203,6 @@ all_pomc = [setproperties(pomc, fit_mc_sem_s) for pomc in cases_Rp.pomc];
 sols_m = [solve(ODEProblem(pomc), Rodas3()) for pomc in all_pomc];
 cases_both = Table(cases_Rp, (pomc=all_pomc,sol_mc=sols_m))
 
-begin
-myega_plots = map(cases_both, psols) do case, solp
-    @info "check" obj_expT(case.sol_mc, case.pdfit, tweight=0) obj_expT(case.sol_mc, case.pdfit, tweight=1)
-    blankplot_hrC(legend=:bottomright, title=case.name)
-    plot!(Tsh, label=L"T_\mathrm{sh}", c=:black)
-    plot!(case.pdfit, nmarks=15)
-
-    modconvtplot!(case.sol_mc, label=L"$T_\mathrm{f}$, PBM")
-    modconvtplot!(solp, c=:green, alpha=0.6, label=L"$T_\mathrm{f}$, Pikal")
-    if case.name ∈ ["A3", "A5"]
-        plot!(xlabel="")
-    end
-    if case.name ∈ ["A5", "B"]
-        plot!(ylabel="")
-    end
-    plot!(xlim=(-0.5, 21), ylim=(-45, -2))
-end
-plot(myega_plots..., size=(600, 500))
-end
-
 errs = Table(map(cases_both) do case
     PBM = case.sol_mc
     PP = solve(ODEProblem(case.po), Rodas3())
@@ -220,33 +216,63 @@ errs = Table(map(cases_both) do case
 end)
 
 begin
-e1 = groupedbar(errs.name, [errs.PBM_T errs.PP_T], label="", ylabel=L"$T_\mathrm{f}$ error", c=[2 3], lw=1)
-# e2 = groupedbar(errs.name, [errs.PBM_t errs.PP_t], ylabel=L"$t$ rel. error", c=[2 3], lw=1)
-plot(myega_plots..., e1, layout=@layout([grid(2,2) e{0.2w}]), size=(800,400))
-plot!(subplot=1, left_margin=20Plots.px)
-plot!(subplot=2, left_margin=-10Plots.px, )
-plot!(subplot=3, bottom_margin=20Plots.px)
-plot!(subplot=4, left_margin=-10Plots.px,)
-# plot!(subplot=2, ylabel="hh")
+modcs = [:teal :crimson]
+myega_plots = map(cases_both, psols) do case, solp
+    @info "check" obj_expT(case.sol_mc, case.pdfit, tweight=0) obj_expT(case.sol_mc, case.pdfit, tweight=1)
+    blankplot_hrC(legend=:bottomright, ylabel=L"T", xlabel=L"t")
+    # plot!(title=case.name)
+    # plot!(Tsh, label=L"T_\mathrm{sh}", c=:black)
+    plot!(case.pdfit, c=case.color, nmarks=15)
+    vspan!([Inf], [Inf], c=case.color, alpha=0.4, label=L"$t_\mathrm{end}$,  on-off")
+
+    modconvtplot!(case.sol_mc, label=L"$T_\mathrm{f}$, PBM", c=modcs[1], alpha=0.8)
+    modconvtplot!(solp, c=modcs[2], alpha=0.8, label=L"$T_\mathrm{f}$, Pikal")
+    if case.name ∈ ["A3", "A5"]
+        plot!(xlabel="")
+    end
+    if case.name ∈ ["A5", "B"]
+        plot!(ylabel="")
+    end
+    plot!(xlim=(-0.5, 20.1), ylim=(-45, -14))
 end
-savefig(plotsdir("dextran_T_semC.svg"))
-savefig(plotsdir("dextran_T_semC.pdf"))
+
+plot()
+for (i, c) in enumerate(cases_both.color)
+    vspan!([i-1,i], c=c, alpha=0.3, label="")
+end
+e1 = groupedbar!(errs.name, [errs.PBM_T errs.PP_T], color=modcs, label="", ylabel=L"$T_\mathrm{f}$ error [$\degree$C]",unitformat=(x,y)->x, lw=1)
+# e2 = groupedbar(errs.name, [errs.PBM_t errs.PP_t], ylabel=L"$t$ rel. error", c=[2 3], lw=1)
+plot(myega_plots..., e1, layout=@layout([grid(2,2) e{0.2w}]), size=(800,300))
+plot!(subplot=1, left_margin=15Plots.px)
+plot!(subplot=2, left_margin=-10Plots.px, )
+plot!(subplot=3, bottom_margin=15Plots.px)
+plot!(subplot=4, left_margin=-10Plots.px, right_margin=15Plots.px)
+end
+# plot!(subplot=2, ylabel="hh")
+savefig(plotsdir("dextran_T_semC_poster.svg"))
+savefig(plotsdir("dextran_T_semC_poster.pdf"))
 
 
 l = range(0u"cm", hf0, length=100)
 begin
 blankplot_lRp()
 for (i, case) in enumerate(cases_both)
-    # plot!(subplot=4, l, case.Rp.(l), ls=:dash, c=parse(Int, case.name), label="3PP $(case.name)")
-    mcrpplot!(case.sol_mc, c=i, label="PBM $(case.name)")
     hdT, RpT = case.hRp
-    plot!(l, case.po.Rp.(l), ls=:dash, c=i, label="3PP $(case.name)")
-    scatter!(hdT, RpT, alpha=0.5, c=i, label="Rp from T, $(case.name)", seriestype=:samplemarkers)
+    # plot!(subplot=4, l, case.Rp.(l), ls=:dash, c=parse(Int, case.name), label="3PP $(case.name)")
+    # mcrpplot!(case.sol_mc, c=case.color, label="PBM $(case.name)")
+    # plot!(l, case.po.Rp.(l), ls=:dash, c=case.color, label="3PP $(case.name)")
+    # scatter!(hdT, RpT, alpha=0.9, c=case.color, label="Rp from T, $(case.name)", seriestype=:samplemarkers)
+    plot!(hdT, RpT, alpha=0.7, c=case.color, label="", seriestype=:samplemarkers, offset=i+3,step=3, m=:o, lw=0)
+    mcrpplot!(case.sol_mc, c=case.color, lw=2, label="")
+    plot!(l, case.po.Rp.(l), ls=:dash, lw=4, c=case.color, label="")
 end
-plot!(xlim=(0, 0.4), ylim=(0, 15))
-plot!()
+plot!([Inf], [Inf], c=:gray, lw=2, label="PBM")
+plot!([Inf], [Inf], ls=:dash, c=:gray, alpha=0.6, lw=4, label="Pikal")
+scatter!([Inf], [Inf], c=:gray, label="Rp from T")
+plot!(xlim=(0, 0.4), ylim=(0, 15), legend=:topleft)
+plot!(size=(250, 250), xlabel=L"dry layer thickness, $h_\mathrm{d}$ [cm]", ylabel=L"$R_p$ [cm Torr hr g$^{-1}$]", guidefontfamily="Computer Modern", unitformat=(x,y)->x)
 end
-savefig(plotsdir("dextran_Rp.svg"))
+savefig(plotsdir("dextran_Rp_poster.svg"))
 savefig(plotsdir("dextran_Rp.pdf"))
 
 

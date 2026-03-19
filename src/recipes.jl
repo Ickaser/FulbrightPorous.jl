@@ -193,26 +193,28 @@ end
     elseif prm isa InterpK || prm isa Sigmoid_k || prm isa MYEGA_k
         kf = prm
     else
-        error("Kinetic plot expects either a ParamObjMC or ODESolution")
+        error("Kinetic plot expects a ParamObjMC, ODESolution, NamedTuple, or k_f type")
     end
-    if kf isa DataInterpolations.AbstractInterpolation
+    if kf isa InterpK
         @series begin
-            seriestype := :scatter
-            primary := false
-            return kf.t, kf.u
+            markershape --> :circle
+            return kf.spl.t, kf.(kf.spl.t)
         end
-    # elseif kf isa InterpK
-    #     @series begin
-    #         seriestype := :scatter
-    #         primary := false
-    #         return kf.spl.t, kf.spl.u
-    #     end
-    end
-    @series begin
-        seriestype := :samplemarkers
-        yscale --> :log10
-        label --> L"k_f"
-        return T, kf.(T)
+    else
+        if kf isa DataInterpolations.AbstractInterpolation
+            @series begin
+                seriestype := :scatter
+                primary := false
+                return kf.t, kf.u
+            end
+        end
+    
+        @series begin
+            seriestype := :samplemarkers
+            yscale --> :log10
+            label --> L"k_f"
+            return T, kf.(T)
+        end
     end
 end
 

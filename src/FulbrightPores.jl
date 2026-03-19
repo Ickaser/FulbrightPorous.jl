@@ -6,7 +6,7 @@ import LyoPronto: ODEProblem
 @reexport using DrWatson
 @reexport using Unitful
 @reexport using Plots
-@reexport using StatsPlots: @df
+@reexport using StatsPlots: @df, groupedbar, groupedbar!
 @reexport using LaTeXStrings
 @reexport using CSV
 @reexport using TypedTables

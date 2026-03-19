@@ -283,3 +283,26 @@ FulbrightPores.calc_mfp_dref(50u"mTorr", -45u"°C")
 FulbrightPores.calc_mfp_dref(50u"mTorr", -15u"°C")
 FulbrightPores.calc_mfp_dref(100u"mTorr", -15u"°C")
 FulbrightPores.calc_mfp_dref(2000u"mTorr", -10u"°C")
+
+
+# Bundle of capillaries: illustrate second moments
+
+total_area(bundle) = sum(x->x^2, bundle)
+knudsen_flow(bundle) = sum(x->x^3, bundle)
+poiseuille_flow(bundle) = sum(x->x^4, bundle)
+
+samps = Table(map(1:10) do i
+    bundle = rand(10)
+    bundle ./= sqrt(total_area(bundle))
+    R = sum(bundle)
+    A = total_area(bundle)
+    K = knudsen_flow(bundle)
+    P = poiseuille_flow(bundle)
+    return (;R, A, K, P)
+end)
+begin
+pl1 = @df samps scatter(:A, :K, label="Knudsen", xlim=(0.9, 1.1))
+pl2 = @df samps scatter(:P, :K, label="Poiseuille",)
+pl3 = @df samps scatter(:R, :K, label="Knudsen",)
+plot(pl1, pl2, pl3)
+end

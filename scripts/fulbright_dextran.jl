@@ -11,7 +11,7 @@ overnightfix(dat1)
 
 # plot(dat1raw.Phase)
 
-# t_end1 = identify_pd_end(dat1.t, dat1.pch_pir, Val(:2der), window_width=91,  tmin=1u"hr",  tmax=50u"hr")
+# t_end1 = identify_pd_end(dat1.t, dat1.pch_pir, Val(:der2), window_width=91,  tmin=1u"hr",  tmax=50u"hr")
 # t_end1 = identify_pd_end(dat1.t, dat1.pch_pir, Val(:onoff), window_width=91,  tmin=1u"hr",  tmax=50u"hr")
 t_end1 = missing
 
@@ -237,21 +237,35 @@ rp_all = @time solve(OP(obj_n, fill(0.0, 3), (trans_Rp, cases.pop, cases.fitdat)
 
 cases_Rps = Table(cases, single_Rps)
 
+errs = Table(map(cases_Rps) do case
+    shared = gen_sol_pd(rp_all.u, trans_Rp, case.pop)
+    PP = case.sol_p
+    errf = (model, tweight)->obj_expT(model, case.fitdat; tweight)
+    sh_T = sqrt(errf(shared, 0))*u"K"
+    sep_T = sqrt(errf(PP, 0))*u"K"
+    t_end_est = ismissing(case.fitdat.t_end) ? NaN : ustrip(u"hr", sum(case.fitdat.t_end)/2)
+    sh_t = sqrt(errf(shared, 1) - errf(shared, 0))/t_end_est
+    sep_t = sqrt(errf(PP, 1) - errf(PP, 0))/t_end_est
+    return (;name=case.name, sh_T, sep_T, sh_t, sep_t)
+end)
+
 begin
+e1 = StatsPlots.groupedbar(errs.name, [errs.sh_T errs.sep_T], label="", ylabel=L"$T_\mathrm{f}$ error", c=[2 4], lw=1)
+e2 = StatsPlots.groupedbar(errs.name, [errs.sh_t errs.sep_t], label="", ylabel=L"$t_\mathrm{end}$ rel. error", c=[2 4], lw=1)
 pls = map(cases_Rps) do case 
     plT = blankplot_hrC()
     # plot!(case.fitdat, title=case.name)
-    @df case.dat exptfplot!(:t, :T1, :T2, :T3, :T4, labsuffix=", full",)
+    @df case.dat exptfplot!(:t, :T1, :T2, :T3, :T4, labsuffix=", full", nmarks=20)
     tendplot!(case.fitdat.t[case.fitdat.Tf_iend[1]], label="end useful")
     tendplot!(case.fitdat.t_end)
     modconvtplot!(case.sol_p, label="3PP fit, $(case.name)")
     modconvtplot!(gen_sol_pd(rp_all.u, trans_Rp, case.pop), c=:purple, label="3PP fit, all")
     plot!(ylim=(-45, 10))
     plot!(legend = :top, legend_columns=2)
-    plot!(case.pop.Tsh, tmax=case.fitdat.t[end], c=:black, label=L"T_sh")
+    plot!(case.pop.Tsh, tmax=case.fitdat.t[end], c=:black, label=L"T_{sh}")
     return plT
 end
-plot(pls..., layout=(2,2), size=(800, 600), legend=:bottomright)
+plot(pls..., e1, e2, layout=(3,2), size=(800, 800), legend=:bottomright)
 # mathjax = KW(:include_mathjax=>"cdn")
 # plot!(extra_plot_kwargs=mathjax, legend=:right, ticks=:native) # For Plotly
 # plot!(subplot=4, right_margin=150Plots.px)
