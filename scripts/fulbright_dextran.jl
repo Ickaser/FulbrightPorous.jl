@@ -225,7 +225,7 @@ single_Rps = map(cases) do case
     (;name, pop, fitdat, dat) = case
     u0 = zeros(3)
     @time opt = solve(OP(obj_Rpf, u0, (trans_Rp, pop, fitdat)), optalg)#, g_tol=1e-6)
-    Rp = RpFormFit(transform(trans_Rp, opt.u).Rp...)
+    Rp = transform(trans_Rp, opt.u).Rp
     sol = gen_sol_pd(opt.u, trans_Rp, pop, fitdat)
     @info "analyis" name opt Rp
     hRps = map(x->calc_hRp_T(case.pop, case.fitdat, i=x), 1:length(fitdat.Tfs))

@@ -187,7 +187,7 @@ end
     if prm isa ParamObjMC 
         kf = prm.k_f
     elseif prm isa NamedTuple
-        kf = k_f_nt(prm.k_f)
+        kf = prm.k_f
     elseif prm isa ODESolution
         kf = prm.prob.p.k_f
     elseif prm isa InterpK || prm isa Sigmoid_k || prm isa MYEGA_k

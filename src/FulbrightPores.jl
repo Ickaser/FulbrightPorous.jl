@@ -36,7 +36,6 @@ const odealg_chunk4 = Rodas4(autodiff=AutoForwardDiff(chunksize=4))
 
 include("pikal_microcollapse.jl")
 include("kinetic_models.jl")
-export k_f_nt
 include("fitting.jl")
 include("table_renaming.jl")
 export blankplot_hrC, blankplot_lRp, fp_plot_defaults 

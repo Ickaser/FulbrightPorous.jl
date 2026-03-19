@@ -136,10 +136,6 @@ function ParamObjMC(tuptup)
     return ParamObjMC(tuptup[1]..., tuptup[2]...,
         tuptup[3]..., tuptup[4]...)
 end
-function ParamObjMC(hf0, csolid, ρsolution, Kshf, Av, Ap, pch, Tsh, k_f::NamedTuple, C, N, S, Rs)
-    k_fn = k_f_nt(k_f)
-    return ParamObjMC(hf0, csolid, ρsolution, Kshf, Av, Ap, pch, Tsh, k_fn, C, N, S, Rs)
-end
 Base.size(::ParamObjMC) = (4,)
 Base.length(::ParamObjMC) = 14
 function Base.getindex(po::ParamObjMC, i)

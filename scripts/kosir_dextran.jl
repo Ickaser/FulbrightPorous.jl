@@ -155,18 +155,13 @@ end
 # pass123 = make_mcpass([1, 2, 3])
 # pass45 = make_mcpass([4, 5])
 
-# NTV = ConstWrapTV() ∘ TVScale(4e7u"cm^-3") ∘ TVExp()
-# STV = ConstWrapTV() ∘ TVScale(2e-4u"cm^3") ∘ TVExp()
-# CTV = TVScale(1.2u"m^0.5") ∘ TVExp()
-# RsTV = TVScale(1.5u"cm^2*Torr*hr/g") ∘ TVShift(0.01) ∘ TVLogistic()
-# porous_nt = as((N = NTV, S = STV, C = CTV, Rs = RsTV,)) # If I could enforce S > ϕ/N, would be great...
 porous_nt = FulbrightPores.porous_transform_bounded(Vfill)
-myega_nt = as((;k_f=as((k0 = TVScale(1e42u"s^-1") ∘ TVExp(),
+myega_nt = as((;k_f=as(MYEGA_k, as((k0 = TVScale(1e42u"s^-1") ∘ TVExp(),
             K1 = TVScale(2.0e4u"K") ∘ TVExp(),
-            K2 = TVScale(1e2u"K") ∘ TVExp() ,))))
-# plot(Tran, FulbrightPores.k_f_nt(transform(as(myega_nt), zeros(3))).(Tran), yscale=:log10, label="MYEGA, def")
+            K2 = TVScale(1e2u"K") ∘ TVExp() ,)))))
+# plot(Tran, transform(myega_nt, zeros(3)).k_f.(Tran), yscale=:log10, label="MYEGA, def")
 sigma_nt = FulbrightPores.sigmoid_transform_bounded(1e-8u"s^-1", 1.0u"K")
-# plot(Tran, FulbrightPores.k_f_nt(transform(as(sigma_nt), zeros(4))).(Tran), yscale=:log10, label="MYEGA, def")
+# plot(Tran, transform(sigma_nt, zeros(4)).k_f.(Tran), yscale=:log10, label="MYEGA, def")
 trans_myega = merge(porous_nt, myega_nt)
 trans_sigma = merge(porous_nt, sigma_nt)
 

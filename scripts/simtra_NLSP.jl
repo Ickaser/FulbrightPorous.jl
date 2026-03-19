@@ -314,17 +314,6 @@ end
 #             kl3 = TV.Identity(),
 #             kl4 = TV.Identity())
 const TV = TransformVariables
-interp_nt = (kl1 = TV.Identity(),
-            kl2 = TVExp(),
-            kl3 = TVExp(),
-            kl4 = TVExp())
-function FulbrightPores.k_f_nt(nt::NamedTuple{(:kl1, :kl2, :kl3, :kl4)})
-    # return InterpK([nt...], [-45.0, -38, -32, -28]u"°C" .|> u"K", 1e-14u"s^-1")
-    # if nt.kl1 < nt.kl2 || nt.kl2 < nt.kl3 || nt.kl3 < nt.kl4
-    #     return 
-    # end
-    return InterpK(cumsum([nt...]), [-45.0, -38, -32, -22]u"°C" .|> u"K", 1e-14u"s^-1")
-end
 # opt2p = solve(NLSP(err_Rp, opt_Rp1.u, (pop2, fitdat2)), TR(); maxiters=200)
 # opt_MC2 = solve(NLSP(err_MC, opt_MC1.u, (pomc2, fitdat2)), TR(); maxiters=200)
 

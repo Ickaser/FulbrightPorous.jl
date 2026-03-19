@@ -205,7 +205,7 @@ single_Rps = map(cases) do case
     (;name, pop, fitdat, dat) = case
     u0 = [0., 0., 0.]
     @time opt = solve(OP(obj_Rpf, u0, (trans_Rp, pop, fitdat)), optalg)#, g_tol=1e-6)
-    Rp = RpFormFit(transform(trans_Rp, opt.u).Rp...)
+    Rp = transform(trans_Rp, opt.u).Rp
     sol = gen_sol_pd(opt.u, trans_Rp, pop, fitdat)
     @info "analyis" name opt Rp
     hRps = map(x->calc_hRp_T(case.pop, case.fitdat, i=x), 1:length(case.fitdat.Tfs))
@@ -304,28 +304,18 @@ end
 #             kl4 = TV.Identity())
 
 const TV = TransformVariables
-interp_nt = as((;k_f=as((kl1 = TV.Identity(),
+T_interps = [-45.0, -38, -32, -22]u"°C" .|> u"K"
+T_interps_trans = as((;T=Constant(T_interps)))
+k_logs_trans = as((;klog=as((kl1 = TV.Identity(),
             kl2 = TVExp(),
             kl3 = TVExp(),
             kl4 = TVExp()))))
-function FulbrightPores.k_f_nt(nt::NamedTuple{(:kl1, :kl2, :kl3, :kl4)})
-    # return InterpK([nt...], [-45.0, -38, -32, -28]u"°C" .|> u"K", 1e-14u"s^-1")
-    # if nt.kl1 < nt.kl2 || nt.kl2 < nt.kl3 || nt.kl3 < nt.kl4
-    #     return 
-    # end
-    return InterpK(cumsum([nt...]), [-45.0, -38, -32, -22]u"°C" .|> u"K", 1e-14u"s^-1")
-end
-# const TV = TransformVariables
-# porous_nt = (N = ConstWrapTV() ∘ TVScale(3e7u"cm^-3") ∘ TVExp(),
-#                S = ConstWrapTV() ∘ TVScale(2e-5u"cm^3") ∘ TVExp(), 
-#                C = TVScale(4e-1u"m^0.5") ∘ TVExp(),
-#                Rs = TVScale(0.5u"cm^2*Torr*hr/g") ∘ TVShift(0.01) ∘ TVLogistic()
-#                )
+interp_nt = as((;k_f = as(InterpK, merge(k_logs_trans, T_interps_trans))))
 porous_nt = FulbrightPores.porous_transform_bounded(fillvol)
 myega_nt = as((;k_f=as(MYEGA_k, as((k0 = TVScale(1e11u"s^-1") ∘ TVExp(),
             K1 = TVScale(5e4u"K") ∘ TVShift(0.001) ∘ TVLogistic() ∘ TVShift(TV.logit(0.05)),
             K2 = TVScale(6e2u"K") ∘ TVShift(0.01) ∘ TVLogistic() ,)))))
-# plot(Tran, FulbrightPores.k_f_nt(transform(as(myega_nt), zeros(3))).(Tran), yscale=:log10, label="MYEGA, def")
+# plot(Tran, transform(myega_nt, zeros(3)).k_f.(Tran), yscale=:log10, label="MYEGA, def")
 # sigma_nt = as((;k_f=as((k0 = TVScale(1e-15u"s^-1") ∘ TVExp(),
 #             kf = TVScale(1e-8u"s^-1") ∘ TVExp(),
 #             K1 = TVScale(0.8u"K") ∘ TVExp(),
@@ -370,7 +360,7 @@ begin
 plot(u"°C", u"s^-1")
 marks = Dict(3=>:circle, 7=>:square, 11=>:utriangle)
 for i in [3,7,11]
-    k = k_f_nt(transform(mcfit_cases[i].trans, mcfits[i].u).k_f)
+    k = transform(mcfit_cases[i].trans, mcfits[i].u).k_f
     kineticplot!(k, markershape=marks[i], label="$(nameof(typeof(k))) fit to $(mcfit_cases[i].cases)")
 end
 # kineticplot!(transform(trans_interp, interp_guess),  label="Interp guess")
@@ -389,9 +379,9 @@ function get_sol_Rp(casenum, fitnum)
 end
 
 # Choose a favored fit for plotting, etc.
-fitnum = 11 # 1&8, interp
+# fitnum = 3 # 1&8, interp
 # fitnum = 7 # 1&8, MYEGA
-# fitnum = 11 # 1&8, sigmoid
+fitnum = 11 # 1&8, sigmoid
 
 bestfit = transform(mcfit_cases[fitnum].trans, mcfits[fitnum].u)
 @info "Chosen fit" bestfit
@@ -500,11 +490,11 @@ savefig(plotsdir("simtra_suc_poreevol.pdf"))
 Latexify.set_default(labelformat=:round)
 begin
 plot(u"°C", u"s^-1", xlabel="T\\;", ylabel="k", unitformat=latexify, guidefontsize=15)
-k = k_f_nt(transform(mcfit_cases[3].trans, mcfits[3].u).k_f)
+k = transform(mcfit_cases[3].trans, mcfits[3].u).k_f
 # lab = "$(nameof(typeof(k))) fit to $(mcfit_cases[fitnum].cases)"
 lab = "Fit 1 to cycles"
 kineticplot!(k, markershape=:circle, label=lab)
-k = k_f_nt(transform(mcfit_cases[11].trans, mcfits[11].u).k_f)
+k = transform(mcfit_cases[11].trans, mcfits[11].u).k_f
 # lab = "$(nameof(typeof(k))) fit to $(mcfit_cases[fitnum].cases)"
 lab = "Fit 2 to cycles"
 kineticplot!(k, markeralpha=0, label=lab)

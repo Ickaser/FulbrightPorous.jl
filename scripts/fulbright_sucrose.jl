@@ -385,8 +385,8 @@ pass123 = make_mcpass([1, 2, 3])
 pass45 = make_mcpass([4, 5])
 pass7 = make_mcpass([7])
 
-NTV = ConstWrapTV() ∘ TVScale(2e6u"cm^-3") ∘ TVExp()
-STV = ConstWrapTV() ∘ TVScale(5e-7u"cm^3") ∘ TVExp()
+NTV = as(ConstPhysProp, (TVScale(2e6u"cm^-3") ∘ TVExp(),))
+STV = as(ConstPhysProp, (TVScale(5e-7u"cm^3") ∘ TVExp(),))
 CTV = TVScale(2e-1u"m^0.5") ∘ TVExp()
 RsTV = TVScale(1.5u"cm^2*Torr*hr/g") ∘ TVShift(0.01) ∘ TVLogistic()
 # porous_nt = as((N = NTV, S = STV, # If I could enforce S > ϕ/N, would be great...
@@ -395,9 +395,9 @@ porous_nt = FulbrightPores.porous_transform_bounded(fillvol)
 myega_nt = as((k_f=as((k0 = TVScale(1e42u"s^-1") ∘ TVExp(),
             K1 = TVScale(2.0e4u"K") ∘ TVExp(),
             K2 = TVScale(1e2u"K") ∘ TVExp() ,)),))
-# plot(Tran, FulbrightPores.k_f_nt(transform(as(myega_nt), zeros(3))).(Tran), yscale=:log10, label="MYEGA, def")
+# plot(Tran, transform(as(myega_nt, zeros(3)).k_f.(Tran), yscale=:log10, label="MYEGA, def")
 sigma_nt = FulbrightPores.sigmoid_transform_bounded(1e-10u"s^-1", 1.0u"K")
-# plot(Tran, FulbrightPores.k_f_nt(transform(as(sigma_nt), zeros(4))).(Tran), yscale=:log10, label="MYEGA, def")
+# plot(Tran, transform(as(sigma_nt, zeros(4)).k_f.(Tran), yscale=:log10, label="sigmoid, def")
 trans_myega = merge(porous_nt, myega_nt)
 trans_sigma = merge(porous_nt, sigma_nt)
 
@@ -471,14 +471,14 @@ fits = Table((opt=[opt123sigm, opt123myega, opt45sigm, opt45myega, opt_2m, opt_2
 fits = Table(fits, (kf= map(fits) do x
     fitprm = transform(x.tr, x.opt.u)
     if hasproperty(fitprm, :shared)
-        FulbrightPores.k_f_nt(fitprm.shared.k_f)
+        fitprm.shared.k_f
     else
-        FulbrightPores.k_f_nt(fitprm.k_f)
+        fitprm.k_f
     end
 end ,))
 fits = Table(fits, (k_type = map(x->(x.kf isa Sigmoid_k ? Sigmoid_k : MYEGA_k), fits)))
-# push!(fits, (opt=opt_2m, tr=trans_myega, cases=(1,2,3,4,5), kf=FulbrightPores.k_f_nt(transform(trans_myega, opt_2m.u[end-6:end]).k_f)))
-# push!(fits, (opt=opt_2s, tr=trans_sigma, cases=(1,2,3,4,5), kf=FulbrightPores.k_f_nt(transform(trans_sigma, opt_2s.u[end-7:end]).k_f)))
+# push!(fits, (opt=opt_2m, tr=trans_myega, cases=(1,2,3,4,5), kf=transform(trans_myega, opt_2m.u[end-6:end]).k_f))
+# push!(fits, (opt=opt_2s, tr=trans_sigma, cases=(1,2,3,4,5), kf=transform(trans_sigma, opt_2s.u[end-7:end]).k_f))
 
 # new_sols = vcat(gen_pbmsols(opt123myega, trans_myega)[1:3], gen_pbmsols(opt45myega, trans_myega)[4:5])
 # new_sols = vcat(gen_pbmsols(opt123sigm, trans_sigma)[1:3], gen_pbmsols(opt45sigm, trans_sigma)[4:5], gen_pbmsols(opt7sigm, trans_sigma)[6:6])
@@ -583,10 +583,10 @@ for fit in fits
     @info "check" fit.kf.(Tran) fit.cases fit.kf
     plot!(Tran, fit.kf.(Tran), label="$(fit.k_type), $(fit.cases)")
 end
-# plot!(Tran, FulbrightPores.k_f_nt(transform(trans_myega, p0_myega).k_f).(Tran), label="MYEGA, guess")
-# plot!(Tran, FulbrightPores.k_f_nt(transform(trans_sigma, p0_sigma).k_f).(Tran), label="Sigmoid, guess")
-# plot!(Tran, FulbrightPores.k_f_nt(transform(as(myega_nt), zeros(3))).(Tran), label="MYEGA, def")
-# plot!(Tran, FulbrightPores.k_f_nt(transform(as(sigma_nt), zeros(4))).(Tran), label="Sigmoid, def")
+# plot!(Tran, transform(trans_myega, p0_myega).k_f.(Tran), label="MYEGA, guess")
+# plot!(Tran, transform(trans_sigma, p0_sigma).k_f.(Tran), label="Sigmoid, guess")
+# plot!(Tran, transform(myega_nt, zeros(3)).k_f.(Tran), label="MYEGA, def")
+# plot!(Tran, transform(sigma_nt, zeros(4)).k_f.(Tran), label="Sigmoid, def")
 plot!(ylim=(1e-16, 1e-5), legend=:bottomright)
 plot!()
 end
