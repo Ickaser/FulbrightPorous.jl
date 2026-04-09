@@ -214,19 +214,20 @@ begin
 modcs = [:teal :crimson]
 myega_plots = map(cases_both, psols) do case, solp
     @info "check" obj_expT(case.sol_mc, case.pdfit, tweight=0) obj_expT(case.sol_mc, case.pdfit, tweight=1)
-    blankplot_hrC(legend=:bottomright, ylabel=L"T", xlabel=L"t")
-    # plot!(title=case.name)
+    blankplot_hrC(legend=:bottomright, )
+    plot!(title=case.name)
     # plot!(Tsh, label=L"T_\mathrm{sh}", c=:black)
     plot!(case.pdfit, c=case.color, nmarks=15)
-    vspan!([Inf], [Inf], c=case.color, alpha=0.4, label=L"$t_\mathrm{end}$,  on-off")
+    # vspan!([Inf], [Inf], c=case.color, alpha=0.4, label=L"$t_\mathrm{end}$,  on-off")
 
-    modconvtplot!(case.sol_mc, label=L"$T_\mathrm{f}$, PBM", c=modcs[1], alpha=0.8)
-    modconvtplot!(solp, c=modcs[2], alpha=0.8, label=L"$T_\mathrm{f}$, Pikal")
-    if case.name ∈ ["A3", "A5"]
-        plot!(xlabel="")
-    end
-    if case.name ∈ ["A5", "B"]
+    modconvtplot!(solp, c=modcs[2], alpha=0.8, label="Pikal fit")
+    modconvtplot!(case.sol_mc, label="PBM fit", c=modcs[1], alpha=0.8)
+    # if case.name ∈ ["A3", "A5"]
+    #     plot!(xlabel="")
+    # end
+    if case.name ∈ ["A5", "A6", "B"]
         plot!(ylabel="")
+        plot!(yticks=(-45:5:-15, ""), left_margin=-5Plots.px)
     end
     plot!(xlim=(-0.5, 20.1), ylim=(-45, -14))
 end
@@ -235,13 +236,14 @@ plot()
 for (i, c) in enumerate(cases_both.color)
     vspan!([i-1,i], c=c, alpha=0.3, label="")
 end
-e1 = groupedbar!(errs.name, [errs.PBM_T errs.PP_T], color=modcs, label="", ylabel=L"$T_\mathrm{f}$ error [$\degree$C]",unitformat=(x,y)->x, lw=1)
+e1 = groupedbar!(errs.name, [errs.PP_T errs.PBM_T], color=modcs[[2 1]], label="", ylabel=L"$T_\mathrm{f}$ error [$\degree$C]",unitformat=(x,y)->x, lw=1)
 # e2 = groupedbar(errs.name, [errs.PBM_t errs.PP_t], ylabel=L"$t$ rel. error", c=[2 3], lw=1)
-plot(myega_plots..., e1, layout=@layout([grid(2,2) e{0.2w}]), size=(800,300))
+plot(myega_plots..., e1, layout=@layout([grid(1,4) e{0.2w}]), size=(800,200))
 plot!(subplot=1, left_margin=15Plots.px)
-plot!(subplot=2, left_margin=-10Plots.px, )
-plot!(subplot=3, bottom_margin=15Plots.px)
-plot!(subplot=4, left_margin=-10Plots.px, right_margin=15Plots.px)
+plot!(bottom_margin=15Plots.px)
+# plot!(subplot=2, left_margin=-10Plots.px, )
+# plot!(subplot=3, bottom_margin=15Plots.px)
+# plot!(subplot=4, left_margin=-10Plots.px, right_margin=15Plots.px)
 end
 # plot!(subplot=2, ylabel="hh")
 savefig(plotsdir("dextran_T_semC_poster.svg"))
@@ -258,12 +260,12 @@ for (i, case) in enumerate(cases_both)
     # plot!(l, case.po.Rp.(l), ls=:dash, c=case.color, label="3PP $(case.name)")
     # scatter!(hdT, RpT, alpha=0.9, c=case.color, label="Rp from T, $(case.name)", seriestype=:samplemarkers)
     plot!(hdT, RpT, alpha=0.7, c=case.color, label="", seriestype=:samplemarkers, offset=i+3,step=3, m=:o, lw=0)
-    mcrpplot!(case.sol_mc, c=case.color, lw=2, label="")
-    plot!(l, case.po.Rp.(l), ls=:dash, lw=4, c=case.color, label="")
+    mcrpplot!(case.sol_mc, c=case.color, lw=3, label="")
+    # plot!(l, case.po.Rp.(l), ls=:dash, lw=4, c=case.color, label="")
 end
-plot!([Inf], [Inf], c=:gray, lw=2, label="PBM")
-plot!([Inf], [Inf], ls=:dash, c=:gray, alpha=0.6, lw=4, label="Pikal")
-scatter!([Inf], [Inf], c=:gray, label="Rp from T")
+plot!([Inf], [Inf], c=:gray, lw=3, label="PBM")
+# plot!([Inf], [Inf], ls=:dash, c=:gray, alpha=0.6, lw=4, label="Pikal")
+scatter!([Inf], [Inf], c=:gray, label=L"$R_p$ from T")
 plot!(xlim=(0, 0.4), ylim=(0, 15), legend=:topleft)
 plot!(size=(250, 250), xlabel=L"dry layer thickness, $h_\mathrm{d}$ [cm]", ylabel=L"$R_p$ [cm Torr hr g$^{-1}$]", guidefontfamily="Computer Modern", unitformat=(x,y)->x)
 end

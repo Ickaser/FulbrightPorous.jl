@@ -101,7 +101,7 @@ end
 end
 
 function calc_l(dat, hf0)
-    minteg = @df dat cumsum(:mfr[1:end-1].*(:t[2:end]-:t[1:end-1]))
+    minteg = @df dat cumsum(max.(0u"g/s", :mfr[1:end-1]).*diff(:t))
     insert!(minteg, 1, 0u"g")
     frac = minteg ./ minteg[end]
     ld = frac .*hf0 
@@ -147,35 +147,45 @@ function calc_Kn(sol)
 end
 
 @userplot PBMTDLAS
-@recipe function f(pt::PBMTDLAS)
+@recipe function f(pt::PBMTDLAS; hf0 = nothing)
     pbmsol, dat, Rpp = pt.args
-    l, Rp_mc = calc_lRp(pbmsol)
-    ld = calc_l(dat, pbmsol.prob.p.hf0)
+    isnothing(hf0) && (hf0 = pbmsol.prob.p.hf0)
+    ld = calc_l(dat, hf0)
     Rpd = dat.Rp
-    Rp_pikal = Rpp.(ld)
     # unitformat --> :square
     # xlabel --> "Dry layer thickness"
     # ylabel --> "Rp"
+    downselect = length(ld) ÷ 40
+    ld = ld[begin:downselect:end]
+    Rpd = Rpd[begin:downselect:end]
+    @info "check" ld Rpd downselect
     @series begin
         c --> palette(:Blues_5,)[4]
-        seriestype := :samplemarkers
+        # seriestype := :samplemarkers
+        # lw --> 1
+        # step --> length(Rpd) ÷ 30
+        seriestype := :scatter
         marker --> :o
-        lw --> 1
-        step --> length(Rpd) ÷ 30
         label --> "TDLAS"
         return ld, Rpd
     end
-    @series begin
-        c --> palette(:Oranges_4)[end]
-        seriestype := :line
-        label --> "PBM"
-        return l, Rp_mc
+    if !isnothing(pbmsol)
+        l, Rp_mc = calc_lRp(pbmsol)
+        @series begin
+            c --> palette(:Oranges_4)[end]
+            seriestype := :line
+            label --> "PBM"
+            return l, Rp_mc
+        end
     end
-    @series begin
-        c --> :green
-        seriestype := :line
-        label --> "3PP"
-        return ld, Rp_pikal
+    if !isnothing(Rpp)
+        Rp_pikal = Rpp.(ld)
+        @series begin
+            c --> :green
+            seriestype := :line
+            label --> "3PP"
+            return ld, Rp_pikal
+        end
     end
 end
 
