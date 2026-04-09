@@ -304,7 +304,7 @@ end
 #             kl4 = TV.Identity())
 
 const TV = TransformVariables
-T_interps = [-45.0, -38, -32, -22]u"°C" .|> u"K"
+T_interps = [-45.0, -34, -31, -27]u"°C" .|> u"K"
 T_interps_trans = as((;T=Constant(T_interps)))
 k_logs_trans = as((;klog=as((kl1 = TV.Identity(),
             kl2 = TVExp(),
@@ -329,7 +329,7 @@ trans_sigma = merge(porous_nt, sigma_nt)
 obj_nmc = OptimizationFunction((x,y)->objn_pd(x,y; badprms=FulbrightPores.badNS, tweight=1e-2), AutoForwardDiff(chunksize=4))
 
 
-interp_guess = [-1.0, 1, 0, 0, -1, 0, 0, 0]
+interp_guess = [-1.0, 1, 0, 0, -1, 0, 1, -2]
 # plot(u"°C", u"s^-1")
 # kineticplot!(transform(trans_interp, interp_guess),  label="Interp guess")
 myega_guess = [0.1, 0.1, 0, 0, -10, 0, 0]
