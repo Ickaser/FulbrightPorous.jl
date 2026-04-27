@@ -5,6 +5,7 @@ blankplot_lRp(;kwargs...) = plot(u"cm", u"cm^2*Torr*hr/g", xlabel=L"h_d", ylabel
 function fp_plot_defaults()
     default(:linewidth, 3)
     default(:markersize, 5)
+    default(:fontfamily, "Computer Modern")
 end
 
 # ------------------------
@@ -158,7 +159,6 @@ end
     downselect = length(ld) ÷ 40
     ld = ld[begin:downselect:end]
     Rpd = Rpd[begin:downselect:end]
-    @info "check" ld Rpd downselect
     @series begin
         c --> palette(:Blues_5,)[4]
         # seriestype := :samplemarkers
