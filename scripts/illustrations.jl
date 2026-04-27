@@ -72,8 +72,8 @@ dat1.t .-= dat1.t[1]
 
 # plot(dat1raw.Phase)
 
-# t_end1 = identify_pd_end(dat1.t, dat1.pch_pir, Val(:2der), window_width=91,  tmin=1u"hr",  tmax=50u"hr")
-t_end1 = identify_pd_end(dat1.t, dat1.pch_pir, Val(:onoff), window_width=91,  tmin=1u"hr",  tmax=50u"hr")
+# t_end1 = identify_pd_end(dat1.t, dat1.pch_pir, Val(:2der), window_width=91,  tmin=5u"hr",  tmax=50u"hr")
+t_end1 = identify_pd_end(dat1.t, dat1.pch_pir, Val(:onoff), window_width=91,  tmin=5u"hr",  tmax=50u"hr")
 
 pch1 = RampedVariable(100.0u"mTorr")
 # @df dat1 plot(:t, :pch_cm, ylim=(0, 200))
@@ -175,7 +175,7 @@ model2.t .+= ustrip(u"hr", dat2full.t[findfirst(x->x==4, dat2full.phase)])
 end
 
 # Latexify.set_default(labelformat=:square)
-default(:fontfamily, "sans-serif")
+default(:fontfamily, "Computer Modern")
 
 begin
 pl1 = @df dat1 exptfplot(:t, :T1, :T2, :T3, :T4, ylabel="Temperature", lw=2)
@@ -192,14 +192,65 @@ end
 
 begin
 twinx(plot(xwiden=false, size=(450, 280)))
-cycledataplot!(dat2full, (:T1, :T2, :T3, :T4), (:Tsh_i), (:pch_pir, :pch_cm), nmarks=15, sampmarks=true, pcolor=:green)
+cycledataplot!(dat2full, (:T1, :T2, :T3, :T4), (:Tsh_i), (:pch_pir, :pch_cm), nmarks=15, sampmarks=true, pcolor=:green, lw=1)
 modconvtplot!(model2, lw=3, alpha=0.8)
 plot!(subplot=1, legend=(0.65, 0.38), ylim=(-52, 25))
 plot!(subplot=2, legend=(0.63, 0.85), ylim=(1, 200))
 plot!(size=(800, 400))
-plot!(bottom_margin=15Plots.px, left_margin=15Plots.px, right_margin=15Plots.px)
+cycleplot = plot!(bottom_margin=15Plots.px, left_margin=15Plots.px, right_margin=15Plots.px)
 end
 savefig(plotsdir("example_cycle_data_wide.svg"))
+savefig(plotsdir("example_cycle_data_wide.pdf"))
+
+begin
+pl1 = blankplot_hrC(xlabel=nothing, bottom_margin=-15Plots.px)
+@df dat1 exptfplot!(:t, :T1, :T2, :T3, :T4, label="", lw=1, markeralpha=0, sampmarks=true)
+plot!(fitdat1; nmarks=10, markeralpha=0.8)
+plot!(ylim=(-45, -25))
+
+t_mid, p_mid, dp_mid, p_max, p_min, pch_pir_sm = let
+    pch_pir = dat1.pch_pir
+    t = dat1.t
+    window_width = 91
+    tmin = 5u"hr"
+    tmax = 50u"hr"
+    pch_pir_sm = savitzky_golay(pch_pir, window_width, 3, deriv=0).y
+    dt = sum(diff(t)) / (length(t)-1)
+    pch_pir_der1 = savitzky_golay(pch_pir, window_width, 3, deriv=1, rate=1/dt).y
+    ti_inds = tmin .< t .< tmax
+    i_mid = argmin(pch_pir_der1[ti_inds]) + searchsortedfirst(t, tmin)
+    t_mid = t[i_mid]
+    dp_mid = pch_pir_der1[i_mid]
+    p_mid = pch_pir_sm[i_mid]
+    p_max = maximum(pch_pir_sm[ti_inds])
+    p_min = minimum(pch_pir_sm[ti_inds])
+    t_onset = (p_max - p_mid)/dp_mid + t_mid
+    t_offset = (p_min - p_mid)/dp_mid + t_mid
+
+    t_mid, p_mid, dp_mid, p_max, p_min, pch_pir_sm
+end
+
+uppert = t_end1[1]-0.5u"hr"
+lowert = t_end1[2]+0.3u"hr"
+upperp = p_mid + dp_mid*(uppert - t_mid)
+lowerp = p_mid + dp_mid*(lowert - t_mid)
+
+pl2 = plot(u"hr", u"mTorr", ylabel="Pressure", xlabel="Time", unitformat=:square)
+@df dat1 scatter!(:t, :pch_pir, c=4, label="Pirani", marker=:circle, msw=0, ms=1.2)
+@df dat1 scatter!(:t, :pch_cm, c=:gray, label="CM", marker=:circle, msw=0, ms=1.2)
+tendplot!(fitdat1.t_end)
+plot!(dat1.t, pch_pir_sm, c=3, label="Pirani (smoothed)", lw=2)
+
+lineattr = (;c=:black, ls=:dash, lw=2, la=0.8, label="")
+plot!([0.5;  15;; 12; 22]u"hr", [p_max; p_max;; p_min; p_min]; lineattr...)
+plot!([uppert, lowert], [upperp, lowerp]; lineattr...)
+scatter!([t_mid], [p_mid], marker=:star5, ms=8, c=:green, label="")
+
+cycle_end = plot(pl1, pl2, link=:x, layout=@layout([a{0.4h}; b]))
+end
+savefig(plotsdir("example_cycle_end.svg"))
+savefig(plotsdir("example_cycle_end.pdf"))
+
 
 l = range(0u"cm", hf0, length=101)
 hRps = [calc_hRp_T(pop2, fitdat2; i) for i in 1:4]
