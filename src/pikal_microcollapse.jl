@@ -152,6 +152,10 @@ function Base.getindex(po::ParamObjMC, i)
     end
 end
 function Base.show(io::IO, po::ParamObjMC) 
+    compact = get(io, :compact, false)::Bool
+    if compact
+        return print(io, "ParamObjMC(...)")
+    end
     str = "ParamObjMC( 
     $(po.hf0), 
     $(po.csolid), 
