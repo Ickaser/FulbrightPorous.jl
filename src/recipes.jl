@@ -48,7 +48,7 @@ public calc_moms_NS
         elseif kind == :moms
             ylabel --> "μ0"
         end
-        return hd, μ0
+        return t, μ0
     end
     @series begin
         subplot --> 2
@@ -57,22 +57,22 @@ public calc_moms_NS
         xformatter -->  _->""
         if kind == :stats
             ylabel --> "typical \npore diameter\n" #*", total pore volume"
-            return hd, meandiam
+            return t, meandiam
         elseif kind == :moms
             ylabel --> "μ1" 
-            return hd, μ1
+            return t, μ1
         end
     end
     @series begin
         subplot --> 3
-        xlabel --> "Dry layer thickness"
+        xlabel --> "Time"
         legend --> :none
         if kind == :stats
             ylabel --> "pore diameter \nstdev\n" #*", pore size second moment"
-            return hd, sqrt.(vardiam) .|> u"μm"
+            return t, sqrt.(vardiam) .|> u"μm"
         elseif kind == :moms
             ylabel --> "μ2"
-            return hd, μ2
+            return t, μ2
         end
     end
     @series begin
