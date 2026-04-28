@@ -197,21 +197,21 @@ obj_Rpf = OptimizationFunction((x,y)->obj_pd(x,y,tweight=1e-2), AutoForwardDiff(
 # obj_Rpf = OptimizationFunction(obj_pd, AutoForwardDiff(chunksize=3))
 @time obj_Rpf([0.0, 1.0, 0.0], (trans_Rp, pop1, fitdat1))
 
-obj_npf = OptimizationFunction((x,y)->objn_pd(x,y,tweight=1e-2), AutoForwardDiff(chunksize=3))
+# obj_npf = OptimizationFunction((x,y)->objn_pd(x,y,tweight=1e-2), AutoForwardDiff(chunksize=3))
 
 single_Rps = map(cases) do case
     (;name, pop, fitdat, dat) = case
     u0 = [0., 0., 0.]
     @time opt = solve(OP(obj_Rpf, u0, (trans_Rp, pop, fitdat)), optalg)#, g_tol=1e-6)
+    SciMLBase.successful_retcode(opt.retcode) || @warn "Optimization did not converge for Rp case $name"
     Rp = transform(trans_Rp, opt.u).Rp
     sol = gen_sol_pd(opt.u, trans_Rp, pop, fitdat)
     @info "analyis" name opt Rp
     hRps = map(x->calc_hRp_T(case.pop, case.fitdat, i=x), 1:length(case.fitdat.Tfs))
-    return (opt=opt, sol_p=sol, Rp, hRps)
+    return (opt=opt.u, sol_p=sol, Rp, hRps)
 end;
 
 cases_Rps = Table(cases, single_Rps)
-FulbrightPores.calc_l(cases_Rps[4].dat, hf0)
 
 pls = map(cases_Rps) do case 
     plT = blankplot_hrC()
@@ -279,22 +279,22 @@ end
 savefig(plotsdir("simtra_suc_Rp_overlay.svg"))
 
 
-function make_Rp_pass(casenums)
-    subdat = filter(x->parse(Int, x.name)∈casenums, cases_Rps)
-    (subdat.pop, subdat.fitdat)
-end
+# function make_Rp_pass(casenums)
+#     subdat = filter(x->parse(Int, x.name)∈casenums, cases_Rps)
+#     (subdat.pop, subdat.fitdat)
+# end
 function make_mc_pass(casenums)
     subdat = filter(x->parse(Int, x.name)∈casenums, cases)
     (subdat.pomc, subdat.fitdat)
 end
 
-rpfit_cases = Table(cases = [(1,), (2,), (4,), (5,), (6,), (1,6)],
-        p0 = fill([0.5, -0.3, 0], 7),
-        trans = fill(trans_Rp, 7))
-rpfits = map(rpfit_cases) do case
-    sol = @time solve(OP(obj_npf, case.p0, (case.trans, make_Rp_pass(case.cases)...)), optalg;)
-    # SciMLBase.strip_solution(sol) # make this serialize nicer
-end
+# rpfit_cases = Table(cases = [(1,), (2,), (4,), (5,), (6,), (1,6)],
+#         p0 = fill([0.5, -0.3, 0], 7),
+#         trans = fill(trans_Rp, 7))
+# rpfits = map(rpfit_cases) do case
+#     sol = @time solve(OP(obj_npf, case.p0, (case.trans, make_Rp_pass(case.cases)...)), optalg;)
+#     # SciMLBase.strip_solution(sol) # make this serialize nicer
+# end
 
 # -----------------------------
 # Fit k by interpolating at four values
@@ -352,7 +352,11 @@ mcfit_cases = Table(cases = repeat([(1,), (6,), (1, 6), (1, 4, 6)], 3),
 
 mcfits = map(mcfit_cases) do case
     sol = @time solve(OP(obj_nmc, case.p0, (case.trans, make_mc_pass(case.cases)...)), optalg;)
+    if !SciMLBase.successful_retcode(sol.retcode)
+        @warn "Optimization did not converge for cases $(case.cases), transfrom $(case.trans)"
+    end
     # @time solve(OP(obj_nmc, case.p0, (case.trans, make_mc_pass(case.cases)...)), optalg; show_trace=true)
+    sol.u
     # SciMLBase.strip_solution(sol) # make this serialize nicer
 end
 
@@ -371,19 +375,19 @@ end
 
 function get_sol_mc(casenum, fitnum)
     case = filter(x->parse(Int, x.name) == casenum, cases_Rps)[1]
-    sol = gen_sol_pd(mcfits[fitnum].u, mcfit_cases[fitnum].trans, case.pomc)
+    sol = gen_sol_pd(mcfits[fitnum], mcfit_cases[fitnum].trans, case.pomc)
 end
-function get_sol_Rp(casenum, fitnum)
-    case = filter(x->parse(Int, x.name) == casenum, cases_Rps)[1]
-    sol = gen_sol_pd(rpfits[fitnum].u, rpfit_cases[fitnum].trans, case.pop)
-end
+# function get_sol_Rp(casenum, fitnum)
+#     case = filter(x->parse(Int, x.name) == casenum, cases_Rps)[1]
+#     sol = gen_sol_pd(rpfits[fitnum], rpfit_cases[fitnum].trans, case.pop)
+# end
 
 # Choose a favored fit for plotting, etc.
 # fitnum = 3 # 2&8, interp
 # fitnum = 7 # 2&8, MYEGA
 fitnum = 11 # 2&8, sigmoid
 
-bestfit = transform(mcfit_cases[fitnum].trans, mcfits[fitnum].u)
+bestfit = transform(mcfit_cases[fitnum].trans, mcfits[fitnum])
 @info "Chosen fit" bestfit
 bestfit.N.val |> u"μm^-3"
 bestfit.S.val/fillvol |> NoUnits
@@ -392,31 +396,30 @@ bestfit.C |> u"m^0.5"
 errs = Table(map(cases_Rps[[1, 2, 3, 4, 5]]) do case
     i = parse(Int, case.name)
     PBM = get_sol_mc(i, fitnum)
-    PP = get_sol_Rp(i, 6)
+    # PP = get_sol_Rp(i, 6)
     PPi = case.sol_p
     errf = (model, tweight)->obj_expT(model, case.fitdat; tweight)
     PBM_T = sqrt(errf(PBM, 0))*u"K"
-    PP_T = sqrt(errf(PP, 0))*u"K"
+    # PP_T = sqrt(errf(PP, 0))*u"K"
     PPi_T = sqrt(errf(PPi, 0))*u"K"
     t_end_est = ustrip(u"hr", sum(case.fitdat.t_end)/2)
     PBM_t = sqrt(errf(PBM, 1) - errf(PBM, 0))/t_end_est
     @info "check" PBM_t PBM.t[end] t_end_est
-    PP_t = sqrt(errf(PP, 1) - errf(PP, 0))/t_end_est
+    # PP_t = sqrt(errf(PP, 1) - errf(PP, 0))/t_end_est
     PPi_t = sqrt(errf(PPi, 1) - errf(PPi, 0))/t_end_est
     pch = case.pop.pch(Inf*u"s") |> u"mTorr"
     Tsh = case.pop.Tsh(Inf*u"s") |> u"°C" |> float
-    return (;name=case.name, PBM_T, PBM_t, PP_T, PP_t, PPi_T, PPi_t, pch, Tsh)
+    return (;name=case.name, PBM_T, PBM_t, PPi_T, PPi_t, pch, Tsh)
 end)
 
 # Save results to disk
 safesave(datadir("exp_pro", "simtra_sucrose_fitdata.jld2"), Dict("fitdats"=>cases.fitdat))
-safesave(datadir("exp_pro", "simtra_sucrose_fitresults.jld2"), @strdict errs mcfit_cases mcfits rpfit_cases rpfits)
+safesave(datadir("exp_pro", "simtra_sucrose_fitresults.jld2"), @strdict errs mcfit_cases mcfits cases_Rps)
 
 # Load results from disk for replotting without recomputing
 fitdats = load(datadir("exp_pro", "simtra_sucrose_fitdata.jld2"))["fitdats"]
 results = load(datadir("exp_pro", "simtra_sucrose_fitresults.jld2"))
-@unpack errs, mcfit_cases, mcfits, rpfit_cases, rpfits = results
-
+@unpack errs, mcfit_cases, mcfits, cases_Rps = results
 
 
 begin
