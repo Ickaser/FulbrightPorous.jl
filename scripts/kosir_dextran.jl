@@ -56,7 +56,7 @@ N = ConstPhysProp(N_typical)
 S = ConstPhysProp(5*V_typical) # = 5*V_typ^2*N_typ
 C = 2e-1u"m^0.5"
 Rs = 0.5u"cm^2*Torr*hr/g"
-k0 = 1e-14u"1/s"
+k0 = 0.0u"1/s"
 
 po_base = ParamObjPikal(Rp_g, hf0, cbase, ρsolution, Kshf_g, Av, Ap, pch, Tsh) 
 pomc_base = ParamObjMC([
@@ -85,7 +85,7 @@ cases_pdfit = Table(map(cases, pdends) do case, pdend
     pomc = @set pomc_base.csolid = case.csolid
     @reset pomc.N = ConstPhysProp(N_sem)
     @reset pomc.S = ConstPhysProp(S_sem)
-    merge(case, (;pdfit, po, pomc))
+    merge(case, (;pdfit, po, pomc, N_sem, S_sem))
 end)
 
 begin
@@ -155,45 +155,46 @@ end
 # pass123 = make_mcpass([1, 2, 3])
 # pass45 = make_mcpass([4, 5])
 
+# Ignore microcollapse kinetics in fit: treat as known at 0
 porous_nt = FulbrightPores.porous_transform_bounded(Vfill)
-myega_nt = as((;k_f=as(MYEGA_k, as((k0 = TVScale(1e42u"s^-1") ∘ TVExp(),
-            K1 = TVScale(2.0e4u"K") ∘ TVExp(),
-            K2 = TVScale(1e2u"K") ∘ TVExp() ,)))))
-# plot(Tran, transform(myega_nt, zeros(3)).k_f.(Tran), yscale=:log10, label="MYEGA, def")
-sigma_nt = FulbrightPores.sigmoid_transform_bounded(1e-8u"s^-1", 1.0u"K")
-# plot(Tran, transform(sigma_nt, zeros(4)).k_f.(Tran), yscale=:log10, label="MYEGA, def")
-trans_myega = merge(porous_nt, myega_nt)
-trans_sigma = merge(porous_nt, sigma_nt)
+# myega_nt = as((;k_f=as(MYEGA_k, as((k0 = TVScale(1e42u"s^-1") ∘ TVExp(),
+#             K1 = TVScale(2.0e4u"K") ∘ TVExp(),
+#             K2 = TVScale(1e2u"K") ∘ TVExp() ,)))))
+# sigma_nt = FulbrightPores.sigmoid_transform_bounded(1e-8u"s^-1", 1.0u"K")
+# trans_myega = merge(porous_nt, myega_nt)
+# trans_sigma = merge(porous_nt, sigma_nt)
 
 NTV, STV, CTV, RsTV = map(key->getproperty(porous_nt, key), (:N, :S, :C, :Rs))
-remap_vars(fitprm) = vcat(repeat(fitprm[1:2], 4), fitprm[3:end])
-trans_nm = as((separate=as(Vector, as((N=NTV, S=STV)), 4),
-                shared=as((C=CTV, Rs=RsTV, k_f=myega_nt.k_f)),))
-trans_ns_sem_s = as((C=CTV, Rs=RsTV, k_f=sigma_nt.k_f))
-trans_ns_sem = as((separate=as(Vector, as((C=CTV,)), 4),
-                shared=as((Rs=RsTV, k_f=sigma_nt.k_f)),))
-trans_ns = as((separate=as(Vector, as((N=NTV, S=STV)), 4),
-                shared=as((C=CTV, Rs=RsTV, k_f=sigma_nt.k_f)),))
+trans_cr = as((C=CTV, Rs=RsTV))
+# Other transforms considered other fits:
+# trans_nm = as((separate=as(Vector, as((N=NTV, S=STV)), 4),
+#                 shared=as((C=CTV, Rs=RsTV, k_f=myega_nt.k_f)),))
+# trans_ns_sem = as((separate=as(Vector, as((C=CTV,)), 4),
+#                 shared=as((Rs=RsTV, k_f=sigma_nt.k_f)),))
+# trans_ns = as((separate=as(Vector, as((N=NTV, S=STV)), 4),
+#                 shared=as((C=CTV, Rs=RsTV, k_f=sigma_nt.k_f)),))
 
 
-objnf_mc = OptimizationFunction((x,y)->objn_pd(x,y,tweight=1e-1, badprms=FulbrightPores.badNS), AutoForwardDiff())
+# objnf_mc = OptimizationFunction((x,y)->objn_pd(x,y,tweight=1e-1, badprms=FulbrightPores.badNS), AutoForwardDiff())
 
-@time opt1234myega = solve(OP(objnf_mc, zeros(14), (trans_ns, cases_Rp.pomc, cases_Rp.pdfit)), optalg)
+# @time opt1234myega = solve(OP(objnf_mc, zeros(14), (trans_ns, cases_Rp.pomc, cases_Rp.pdfit)), optalg)
 
-# p0_sem = vcat(repeat([-2.5], 4), zeros(4))
-p0_sem = zeros(9)
+p0_cr = zeros(TransformVariables.dimension(trans_cr))
 blankplot_hrC()
-modconvtplot!(LyoPronto.gen_nsol_pd(p0_sem, trans_ns_sem, cases_Rp.pomc, cases_Rp.pdfit)..., c=[1 2 3 4])
+modconvtplot!(LyoPronto.gen_nsol_pd(p0_cr, trans_cr, cases_Rp.pomc, cases_Rp.pdfit)..., c=[1 2 3 4])
 
-@time opt1234myegasem = solve(OP(objnf_pd, p0_sem, (trans_ns_sem, cases_Rp.pomc, cases_Rp.pdfit)), optalg, show_trace=true)
-@time opt1234myegasems = solve(OP(objnf_pd, [0.0, -3.0, 0.0, -5, 0.0, 0.0], (trans_ns_sem_s, cases_Rp.pomc, cases_Rp.pdfit)), optalg, show_trace=true)
+@time opt_1234 = solve(OP(objnf_pd, p0_cr, (trans_cr, cases_Rp.pomc, cases_Rp.pdfit)), optalg)
+@time opt_12 = solve(OP(objnf_pd, p0_cr, (trans_cr, cases_Rp.pomc[1:2], cases_Rp.pdfit[1:2])), optalg)
+# @time opt1234myegasems = solve(OP(objnf_pd, [0.0, -3.0, 0.0, -5, 0.0, 0.0], (trans_ns_sem, cases_Rp.pomc, cases_Rp.pdfit)), optalg, show_trace=true)
 
-fit_mc = transform(trans_ns, opt1234myega.u)
-fit_mc_sem = transform(trans_ns_sem, opt1234myegasem.u)
-fit_mc_sem_s = transform(trans_ns_sem_s, opt1234myegasems.u)
+fit_cr = transform(trans_cr, opt_12.u)
+fit_cr = transform(trans_cr, opt_1234.u)
+
+# fit_mc_sem = transform(trans_ns_sem, opt1234myegasem.u)
+# fit_mc_sem_s = transform(trans_ns_sem_s, opt1234myegasems.u)
 # all_pomc = [setproperties(pomc, merge(sep, fit_mc.shared)) for (pomc, sep) in zip(cases_Rp.pomc, fit_mc.separate)]
 # all_pomc = [setproperties(pomc, merge(sep, fit_mc_sem.shared)) for (pomc, sep) in zip(cases_Rp.pomc, fit_mc_sem.separate)];
-all_pomc = [setproperties(pomc, fit_mc_sem_s) for pomc in cases_Rp.pomc];
+all_pomc = [setproperties(pomc, fit_cr) for pomc in cases_Rp.pomc];
 
 sols_m = [solve(ODEProblem(pomc), Rodas3()) for pomc in all_pomc];
 cases_both = Table(cases_Rp, (pomc=all_pomc,sol_mc=sols_m))
@@ -209,6 +210,51 @@ errs = Table(map(cases_both) do case
     PP_t = sqrt(errf(PP, 1) - errf(PP, 0))/t_end_est
     return (;name=case.name, PBM_T, PP_T, PBM_t, PP_t)
 end)
+
+l = range(0u"cm", hf0, length=100)
+
+begin
+modcs = [2 4]
+myega_plots = map(cases_both, psols) do case, solp
+    blankplot_hrC(legend=:bottomright, )
+    plot!(title=case.name)
+    # plot!(Tsh, label=L"T_\mathrm{sh}", c=:black)
+    plot!(case.pdfit, nmarks=10, c=case.color)
+
+    modconvtplot!(solp, c=modcs[2], alpha=0.8, label="Pikal fit")
+    mclab = (case.name ∈ ["A3", "A5"] ? "PBM fit" : "PBM eval")
+    modconvtplot!(case.sol_mc, label=mclab, c=modcs[1], alpha=0.8)
+    if case.name ∈ ["A5", "A6", "B"]
+        plot!(ylabel="")
+        plot!(yticks=(-40:5:-15, ""), left_margin=-13Plots.px)
+    end
+    plot!(xlim=(-0.5, 20.1), ylim=(-40, -14))
+end
+
+plot()
+for (i, c) in enumerate(cases_both.color)
+    vspan!([i-1,i], c=c, alpha=0.3, label="")
+end
+e1 = groupedbar!(errs.name, [errs.PP_T errs.PBM_T], color=modcs[[2 1]], label="", ylabel=L"$T_\mathrm{f}$ error [$\degree$C]",unitformat=(x,y)->x, lw=1)
+
+lRp = blankplot_lRp()
+for (i, case) in enumerate(cases_both)
+    hdT, RpT = case.hRp
+    plot!(hdT, RpT, alpha=0.7, c=case.color, label="", seriestype=:samplemarkers, offset=i+3,step=3, m=:circle, la=0)
+    mcrpplot!(case.sol_mc, c=case.color, lw=3, label="")
+end
+plot!([Inf], [Inf], c=:gray, lw=3, label="PBM")
+scatter!([Inf], [Inf], c=:gray, label=L"T_\mathrm{f}(t)")
+plot!(xlim=(0, 0.4), ylim=(0, 15), legend=:topleft)
+plot!(xlabel=L"dry layer thickness, $h_\mathrm{d}$ [cm]", ylabel=L"$R_p$ [cm Torr hr g$^{-1}$]", guidefontfamily="Computer Modern", unitformat=(x,y)->x)
+
+plot(myega_plots..., e1, lRp, layout=@layout([grid(1,4); grid(1,2)]), size=(800,500))
+plot!(subplot=1, left_margin=15Plots.px)
+plot!(subplot=5, left_margin=15Plots.px)
+plot!(bottom_margin=15Plots.px)
+end
+savefig(plotsdir("dextran_T_semC.svg"))
+savefig(plotsdir("dextran_T_semC.pdf"))
 
 begin
 modcs = [:teal :crimson]
@@ -249,8 +295,22 @@ end
 savefig(plotsdir("dextran_T_semC_poster.svg"))
 savefig(plotsdir("dextran_T_semC_poster.pdf"))
 
+begin
+blankplot_lRp()
+for (i, case) in enumerate(cases_both)
+    hdT, RpT = case.hRp
+    plot!(hdT, RpT, alpha=0.7, c=case.color, label="", seriestype=:samplemarkers, offset=i+3,step=3, m=:o, lw=0)
+    mcrpplot!(case.sol_mc, c=case.color, lw=3, label="")
+end
+plot!([Inf], [Inf], c=:gray, lw=3, label="PBM")
+# plot!([Inf], [Inf], ls=:dash, c=:gray, alpha=0.6, lw=4, label="Pikal")
+scatter!([Inf], [Inf], c=:gray, label=L"$R_p$ from T")
+plot!(xlim=(0, 0.4), ylim=(0, 15), legend=:topleft)
+plot!(size=(400, 400), xlabel=L"dry layer thickness, $h_\mathrm{d}$ [cm]", ylabel=L"$R_p$ [cm Torr hr g$^{-1}$]", guidefontfamily="Computer Modern", unitformat=(x,y)->x)
+end
+savefig(plotsdir("dextran_Rp.svg"))
+savefig(plotsdir("dextran_Rp.pdf"))
 
-l = range(0u"cm", hf0, length=100)
 begin
 blankplot_lRp()
 for (i, case) in enumerate(cases_both)
@@ -270,46 +330,33 @@ plot!(xlim=(0, 0.4), ylim=(0, 15), legend=:topleft)
 plot!(size=(250, 250), xlabel=L"dry layer thickness, $h_\mathrm{d}$ [cm]", ylabel=L"$R_p$ [cm Torr hr g$^{-1}$]", guidefontfamily="Computer Modern", unitformat=(x,y)->x)
 end
 savefig(plotsdir("dextran_Rp_poster.svg"))
-savefig(plotsdir("dextran_Rp.pdf"))
 
 
 
-ns_SEM = Table(map(cases_Rp, fit_mc.separate, fit_mc_sem.separate) do case, fit, fitsem
-    # μ1 = π/6*sum(case.Df.f .* case.Df.D.^3)/sum(case.Df.f)
-    # N_sem = 1/μ1 |> u"mL^-1"
-    # S_sem = π^2/36 * sum(case.Df.f .* case.Df.D.^6)/sum(case.Df.f) / Vfill |> u"mL"
-    N_sem = case.pomc.N(0) |> u"μm^-3"
-    S_sem = case.pomc.S(0) |> u"μm^3"
-    C_sem = fitsem.C
+# ns_SEM = Table(map(cases_Rp, fit_mc.separate, fit_mc_sem.separate) do case, fit, fitsem
+#     # μ1 = π/6*sum(case.Df.f .* case.Df.D.^3)/sum(case.Df.f)
+#     # N_sem = 1/μ1 |> u"mL^-1"
+#     # S_sem = π^2/36 * sum(case.Df.f .* case.Df.D.^6)/sum(case.Df.f) / Vfill |> u"mL"
+#     N_sem = case.pomc.N(0) |> u"μm^-3"
+#     S_sem = case.pomc.S(0) |> u"μm^3"
+#     # C_sem = fitsem.C
 
-    # N_mod = case.sol_mc[3,end] / Vfill
-    # S_mod = case.sol_mc[4,end]*u"mm"^6 / Vfill |> u"mL"
-    N_fit = fit.N(0) |> u"mL^-1"
-    S_fit = fit.S(0) |> u"mL"
-    C_fit = fit_mc.shared.C
-    C_shared = fit_mc_sem_s.C
-    # @info "check" N S sum(case.Df.f)
-    # return (;N_sem,N_mod, N_fit, S_sem, S_mod, S_fit, C_sem, C_fit)
-    return (;case.name, N_sem, N_fit, S_sem, S_fit, C_fit, C_sem, C_shared)
-end)
-
-# @df ns_SEM scatter(:N_sem, :S_sem, scale=:log10)
-@df ns_SEM scatter((:N_sem)', (:S_sem)', label=permutedims(cases_both.name), scale=:log10)
-plot!([10^6.4, 10^7.4], [1e-6, 1e-7], ls=:dash, label="slope -1", c=:gray)
-# @df ns_SEM scatter(:N_sem, :C_sem, scale=:log10)
-@df ns_SEM scatter((:N_sem)', (:C_sem)', label=permutedims(cases_both.name), scale=:log10)
-# plot!([10^6.4, 10^7.4], [10^-0.5, 10^-1.5], label="slope -1")
-@df ns_SEM scatter((:S_sem)', (:C_sem)', label=permutedims(cases_both.name), scale=:log10)
-plot!(xlabel="S", ylabel="C")
-# plot!([1e-15, 1e-13], [10^-1.5, 10^-0.5], label="slope 2")
-
-CSV.write(datadir("exp_pro", "dextran_ns_semC.csv"), ns_SEM)
+#     # N_mod = case.sol_mc[3,end] / Vfill
+#     # S_mod = case.sol_mc[4,end]*u"mm"^6 / Vfill |> u"mL"
+#     # N_fit = fit.N(0) |> u"mL^-1"
+#     # S_fit = fit.S(0) |> u"mL"
+#     # C_fit = fit_mc.shared.C
+#     # C_shared = fit_mc_sem_s.C
+#     # @info "check" N S sum(case.Df.f)
+#     # return (;N_sem,N_mod, N_fit, S_sem, S_mod, S_fit, C_sem, C_fit)
+#     # return (;case.name, N_sem, N_fit, S_sem, S_fit, C_fit, C_sem, C_shared)
+# end)
 
 begin
 relevant_params = [:N_sem, :S_sem]
-tab_filtered = hcat([getproperty(ns_SEM, p) for p in relevant_params]...)
-row_labels = LaTeXString.("{".*ns_SEM.name .*"}")
-column_labels = LaTeXString.(["{\$$(string(key)[1])\$, "*latexify(unit(getproperty(ns_SEM[1], key)), fmt=SiunitxNumberFormatter())*"}" for key in relevant_params])
+tab_filtered = hcat([getproperty(cases_pdfit, p) for p in relevant_params]...)
+row_labels = LaTeXString.("{".*cases_pdfit.name .*"}")
+column_labels = LaTeXString.(["{\$$(string(key)[1])\$, "*latexify(unit(getproperty(cases_pdfit[1], key)), fmt=SiunitxNumberFormatter())*"}" for key in relevant_params])
 clipboard(latextabular(ustrip.(tab_filtered),
     side=row_labels, 
     adjustment=[Symbol("@{}"), :r, :S, :S, Symbol("@{}")],
