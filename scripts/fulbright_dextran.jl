@@ -1,4 +1,5 @@
 fp_plot_defaults()
+using StatsPlots: groupedbar
 
 begin
 Kv = load(datadir("exp_pro", "gravimetric_kv.jld2"))["Kv"]
@@ -176,7 +177,7 @@ N = ConstPhysProp(N_typical)
 S = ConstPhysProp(V_typical) # = V_typ^2*N_typ
 C = 2e-1u"m^0.5"
 Rs = 0.5u"cm^2*Torr*hr/g"
-k0 = 1e-14u"1/s"
+k0 = 0.0u"1/s"
 
 pop1 = ParamObjPikal([
     (Rp_g, hf0, csolid, ρsolution),
@@ -250,29 +251,37 @@ errs = Table(map(cases_Rps) do case
 end)
 
 begin
-e1 = StatsPlots.groupedbar(errs.name, [errs.sh_T errs.sep_T], label="", ylabel=L"$T_\mathrm{f}$ error", c=[2 4], lw=1)
-e2 = StatsPlots.groupedbar(errs.name, [errs.sh_t errs.sep_t], label="", ylabel=L"$t_\mathrm{end}$ rel. error", c=[2 4], lw=1)
+e1 = @df errs groupedbar(:name, [:sh_T :sep_T], label="", ylabel=L"$T_\mathrm{f}$ error", c=[2 4], lw=1)
+e2 = @df errs groupedbar(:name, [:sh_t :sep_t], label="", ylabel=L"$t$ rel. error", c=[2 4], lw=1)
+plot!(e1, left_margin=30Plots.px)
+plot!(e2, left_margin=30Plots.px)
+vspan!(e2, [0, 1], c=:lightgray, label="")
 pls = map(cases_Rps) do case 
     plT = blankplot_hrC()
-    # plot!(case.fitdat, title=case.name)
-    @df case.dat exptfplot!(:t, :T1, :T2, :T3, :T4, labsuffix=", full", nmarks=20)
-    tendplot!(case.fitdat.t[case.fitdat.Tf_iend[1]], label="end useful")
-    tendplot!(case.fitdat.t_end)
-    modconvtplot!(case.sol_p, label="3PP fit, $(case.name)")
-    modconvtplot!(gen_sol_pd(rp_all.u, trans_Rp, case.pop), c=:purple, label="3PP fit, all")
+    @df case.dat exptfplot!(:t, :T1, :T2, :T3, :T4, label="", seriestype=:line, marker=:none)
+    plot!(case.fitdat, title=case.name, nmarks=10, sampmarks=true, markeralpha=0.6)
+    # tendplot!(case.fitdat.t[case.fitdat.Tf_iend[1]], label="end useful")
+    # tendplot!(case.fitdat.t_end)
+    modconvtplot!(case.sol_p, label="Pikal fit to case", alpha=0.7)
+    modconvtplot!(gen_sol_pd(rp_all.u, trans_Rp, case.pop), c=:purple, label="Pikal fit to all", alpha=0.7)
     plot!(ylim=(-45, 10))
-    plot!(legend = :top, legend_columns=2)
+    # plot!(legend = :top, legend_columns=2)
+    plot!(legend=:none)
+    if case.name == "1"
+        plot!(legend=(0.0, -0.6), legendfontsize=11, left_margin=20Plots.px)
+    else
+        plot!(ylabel="", left_margin=-15Plots.px)
+    end
     plot!(case.pop.Tsh, tmax=case.fitdat.t[end], c=:black, label=L"T_{sh}")
     return plT
 end
-plot(pls..., e1, e2, layout=(3,2), size=(800, 800), legend=:bottomright)
+plot(pls..., e1, e2, layout=@layout([grid(1,4); _ grid(1,2){0.8w}]), size=(800, 400))
 # mathjax = KW(:include_mathjax=>"cdn")
 # plot!(extra_plot_kwargs=mathjax, legend=:right, ticks=:native) # For Plotly
 # plot!(subplot=4, right_margin=150Plots.px)
 end
 savefig(plotsdir("fulbright_dextran_T.svg"))
-savefig(plotsdir("fulbright_dextran_T.pdf"))
-# savefig("fulbright_dextran.html")
+# Manually adjust legend before converting to PDF
 
 l = range(0u"cm", hf0, length=100)
 begin
@@ -293,16 +302,42 @@ end
 
 begin
 marks = [:o, :utriangle, :square, :diamond]
+csamp = [90, 80, 70, 50]
+cs = stack([colormap("blues")[csamp],
+            colormap("oranges")[csamp],
+            colormap("greens")[csamp],
+            palette([:purple, :white], 7)[1:4],
+            ])
+
+pls = map((dat1nm, dat2nm, dat3nm, dat4nm), 1:4) do dat, i
+    pln = blankplot_hrC(ylabel=L"T")
+    labs = ["Exp. $i, \$T_\\mathrm{f$j}\$" for j in 1:4] |> permutedims
+    nucdat = filter(x->x.phase==1, dat)
+    @df nucdat exptfplot!(:t, :T1, :T2, :T3, :T4, labels=labs, sampmarks=true, nmarks=20, c=cs[:,i]', markershape=permutedims(marks))
+    i ∈ 1:3 && plot!(xlabel="", bottom_margin=-15Plots.px)
+    plot!(xlim=(1,2.8), ylim=(-15, 0))
+end
+pln = plot(pls..., layout=(4,1), size=(400,800))
+
 plr = blankplot_lRp()
-for case in cases_Rps[4:-1:1]
+for case in cases_Rps[1:4]
+    j = tryparse(Int, case.name)
     for (i, hRp) in enumerate(case.hRps)
         hdT, RpT = hRp
-        plot!(hdT, RpT, c=tryparse(Int, case.name), marker=marks[i], 
-        seriestype=:samplemarkers, step=40, offset=mod1(i, 4)*10, 
-        alpha=0.7, label=(i==1 ? "Rp from T, $(case.name)" : nothing))
+        plot!(hdT, RpT, c=cs[i,j], marker=marks[i], 
+        seriestype=:samplemarkers, step=60, offset=mod1(i, 4)*8+ (mod(j,0:3))*10, 
+        linealpha=0.3, 
+        # label=(i==1 ? "Rp from T, $(case.name)" : nothing)
+        label=""
+        )
     end
 end
 plot!(xlim=(0, 0.3), ylim=(0, 5))
+
+plot!(pln, plr, size=(600, 400))
 end
 savefig(plotsdir("fulbright_dextran_rawRp.svg"))
 savefig(plotsdir("fulbright_dextran_rawRp.pdf"))
+
+begin
+end
