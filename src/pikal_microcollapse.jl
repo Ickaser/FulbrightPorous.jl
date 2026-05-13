@@ -186,5 +186,5 @@ function ODEProblem(po::ParamObjMC; u0=calc_u0(po), tspan=(0.0, 200.0))
     t0 = LyoPronto.get_t0(po)
     tspan = @reset tspan[1] = t0
     return ODEProblem{true}(lyo_mc_dae_f, u0, tspan, po; 
-        tstops=tstops, callback=end_drying_callback)
+        tstops=tstops, callback=end_drying_callback, initializealg=BrownFullBasicInit())
 end
