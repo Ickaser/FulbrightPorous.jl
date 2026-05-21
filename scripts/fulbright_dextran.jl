@@ -146,7 +146,7 @@ fitdat4 = @df dat4 PrimaryDryFit(:t[0u"hr".< :t] ,
     );
     t_end=t_end4
 )
-plot(fitdat4)
+# plot(fitdat4, nmarks=10, sampmarks=true)
 
 
 end
@@ -224,11 +224,11 @@ obj_Rpf = OptimizationFunction((x,y)->obj_pd(x,y,tweight=1e-1), AutoForwardDiff(
 
 single_Rps = map(cases) do case
     (;name, pop, fitdat, dat) = case
-    u0 = zeros(3)
+    u0 = [-4.0, 1.0, 0.0]
     @time opt = solve(OP(obj_Rpf, u0, (trans_Rp, pop, fitdat)), optalg)#, g_tol=1e-6)
     Rp = transform(trans_Rp, opt.u).Rp
     sol = gen_sol_pd(opt.u, trans_Rp, pop, fitdat)
-    @info "analyis" name opt Rp
+    @info "analyis" name opt Rp sol.retcode
     hRps = map(x->calc_hRp_T(case.pop, case.fitdat, i=x), 1:length(fitdat.Tfs))
     return (opt=opt, sol_p=sol, Rp=Rp, hRps=hRps)
 end;
@@ -272,7 +272,7 @@ pls = map(cases_Rps) do case
     else
         plot!(ylabel="", left_margin=-15Plots.px)
     end
-    plot!(case.pop.Tsh, tmax=case.fitdat.t[end], c=:black, label=L"T_{sh}")
+    plot!(case.pop.Tsh, tmax=case.fitdat.t[end], c=:black, label=L"T_\mathrm{sh}")
     return plT
 end
 plot(pls..., e1, e2, layout=@layout([grid(1,4); _ grid(1,2){0.8w}]), size=(800, 400))
@@ -313,7 +313,11 @@ pls = map((dat1nm, dat2nm, dat3nm, dat4nm), 1:4) do dat, i
     pln = blankplot_hrC(ylabel=L"T")
     labs = ["Exp. $i, \$T_\\mathrm{f$j}\$" for j in 1:4] |> permutedims
     nucdat = filter(x->x.phase==1, dat)
-    @df nucdat exptfplot!(:t, :T1, :T2, :T3, :T4, labels=labs, sampmarks=true, nmarks=20, c=cs[:,i]', markershape=permutedims(marks))
+    if i ∈ 3:4
+        @df nucdat exptfplot!(:t, :T1, :T2, :T3, :T4, labels=labs, sampmarks=true, nmarks=20, c=cs[:,i]', markershape=permutedims(marks))
+    else
+        @df nucdat exptfplot!(:t, :T1, :T2, :T3, labels=labs, sampmarks=true, nmarks=20, c=cs[:,i]', markershape=permutedims(marks))
+    end
     i ∈ 1:3 && plot!(xlabel="", bottom_margin=-15Plots.px)
     plot!(xlim=(1,2.8), ylim=(-15, 0))
 end
@@ -339,5 +343,110 @@ end
 savefig(plotsdir("fulbright_dextran_rawRp.svg"))
 savefig(plotsdir("fulbright_dextran_rawRp.pdf"))
 
-begin
+function regress_line(xs, ys)
+    n = length(xs)
+    @assert n == length(ys)
+    sx = sum(xs)
+    sy = sum(ys)
+    sxx = sum(xs.^2)
+    syy = sum(ys.^2)
+    sxy = sum(xs .* ys)
+    denom = n*sxx - sx^2
+    m = (n*sxy - sx*sy) / denom
+    b = (sxx*sy - sx*sxy) / denom
+    return m, b
 end
+
+
+begin
+ends = fill(NaN*u"cm", (4, 4))
+ends[1,1] = 0.16u"cm"
+ends[1,3] = 0.06u"cm"
+ends[2,2] = 0.12u"cm"
+ends[4,1] = 0.19u"cm"
+ends[4,2] = 0.21u"cm"
+ends[4,3] = 0.21u"cm"
+ends[3,1] = 0.19u"cm"
+ends[3,2] = 0.25u"cm"
+ends[3,3] = 0.16u"cm"
+
+lines = map(enumerate(cases_Rps[1:4])) do (j, case)
+    Table(map(enumerate(case.hRps)) do (i, hRp)
+        hdT, RpT = hRp
+        if !isnan(ends[j,i])
+            hdT = filter(x->x<ends[j,i], hdT)
+            RpT = RpT[begin:length(hdT)]
+        end
+        A1, R0 = regress_line(hdT, RpT) 
+        (;R0, A1)
+    end)
+end
+pls = map(cases_Rps[1:4]) do case
+    plr = blankplot_lRp()
+    j = tryparse(Int, case.name)
+    for (i, hRp) in enumerate(case.hRps)
+        hdT, RpT = hRp
+        if !isnan(ends[j,i])
+            hdT = filter(x->x<ends[j,i], hdT)
+            RpT = RpT[begin:length(hdT)]
+        end
+        (;R0, A1) = lines[j][i]
+        plot!(l, l*A1.+R0, c=cs[i,j], label="")
+
+        plot!(hdT, RpT, c=cs[i,j], marker=marks[i], 
+        seriestype=:samplemarkers, step=10, offset=mod1(i, 4)*8+ (mod(j,0:3))*10, 
+        linealpha=0.0, 
+        label=(i==1 ? "Rp from T, $(case.name)" : nothing)
+        # label=""
+        )
+    end
+    plot!(xlim=(0.0, 0.2), ylim=(0, 3))
+end
+plot(pls...)
+
+
+end
+
+begin
+plot(layout=(4,1), size=(400, 400))
+t_res = map((dat1nm, dat2nm, dat3nm, dat4nm), 1:4) do dat, i
+    labs = ["Exp. $i, \$T_\\mathrm{f$j}\$" for j in 1:4] |> permutedims
+    Ts = map(i->getproperty(dat, Symbol("T$i"))[begin:180], 1:4)
+    i_nucs = map(Ts) do T
+        i_nuc = argmax(savitzky_golay(T.|>u"K", 3, 1; deriv=1).y) -1
+        i_nuc
+    end
+    i_ress = map(Ts, i_nucs) do T, i_nuc
+        findlast(x->x > -10u"degC", T)
+    end
+
+    nucdat = filter(x->x.t < 3u"hr", dat)
+    @df nucdat exptfplot!(:t, :T1, :T2, :T3, :T4, labels=labs, sampmarks=true, nmarks=20, c=cs[:,i]', markershape=permutedims(marks), subplot=i)
+    for (j, (i_nuc, i_res)) in enumerate(zip(i_nucs, i_ress))
+        # plot!([dat.t[i_nuc], dat.t[i_res]], Ts[j][[i_nuc,i_res]], c=:black, arrow=true, label="", subplot=i)
+        plot!(dat.t[i_nuc:i_nuc], Ts[j][i_nuc:i_nuc], marker=:star, c=:red, label="", subplot=i)
+    end
+    i ∈ 1:3 && plot!(xlabel="", bottom_margin=-15Plots.px)
+    plot!(xlim=(1,2.8), ylim=(-15, 0))
+    return (i_ress .- i_nucs).*u"minute"
+end
+tres_plot = plot!()
+end
+
+begin
+pl_a1t = plot(u"hr", u"hr*cm*Torr/g", size=(400, 300))
+for (tt, line, i) in zip(t_res, lines, 1:4)
+    scatter!(tt[1:length(line)], line.A1, c=cs[:,i], marker=marks, label="")
+end
+plot!(xlabel="Time after nucleation above -10°C", ylabel="Initial slope", unitformat=:square)
+end
+
+begin
+plot(pln, plr, pl_a1t, layout=(1,3), size=(1000, 400))
+plot!(left_margin=20Plots.px, subplot=1)
+for i in 4:6; plot!(subplot=i, bottom_margin=20Plots.px); end
+for i in 1:3; plot!(subplot=i, xticks=(1.0:0.5:2.5, [])); end
+plot!()
+end
+savefig(plotsdir("fulbright_dextran_A1_vs_crysttime.svg"))
+savefig(plotsdir("fulbright_dextran_A1_vs_crysttime.pdf"))
