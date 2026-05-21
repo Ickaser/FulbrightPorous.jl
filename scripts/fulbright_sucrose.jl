@@ -328,25 +328,31 @@ cases = Table([ (name="1", pop=pop1, pomc=pomc1, fitdat=fitdat1, dat=dat1),
                 (name="7", pop=pop7, pomc=pomc7, fitdat=fitdat7, dat=dat7),
                 ])
 
-trans_Rp = Rp_transform_basic(0.8u"cm^2*Torr*hr/g", 14u"cm*Torr*hr/g", 1e0u"1/cm")
-obj_Rpf = OptimizationFunction((x,y)->obj_pd(x,y,tweight=1e-1), AutoForwardDiff(chunksize=3))
+trans_Rp = Rp_transform_basic(0.01u"cm^2*Torr*hr/g", 14u"cm*Torr*hr/g", 1e0u"1/cm")
+# obj_Rpf = OptimizationFunction((x,y)->obj_pd(x,y,tweight=1e-1, badprms=x->x.Rp.R0<1e-4u"cm^2*Torr*hr/g"), AutoForwardDiff(chunksize=3))
 # obj_Rpf = OptimizationFunction(obj_pd, AutoForwardDiff(chunksize=3))
-@time obj_Rpf([0.0, 1.0, 0.0], (trans_Rp, pop1, fitdat1))
 
-obj_npf = OptimizationFunction((x,y)->LyoPronto.objn_pd(x,y,tweight=1e-1), AutoForwardDiff())
+obj_npf = OptimizationFunction((x,y)->LyoPronto.objn_pd(x,y,tweight=1e-1, badprms=x->x.Rp.R0<1e-4u"cm^2*Torr*hr/g"), AutoForwardDiff())
 
 rp123 = @time solve(OP(obj_npf, fill(0.0, 3), (trans_Rp, cases.pop[1:3], cases.fitdat[1:3])), optalg;)
 
 
 single_Rps = map(cases) do case
     (;name, pop, fitdat, dat) = case
-    u0 = (name == "5" ? [0., 2., 5.] : [0., 0., 0.] )
-    # u0 = [0.0, 0.0, 0.0]
-    @time opt = solve(OP(obj_Rpf, u0, (trans_Rp, pop, fitdat)), optalg)#, g_tol=1e-6)
+    u0 = if name ∈ ("4","5") 
+        [0.0, 1.5, 2] 
+    elseif name == "2"
+        [0.0, 1.0, 2.0]
+    else 
+        [0.0, 1.0, 1.0]
+    end
+    # @time opt = solve(OP(obj_Rpf, u0, (trans_Rp, pop, fitdat)), optalg)#, g_tol=1e-6)
+    nls_f = NonlinearFunction(fitdat; tweight=1e-2)
+    @time opt = solve(NonlinearLeastSquaresProblem(nls_f, u0, p=(trans_Rp, pop, fitdat)), LevenbergMarquardt(), reltol=1e-6)
     !SciMLBase.successful_retcode(opt.retcode) && @warn "Unsuccessful fit!!" name 
     Rp = transform(trans_Rp, opt.u).Rp
     sol = gen_sol_pd(opt.u, trans_Rp, pop, fitdat)
-    @info "analyis" name opt Rp
+    @info "analyis" name opt Rp sol.retcode
     hRps = map(x->calc_hRp_T(case.pop, case.fitdat, i=x), 1:4)
     return (opt=opt.u, sol_p=sol, Rp=Rp, hRps=hRps)
 end
@@ -354,6 +360,7 @@ end
 
 cases_Rps = Table(cases, single_Rps)
 
+begin
 pls = map(cases_Rps) do case 
     plT = blankplot_hrC()
     plot!(case.fitdat, title=case.name, nmarks=15)
@@ -363,7 +370,9 @@ pls = map(cases_Rps) do case
     return plT
 end
 plot(pls..., layout=(3,2), size=(800, 1000))
+end
 
+begin
 l = range(0u"cm", hf0, length=100)
 pls = map(cases_Rps) do case
     plr = blankplot_lRp()
@@ -376,6 +385,7 @@ pls = map(cases_Rps) do case
     return plr
 end
 plot(pls..., layout=(3,2), size=(800, 1000))
+end
 
 function make_mcpass(casenums)
     subdat = filter(x->parse(Int, x.name)∈casenums, cases)
@@ -397,7 +407,7 @@ obj_mc(fitprm, tpf) = objn_pd(fitprm, tpf; badprms=FulbrightPores.badNS, tweight
 objf_mc = OptimizationFunction(obj_mc, AutoForwardDiff(chunksize=4))
 objf_mc(rand(7), (trans_myega, pass123...))
 
-p0_sigma = [0, 0, -1, 0.1, 0, 1, 1, 1]
+p0_sigma = [-1, 0, -1, 0.1, 0, 2, -1, 1]
 @time opt123sigm = solve(OP(objf_mc, p0_sigma, (trans_sigma, pass123...)), optalg, time_limit=15)
 # @time opt45sigm = solve(OP(objnf_sigma, p0_sigma, pass45, lb=lb_sigm, ub=ub_sigm), optalg, maxiters=50, time_limit=15)
 @time opt45sigm = solve(OP(objf_mc, p0_sigma, (trans_sigma, pass45...)), optalg, time_limit=15)
@@ -415,10 +425,11 @@ p0_myega = [0, 0, -1, 0.1, 1, 0, 0]
 # split_fit_prms(fitprm_plus) = vcat(fitprm_plus[1:2], fitprm_plus[5:end]), vcat(fitprm_plus[3:4], fitprm_plus[5:end])
 remap_vars(fitprm) = vcat(fitprm[1:2], fitprm[1:2], fitprm[1:2], fitprm[3:end])
 # trans_2m = as((p1=as((porous_nt[1], porous_nt[2])), p2=as(porous_nt), k_f=as(myega_nt)))
-trans_2m = as((separate=as(Vector, as((N=porous_nt.N, S=porous_nt.S)), 3),
+trans_2s = as((separate=as(Vector, as((N=porous_nt.N, S=porous_nt.S)), 3),
                 sep_inds=Constant([1, 1, 1, 2, 2, 3]),
-                shared=merge(as((C=porous_nt.C, Rs=porous_nt.Rs)), myega_nt),))
-trans_2s = @set trans_2m.shared.k_f = sigma_nt.k_f
+                shared=merge(as((C=porous_nt.C, Rs=porous_nt.Rs)), sigma_nt),))
+trans_2m = @set trans_2s.shared.k_f = myega_nt.k_f
+trans_2s_k = @set trans_2s.shared = merge(trans_2s.shared, K_transform_basic(Kv.val))
 function gen_pbmsols(opt, tr)
     sols = if hasproperty(tr, :shared)
         gen_nsol_pd(opt, tr, cases.pomc)
@@ -430,28 +441,26 @@ function gen_pbmsols(opt, tr)
     return Table((sol_mc=sols,))
 end
 
-# trans_2m = as((p1=as(porous_nt), p2=as(porous_nt), k_f=as(myega_nt)))
-# trans_2s = as((p1=as(porous_nt), p2=as(porous_nt), k_f=as(sigma_nt)))
-objf_mc_c5 = OptimizationFunction((x,y)->LyoPronto.objn_pd(x,y; badprms=FulbrightPores.badNS, tweight=1e-1), AutoForwardDiff(chunksize=6))
+objf_mc_c5 = OptimizationFunction((x,y)->LyoPronto.objn_pd(x,y; badprms=FulbrightPores.badNS, tweight=1e-1), AutoForwardDiff(chunksize=5))
+objf_mc_c6 = OptimizationFunction((x,y)->LyoPronto.objn_pd(x,y; badprms=FulbrightPores.badNS, tweight=1e-1), AutoForwardDiff(chunksize=6))
 
 p0_2m = remap_vars(p0_myega)
-@time opt_2m = solve(OP(objf_mc_c5, p0_2m, (trans_2m, cases_Rps.pomc, cases_Rps.fitdat)), optalg, time_limit=15)
+p0_2m = remap_vars(opt123myega)
+@time opt_2m = solve(OP(objf_mc_c6, p0_2m, (trans_2m, cases_Rps.pomc, cases_Rps.fitdat)), optalg, time_limit=15)
 
-p0_2s = remap_vars(p0_sigma)
+p0_2s = remap_vars(p0_sigma .+ [-2.0, 1.0, 0, 0, 0, 0, -1, 0])
 # p0_2s = remap_vars(opt123sigm.u)
-p0_2s[5] -= 1.0
-p0_2s[6] += 1.0
-p0_2s[11] -= 1.0
-@time opt_2s = solve(OP(objf_mc_c5, p0_2s, (trans_2s, cases_Rps.pomc, cases_Rps.fitdat)), optalg, time_limit=15)
+@time opt_2s = solve(OP(objf_mc_c6, p0_2s, (trans_2s, cases_Rps.pomc, cases_Rps.fitdat)), optalg, time_limit=15)
+@time opt_2s_k = solve(OP(objf_mc_c5, vcat(opt_2s.u, 0.1), (trans_2s_k, cases_Rps.pomc, cases_Rps.fitdat)), optalg, time_limit=15)
 
 
-allopts = [opt123sigm, opt123myega, opt45sigm, opt45myega, opt_2m, opt_2s, opt7sigm]
+allopts = [opt123sigm, opt123myega, opt45sigm, opt45myega, opt_2m, opt_2s, opt7sigm, opt_2s_k]
 # check for successes
 [(s = SciMLBase.successful_retcode(opt); !s && @warn "Unsuccessful opt! Check details"; s) for opt in allopts]
 
-fits = Table((opt=[opt123sigm.u, opt123myega.u, opt45sigm.u, opt45myega.u, opt_2m.u, opt_2s.u, opt7sigm.u], 
-              tr=[trans_sigma, trans_myega, trans_sigma, trans_myega, trans_2m, trans_2s, trans_sigma],
-              cases=[(1,2,3), (1,2,3), (4,5), (4,5), (1,2,3,4,5, 6), (1,2,3,4,5, 6), (7,)],))
+fits = Table((opt=[opt123sigm.u, opt123myega.u, opt45sigm.u, opt45myega.u, opt_2m.u, opt_2s.u, opt7sigm.u, opt_2s_k.u], 
+              tr=[trans_sigma, trans_myega, trans_sigma, trans_myega, trans_2m, trans_2s, trans_sigma, trans_2s_k],
+              cases=[(1,2,3), (1,2,3), (4,5), (4,5), (1,2,3,4,5, 6), (1,2,3,4,5,6), (6,), (1,2,3,4,5,6)],))
 fits = Table(fits, (kf= map(fits) do x
     fitprm = transform(x.tr, x.opt)
     if hasproperty(fitprm, :shared)
@@ -464,10 +473,14 @@ fits = Table(fits, (k_type = map(x->(x.kf isa Sigmoid_k ? Sigmoid_k : MYEGA_k), 
 # push!(fits, (opt=opt_2m, tr=trans_myega, cases=(1,2,3,4,5), kf=transform(trans_myega, opt_2m.u[end-6:end]).k_f))
 # push!(fits, (opt=opt_2s, tr=trans_sigma, cases=(1,2,3,4,5), kf=transform(trans_sigma, opt_2s.u[end-7:end]).k_f))
 
+safesave(datadir("exp_pro", "fulbright_sucrose_fitresults.jld2"), Dict("fits"=>fits))
+
 # new_sols = vcat(gen_pbmsols(opt123myega, trans_myega)[1:3], gen_pbmsols(opt45myega, trans_myega)[4:5])
 # new_sols = vcat(gen_pbmsols(opt123sigm, trans_sigma)[1:3], gen_pbmsols(opt45sigm, trans_sigma)[4:5], gen_pbmsols(opt7sigm, trans_sigma)[6:6])
 # new_sols = gen_pbmsols(opt_2m, trans_2m)
 new_sols = gen_pbmsols(opt_2s, trans_2s)
+# new_sols = gen_pbmsols(opt_2s_k, trans_2s_k)
+
 cases_both = Table(cases, single_Rps, new_sols)
 
 errs = Table(map(cases_both) do case
@@ -483,6 +496,10 @@ errs = Table(map(cases_both) do case
     return (;name=case.name, PBM_T, PP_T, PBM_t, PP_t)
 end)
 
+# Kv fit: report
+Kv_fit = transform(trans_2s_k, opt_2s_k).shared.Kshf
+@show Kv_fit Kv
+
 # Plot N and S for different fits
 begin
 i = 1
@@ -491,7 +508,7 @@ cs = cgrad(:viridis)
 markers = [:circle, :square, :diamond, :utriangle, :dtriangle, :ltriangle, :rtriangle, :hexagon, :pentagon, :heptagon, :octagon]
 styles = Table((marker=markers, markersize=fill(10, 11)))
 plot(u"μm^-3", u"μm^3", xlabel="N", ylabel="S", xscale=:log10, yscale=:log10, unitformat=latexify)
-pl_fitNS = map(fits[[1,3,6,7]]) do fit # just sigmoid cases
+pl_fitNS = map(fits[[1,3,6,7,8]]) do fit # just sigmoid cases
     fitprm = transform(fit.tr, fit.opt)
     if hasproperty(fitprm, :shared)
         N_vals = fitprm.separate .|> x->x.N.val .|> u"μm^-3"
@@ -532,8 +549,8 @@ savefig(plotsdir("fulbright_5sucrose_T.pdf"))
 begin
 errnames = ["5% -20", "5% -10", "5% 0", "10% -20", "10% -30", "5%C -20"]
 err_permute = [6,1,2,3,4,5]
-e1 = @df errs[err_permute] groupedbar(errnames[err_permute], [:PBM_T :PP_T], label="", ylabel=L"$T_\mathrm{f}$ error", c=[2 3], lw=1)
-e2 = @df errs[err_permute] groupedbar(errnames[err_permute], [:PBM_t :PP_t], label="", ylabel=L"$t$ rel. error", c=[2 3], lw=1)
+e1 = @df errs[err_permute] groupedbar(errnames[err_permute], [:PBM_T :PP_T], label="", ylabel=L"$T_\mathrm{f}$ error", c=[2 3], lw=1, ylim=(0,3))
+e2 = @df errs[err_permute] groupedbar(errnames[err_permute], [:PBM_t :PP_t], label="", ylabel=L"$t$ rel. error", c=[2 3], lw=1, ylim=(0,0.28))
 pls_T1 = map(cases_both[1:3]) do case
     pl = blankplot_hrC(legend=:outerright, ylabel="T", xlabel="Time")
     plot!(case.fitdat, nmarks=10, markeralpha=0.8)
@@ -590,28 +607,47 @@ end
 
 l = range(0u"cm", hf0, length=100)
 begin
+
+listed_cases = [1,2,3]
 kind = :stats
-cs = palette(:Oranges_7)[[5,6,7]]
+cs = palette(:Oranges_7)[[3,5,7]]
 markers = [:circle :square :utriangle]
-plot(layout=@layout([grid(3,1) a]))
-plot!(subplot=1, ylims=(1e7, Inf), yscale=:log10, ywiden=1.1)
-plot!(subplot=2, ylims=(0, Inf), left_margin=15Plots.px)
-plot!(subplot=3, ylims=(0, Inf))
-plot!(subplot=4, yunitformat=latexify, ylabel="R_p")
-for case in cases_both[[1,2,3]]
-    # plot!(subplot=4, l, case.Rp.(l), ls=:dash, c=parse(Int, case.name), label="3PP $(case.name)")
-    for i in 1:4
-        hdT, RpT = case.hRps[i]
-        plot!(subplot = 4, hdT, RpT, alpha=0.6, c=cs[parse(Int, case.name)], label=(i==1 ? L"T_\mathrm{f}(t)"*", $(case.name)" : ""))
+plot(layout=@layout([grid(3,1) a{0.65w}]), size=(800,400))
+plot!(subplot=1, ylims=(1e7, Inf), yscale=:log10, ywiden=1.1, bottom_margin=-10Plots.px)
+plot!(subplot=2, ylims=(0, Inf), left_margin=15Plots.px, ywiden=1.1, bottom_margin=-10Plots.px)
+plot!(subplot=3, ylims=(0, Inf), ywiden=1.1)
+plot!(subplot=4, yunitformat=latexify, ylabel="R_p", legend=:outerright, legendfontsize=10)
+for (i, case) in enumerate(cases_both[listed_cases])
+    Tsh = round(typeof(1u"degC"), case.pop.Tsh(Inf*u"s"))
+    for j in 1:4
+        hdT, RpT = case.hRps[j]
+        nevery = max(1, length(hdT)÷10)
+        offset = (j-1)*nevery÷4 + 1
+        plot!(subplot = 4, hdT[offset:nevery:end], RpT[offset:nevery:end], alpha=0.6, 
+            c=cs[i], 
+            seriestype=:scatter, marker=markers[i],
+            label=(j==1 ? L"T_\mathrm{f}(t), T_\mathrm{sh}="*" $(Tsh)" : ""),
+            )
     end
 end
-for i in 1:3
-    poreevolplot!(cases_both[i].sol_mc, label="PBM $i"; marker=markers[i], c=cs[i], kind)
+for (i, ci) in enumerate(listed_cases)
+    Tsh = round(typeof(1u"degC"), cases_both[ci].pop.Tsh(Inf*u"s"))
+    poreevolplot!(cases_both[ci].sol_mc, label="PBM $Tsh"; 
+        c=cs[i], kind,
+        xlims=(0, Inf),
+        # seriestype=[:samplemarkers :samplemarkers :samplemarkers :line]
+        # marker=[markers[i] markers[i] markers[i] :none], 
+        seriestype=:line
+    )
+end
+for (i, ci) in enumerate(listed_cases)
+    Tsh = round(typeof(1u"degC"), cases_both[ci].pop.Tsh(Inf*u"s"))
+    plot!(subplot=4, l, cases_both[ci].Rp.(l), ls=:dash, c=palette(:Greens_7)[[3 5 7]][i], label="Pikal $(Tsh)")
 end
 # poreevolplot!(cases_both[2].sol_mc, label="PBM 2, 1&2&3"; marker=:square, kind)
 # poreevolplot!(cases_both[3].sol_mc, label="PBM 3, 1&2&3"; marker=:d, kind)
 # poreevolplot!(cases_both[6].sol_mc, label="PBM 7, 7"; marker=:utriangle, kind)
-plot!()
+plot!(subplot=4, legend=:outerright)
 end
 savefig(plotsdir("fulbright_suc_moments.svg"))
 savefig(plotsdir("fulbright_suc_moments.pdf"))
@@ -655,7 +691,7 @@ res_fit = cases_both[6].sol_mc.prob.p
 @info "Best fit params, 7:" res_fit.N res_fit.S res_fit.C res_fit.Rs res_fit.k_f
 
 
-## temp: debugging
+# temp: debugging
 
 meanT = fill(0.0u"K", maximum(fitdat1.Tf_iend))
 for (i) in eachindex(meanT)
@@ -682,7 +718,7 @@ plot(sol2n.t, dus[3,:])
 plot(sol2n.t, sol2n[2,:])
 plot(sol2n.t, newprob.p.k_f.(sol2n[2,:]*u"K"))
 
-sol1 = cases_both.sol_mc[1]
+sol1 = cases_both.sol_mc[3]
 k1 = sol1.prob.p.k_f
 
 plot(sol1.t, k1.(sol1[2,:]*u"K"))
@@ -698,6 +734,8 @@ function examine_Q(u, p, t)
     Tsub = Tf - Qshf/k_ice/Ap*hf
 end
 Tsub = examine_Q.(sol1.u, (sol1.prob.p,), sol1.t)
+plot(sol1.t*u"hr", Tsub)
+modconvtplot!(sol1)
 plot(sol1.t, k1.(Tsub))
 
 ## MCMC

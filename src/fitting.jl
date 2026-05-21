@@ -25,7 +25,7 @@ function sigmoid_transform_bounded(kf, K1; extrafac=1)
     )))
 end
 function myega_transform_basic(k0, K1, K2)
-    tr = as((
+    tr = as((;
         k_f = as(MYEGA_k, as((
             k0 = TVScale(k0) ∘ TVExp(),
             K1 = TVScale(K1) ∘ TVExp(),
