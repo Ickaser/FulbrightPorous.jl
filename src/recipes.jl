@@ -208,6 +208,7 @@ end
     if kf isa InterpK
         @series begin
             markershape --> :circle
+            label --> L"k_f"
             return kf.spl.t, kf.(kf.spl.t)
         end
     else
