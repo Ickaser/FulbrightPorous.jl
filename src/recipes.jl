@@ -287,7 +287,7 @@ end
 function DistPlot(tupsol::Tuple{ODESolution})
     sol = tupsol[1]
     po = sol.prob.p
-    mean, var, po = calc_moms(sol[end], po)
+    mean, var, po = calc_moms(sol[:, end], po)
     return DistPlot((mean, var, po))
 end
 
