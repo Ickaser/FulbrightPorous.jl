@@ -340,11 +340,11 @@ rp123 = @time solve(OP(obj_npf, fill(0.0, 3), (trans_Rp, cases.pop[1:3], cases.f
 single_Rps = map(cases) do case
     (;name, pop, fitdat, dat) = case
     u0 = if name ∈ ("4","5") 
-        [0.0, 1.5, 2] 
+        [1.0, 1.5, 2] 
     elseif name == "2"
-        [0.0, 1.0, 2.0]
+        [1.0, 1.0, 2.0]
     else 
-        [0.0, 1.0, 1.0]
+        [1.0, 1.0, 1.0]
     end
     # @time opt = solve(OP(obj_Rpf, u0, (trans_Rp, pop, fitdat)), optalg)#, g_tol=1e-6)
     nls_f = NonlinearFunction(fitdat; tweight=1e-2)
@@ -407,7 +407,7 @@ obj_mc(fitprm, tpf) = objn_pd(fitprm, tpf; badprms=FulbrightPores.badNS, tweight
 objf_mc = OptimizationFunction(obj_mc, AutoForwardDiff(chunksize=4))
 objf_mc(rand(7), (trans_myega, pass123...))
 
-p0_sigma = [-1, 0, -1, 0.1, 0, 2, -1, 1]
+p0_sigma = [-1, 0, -1, 0.1, 0, 2, -1.5, 0.5]
 @time opt123sigm = solve(OP(objf_mc, p0_sigma, (trans_sigma, pass123...)), optalg, time_limit=15)
 # @time opt45sigm = solve(OP(objnf_sigma, p0_sigma, pass45, lb=lb_sigm, ub=ub_sigm), optalg, maxiters=50, time_limit=15)
 @time opt45sigm = solve(OP(objf_mc, p0_sigma, (trans_sigma, pass45...)), optalg, time_limit=15)
@@ -448,7 +448,7 @@ p0_2m = remap_vars(p0_myega)
 p0_2m = remap_vars(opt123myega)
 @time opt_2m = solve(OP(objf_mc_c6, p0_2m, (trans_2m, cases_Rps.pomc, cases_Rps.fitdat)), optalg, time_limit=15)
 
-p0_2s = remap_vars(p0_sigma .+ [-2.0, 1.0, 0, 0, 0, 0, -1, 0])
+p0_2s = remap_vars(p0_sigma .+ [-2.0, 1.0, 0, 0, 0, 0, -1, -1])
 # p0_2s = remap_vars(opt123sigm.u)
 @time opt_2s = solve(OP(objf_mc_c6, p0_2s, (trans_2s, cases_Rps.pomc, cases_Rps.fitdat)), optalg, time_limit=15)
 @time opt_2s_k = solve(OP(objf_mc_c5, vcat(opt_2s.u, 0.1), (trans_2s_k, cases_Rps.pomc, cases_Rps.fitdat)), optalg, time_limit=15)
@@ -470,8 +470,6 @@ fits = Table(fits, (kf= map(fits) do x
     end
 end ,))
 fits = Table(fits, (k_type = map(x->(x.kf isa Sigmoid_k ? Sigmoid_k : MYEGA_k), fits)))
-# push!(fits, (opt=opt_2m, tr=trans_myega, cases=(1,2,3,4,5), kf=transform(trans_myega, opt_2m.u[end-6:end]).k_f))
-# push!(fits, (opt=opt_2s, tr=trans_sigma, cases=(1,2,3,4,5), kf=transform(trans_sigma, opt_2s.u[end-7:end]).k_f))
 
 safesave(datadir("exp_pro", "fulbright_sucrose_fitresults.jld2"), Dict("fits"=>fits))
 
@@ -549,8 +547,8 @@ savefig(plotsdir("fulbright_5sucrose_T.pdf"))
 begin
 errnames = ["5% -20", "5% -10", "5% 0", "10% -20", "10% -30", "5%C -20"]
 err_permute = [6,1,2,3,4,5]
-e1 = @df errs[err_permute] groupedbar(errnames[err_permute], [:PBM_T :PP_T], label="", ylabel=L"$T_\mathrm{f}$ error", c=[2 3], lw=1, ylim=(0,3))
-e2 = @df errs[err_permute] groupedbar(errnames[err_permute], [:PBM_t :PP_t], label="", ylabel=L"$t$ rel. error", c=[2 3], lw=1, ylim=(0,0.28))
+e1 = @df errs[err_permute] groupedbar(errnames[err_permute], [:PBM_T :PP_T], label=["PBM" "Pikal fit"], ylabel=L"$T_\mathrm{f}$ error", c=[2 3], lw=1, ylim=(0,3))
+e2 = @df errs[err_permute] groupedbar(errnames[err_permute], [:PBM_t :PP_t], label=["PBM" "Pikal fit"], ylabel=L"$t$ rel. error", c=[2 3], lw=1, ylim=(0,0.15))
 pls_T1 = map(cases_both[1:3]) do case
     pl = blankplot_hrC(legend=:outerright, ylabel="T", xlabel="Time")
     plot!(case.fitdat, nmarks=10, markeralpha=0.8)
@@ -581,11 +579,12 @@ pl_T3 = map(cases_both[6:6]) do case
     return pl
 end
 
-plot(pl_T3..., pls_T1..., pls_T2..., e1, e2, layout=@layout([grid(1,6){0.55h}; [_ grid(1,2){0.8w}]]), size=(1200, 500))
+plot(pl_T3..., pls_T1..., pls_T2..., e1, e2, layout=@layout([grid(1,6){0.55h}; [_ grid(1,2){0.8w} _]]), size=(1200, 500))
 plot!(legend=:none, top_margin=20Plots.px)
 for i in [3,4,6]; plot!(subplot=i, ylabel="", yformatter=:none, left_margin=-15Plots.px); end
 for i in [2,5]; plot!(subplot=i, ylabel="",left_margin=-5Plots.px); end
-plot!(subplot=1, legend=(0,-0.5), legendfontsize=12, left_margin=30Plots.px)
+plot!(subplot=1, legend=(0,-0.4), legendfontsize=12, left_margin=30Plots.px)
+plot!(subplot=8, legend=(1.1,0.5), legendfontsize=12, )
 end
 savefig(plotsdir("fulbright_allsucrose_T.svg"))
 # Manually adjust the legend before exporting to PDF
@@ -602,7 +601,7 @@ end
 # plot!(Tran, transform(myega_nt, zeros(3)).k_f.(Tran), label="MYEGA, def")
 # plot!(Tran, transform(sigma_nt, zeros(4)).k_f.(Tran), label="Sigmoid, def")
 # plot!(ylim=(1e-16, 1e-5), legend=:bottomright)
-plot!()
+plot!(legend=:bottomright)
 end
 
 l = range(0u"cm", hf0, length=100)
@@ -613,10 +612,6 @@ kind = :stats
 cs = palette(:Oranges_7)[[3,5,7]]
 markers = [:circle :square :utriangle]
 plot(layout=@layout([grid(3,1) a{0.65w}]), size=(800,400))
-plot!(subplot=1, ylims=(1e7, Inf), yscale=:log10, ywiden=1.1, bottom_margin=-10Plots.px)
-plot!(subplot=2, ylims=(0, Inf), left_margin=15Plots.px, ywiden=1.1, bottom_margin=-10Plots.px)
-plot!(subplot=3, ylims=(0, Inf), ywiden=1.1)
-plot!(subplot=4, yunitformat=latexify, ylabel="R_p", legend=:outerright, legendfontsize=10)
 for (i, case) in enumerate(cases_both[listed_cases])
     Tsh = round(typeof(1u"degC"), case.pop.Tsh(Inf*u"s"))
     for j in 1:4
@@ -632,7 +627,7 @@ for (i, case) in enumerate(cases_both[listed_cases])
 end
 for (i, ci) in enumerate(listed_cases)
     Tsh = round(typeof(1u"degC"), cases_both[ci].pop.Tsh(Inf*u"s"))
-    poreevolplot!(cases_both[ci].sol_mc, label="PBM $Tsh"; 
+    poreevolplot!(cases_both[ci].sol_mc, label="PBM, $Tsh"; 
         c=cs[i], kind,
         xlims=(0, Inf),
         # seriestype=[:samplemarkers :samplemarkers :samplemarkers :line]
@@ -642,11 +637,15 @@ for (i, ci) in enumerate(listed_cases)
 end
 for (i, ci) in enumerate(listed_cases)
     Tsh = round(typeof(1u"degC"), cases_both[ci].pop.Tsh(Inf*u"s"))
-    plot!(subplot=4, l, cases_both[ci].Rp.(l), ls=:dash, c=palette(:Greens_7)[[3 5 7]][i], label="Pikal $(Tsh)")
+    plot!(subplot=4, l, cases_both[ci].Rp.(l), ls=:dash, c=palette(:Greens_7)[[3 5 7]][i], label="Pikal, $(Tsh)")
 end
 # poreevolplot!(cases_both[2].sol_mc, label="PBM 2, 1&2&3"; marker=:square, kind)
 # poreevolplot!(cases_both[3].sol_mc, label="PBM 3, 1&2&3"; marker=:d, kind)
 # poreevolplot!(cases_both[6].sol_mc, label="PBM 7, 7"; marker=:utriangle, kind)
+plot!(subplot=1, ylims=(0, 2e6), yticks=[0, 1e6, 2e6], left_margin=20Plots.px, bottom_margin=-10Plots.px)
+plot!(subplot=2, ylims=(0, Inf), left_margin=15Plots.px, ywiden=1.1, bottom_margin=-10Plots.px)
+plot!(subplot=3, ylims=(0, Inf), ywiden=1.1, bottom_margin=20Plots.px)
+plot!(subplot=4, yunitformat=latexify, ylabel="R_p", legend=:outerright, legendfontsize=10, bottom_margin=20Plots.px)
 plot!(subplot=4, legend=:outerright)
 end
 savefig(plotsdir("fulbright_suc_moments.svg"))
@@ -674,7 +673,7 @@ begin
 plot(u"μm^3", NoUnits, ywiden=false, ylabel="Approx. Prob. Dens.", xlabel="Pore Size", unitformat=latexify)
 for case in cases_both[[1, 2, 3, 6, 4, 5]]
     distplot!(case.sol_mc;  disttype=:lognormal, label=case.name)
-    # plot!(yscale=:log10)
+    plot!(yscale=:log10)
     plot!(xscale=:log10)
 end
 # plot!(scale=:log10)
