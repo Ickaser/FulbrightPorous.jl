@@ -59,6 +59,13 @@ end
 Sigmoid_k(;k0, kf, K1, K2) = Sigmoid_k(k0, kf, K1, K2)
 Sigmoid_k(a) = Sigmoid_k(a...)
 function (pk::Sigmoid_k)(T)
-    e_x = exp((T-pk.K2)/pk.K1)
-    return (pk.k0 + pk.kf*e_x)/(1 + e_x)
+    x = (T-pk.K2)/pk.K1
+    if -100 < x < 100 # avoid overflow in exp
+        e_x = exp(x)
+        return (pk.k0 + pk.kf*e_x)/(1 + e_x)
+    elseif x >= 100
+        return pk.kf
+    else
+        return pk.k0
+    end
 end
