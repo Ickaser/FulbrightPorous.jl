@@ -202,7 +202,7 @@ obj_Rpf = OptimizationFunction((x,y)->obj_pd(x,y,tweight=1e-2), AutoForwardDiff(
 
 single_Rps = map(cases) do case
     (;name, pop, fitdat, dat) = case
-    u0 = [0., 0., 0.]
+    u0 = [-2, 0.5, 0.]
     @time opt = solve(OP(obj_Rpf, u0, (trans_Rp, pop, fitdat)), optalg)#, g_tol=1e-6)
     SciMLBase.successful_retcode(opt.retcode) || @warn "Optimization did not converge for Rp case $name"
     Rp = transform(trans_Rp, opt.u).Rp
@@ -308,9 +308,10 @@ const TV = TransformVariables
 T_interps = [-45.0, -34, -31, -27]u"°C" .|> u"K"
 T_interps_trans = as((;T=Constant(T_interps)))
 k_logs_trans = as((;klog=as((kl1 = TV.Identity(),
-            kl2 = TVExp(),
-            kl3 = TVExp(),
-            kl4 = TVExp()))))
+            kl2 = TVScale(10.0) ∘ TVLogistic(),
+            kl3 = TVScale(10.0) ∘ TVLogistic(),
+            kl4 = TVScale(10.0) ∘ TVLogistic(),
+            ))))
 interp_nt = as((;k_f = as(InterpK, merge(k_logs_trans, T_interps_trans))))
 porous_nt = FulbrightPores.porous_transform_bounded(fillvol)
 myega_nt = as((;k_f=as(MYEGA_k, as((k0 = TVScale(1e11u"s^-1") ∘ TVExp(),
@@ -335,7 +336,7 @@ interp_guess = [-1.0, 1, 0, 0, -1, 0, 1, -2]
 # kineticplot!(transform(trans_interp, interp_guess),  label="Interp guess")
 myega_guess = [0.1, 0.1, 0, 0, -10, 0, 0]
 # kineticplot(transform(trans_myega, myega_guess), label="MYEGA guess")
-sigma_guess = [-1.0, 1, 0, 0, 0, 0, 0, 0]
+sigma_guess = [-1.0, 1, 0, 0, 0, 0, -1, 2]
 # kineticplot(transform(trans_sigma, sigma_guess), label="MYEGA guess")
 
 mcfit_cases = Table(cases = repeat([(1,), (6,), (1, 6), (1, 4, 6)], 3),
@@ -351,6 +352,7 @@ mcfit_cases = Table(cases = repeat([(1,), (6,), (1, 6), (1, 4, 6)], 3),
 #     solve(prob, odealg_chunk4)
 # end
 
+# using ThreadTools
 mcfits = map(mcfit_cases) do case
     sol = @time solve(OP(obj_nmc, case.p0, (case.trans, make_mc_pass(case.cases)...)), optalg;)
     if !SciMLBase.successful_retcode(sol.retcode)
@@ -369,7 +371,7 @@ for i in [3,7,11]
     kineticplot!(k, markershape=marks[i], label="$(nameof(typeof(k))) fit to $(mcfit_cases[i].cases)")
 end
 # kineticplot!(transform(trans_interp, interp_guess),  label="Interp guess")
-plot!(ylim=(1e-20, 2e-5), legend=:bottomright)
+plot!(ylim=(1e-17, 2e-8), legend=:bottomright)
 end
 
 
@@ -426,12 +428,13 @@ results = load(datadir("exp_pro", "simtra_sucrose_fitresults.jld2"))
 begin
 modcs = [2, 3]
 permute = [1, 5, 2, 3, 4]
-labs = ["PBM fit to $(join(mcfit_cases[fitnum].cases, ", ", " & "))" ]
+# labs = ["PBM fit to $(join(mcfit_cases[fitnum].cases, ", ", " & "))" ]
+labs = ["Pikal fit" "PBM fit to hi-lo"]
 caselabs = ["p=$(ustrip(p))\nT=$(Int(ustrip(T)))" for (p, T) in zip(errs.pch, errs.Tsh)]
 # Terr = groupedbar(errs.name, 
 plot()
 vspan!([0  1; 1  2], color=:gray, alpha=0.3, label="")
-Terr = groupedbar!(caselabs,
+Terr = groupedbar!(caselabs[permute],
     [errs.PPi_T[permute] errs.PBM_T[permute] ], c=modcs[[2 1]], 
     label=labs, lw=1)
 plot!(xlabel="Case", ylabel=L"$T_\mathrm{f}$ error", yunitformat=:square, legend=:topleft)
@@ -440,7 +443,7 @@ plot!(xgrid=false, xminorticks=2, xtickdir=:none, xminortickdir=:none, xminorgri
 # terr = groupedbar(errs.name, 
 plot()
 vspan!([0  1; 1  2], color=:gray, alpha=0.3, label="")
-terr = groupedbar!(caselabs,
+terr = groupedbar!(caselabs[permute],
     # [errs.PBM_t errs.PPi_t errs.PP_t ], c=[2 3 4], 
     [errs.PPi_t[permute] errs.PBM_t[permute] ], c=modcs[[2 1]], 
     label=labs, lw=1)
@@ -461,7 +464,9 @@ pls = map(cases_Rps[permute], ) do case
     # title = L"$p_\mathrm{ch}="*latexify(lab_pch, env=:raw)*L"$"*"\n"*L"$T_\mathrm{sh}="*latexify(lab_Tsh, env=:raw)*L"$"
     
     plot!(;top_margin=20Plots.px, title)
-    nmarks = Int(ustrip(u"hr", case.fitdat.t_end[1]) ÷ 10)
+    # nmarks = Int(ustrip(u"hr", case.fitdat.t_end[1]) ÷ 8)
+    # nmarks = round(Int, case.fitdat.t[case.fitdat.Tf_iend][1] / case.fitdat.t_end[2]*10)
+    nmarks = 8
     # scatter!([55], [-39], label="", ms=10, msw=0, mc = casec)
     plot!(case.fitdat, nmarks=nmarks)
     # modconvtplot!(get_sol_mc(i, fitnum), label="PBM, fit to $(mcfit_cases[fitnum].cases)")
@@ -470,34 +475,39 @@ pls = map(cases_Rps[permute], ) do case
     # modconvtplot!(get_sol_Rp(i, 6), label="Pikal individual fit", c=modcs[2])
     modconvtplot!(case.sol_p, label="Pikal fit", c=modcs[2])
     modconvtplot!(get_sol_mc(i, fitnum), label="PBM fit to hi-lo", c=modcs[1])
-    plot!(xlim=(-1, 120), ylim=(-40, -28), yticks=[-40, -35, -32, -29]) 
+    plot!(ylim=(-40, -28), yticks=[-40, -35, -32, -29]) 
+    # plot!(xlim=(-1, 120), )
     plot!(legend=:none)
-    i ∈ [2, 4, 6] && plot!(ylabel="")
+    plot!(ygridalpha=0.3,)
     # i ∈ [1, 2, 3] && plot!(xlabel="")
-    i ∈ [1, 6] && plot!(bg_legend = :gray95)
+    # i ∈ [1, 6] && plot!(bg_legend = :gray95)
     if i ∈ [1] 
         plot!(left_margin=20Plots.px)
+    # elseif i ∈ [5]
+    #     plot!(ylabel="", left_margin=0Plots.px, yticks=[-40, -36, -32, -29])
     else
-        plot!(ylabel="", left_margin=-5Plots.px, yticks=[-40, -36, -32, -29])
+        plot!(ylabel="", left_margin=-20Plots.px, yticks=([-40, -35, -32, -29], ""))
     end
-    i ∈ [5, 6] && plot!(bottom_margin=20Plots.px)
     return pl
 end
-plot!(pls[5], legend=(-0.3, -0.5), legendfontsize=12)
-plot!(err_plot, legend=:none, bottom_margin=20Plots.px, left_margin=20Plots.px)
+# plot!(err_plot, legend=:none, bottom_margin=20Plots.px, left_margin=20Plots.px)
 # plot!(err_plot[1], xlabel="")
 # plot!(err_plot[2], bottom_margin=20Plots.px)
 # plot(pls..., err_plot, layout=(2,3), size=(1000, 500))
-plot(pls..., plot(err_plot[1]), plot(err_plot[2], left_margin=10Plots.px), 
-    layout=@layout([grid(1,5){0.6h} ; b{0.3w} a{0.3w} _{0.4w} _{0.1w}]), 
+plot(pls..., Terr, terr, 
+    layout=@layout([grid(1,5){0.6h} ; _ b{0.3w} a{0.3w} _ ]), 
     size=(1000, 440))
+# plot!(subplot=5, ymirror=true)
+plot!(subplot=1, legend=(0, -0.4), legendfontsize=12,)
+plot!(subplot=6, legend=:none)
+plot!(subplot=7, legend=(1.1, 0.6), legendfontsize=12,)
 end
 savefig(plotsdir("simtra_suc_fitval.svg"))
 # no PDF because takes a little manual tweaking for a good legend
 function condlabel(pop)
-    lab_pch = pop.pch(Inf*u"s") |> u"mTorr"
-    lab_Tsh = ustrip(u"degC",pop.Tsh(Inf*u"s")) |> Int
-    return L"p_\mathrm{ch}=%$(latexify(lab_pch, env=:raw))"*"\n"*L"$T_\mathrm{sh}=%$(lab_Tsh) ^\circ C$"
+lab_pch = pop.pch(Inf*u"s") |> u"mTorr"
+lab_Tsh = ustrip(u"degC",pop.Tsh(Inf*u"s")) |> Int
+return L"p_\mathrm{ch}=%$(latexify(lab_pch, env=:raw))"*"\n"*L"$T_\mathrm{sh}=%$(lab_Tsh) ^\circ C$"
 end
 
 begin
