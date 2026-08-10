@@ -100,6 +100,7 @@ fitdat1 = @df dat1 PrimaryDryFit(:t,
 dat2raw = CSV.read(datadir("exp_raw", "Fulbright2025", "2025-01-28-10_MFD_ISW.csv"), Table; header=8)
 dat2full = map(x->microfd_fulbright_columnrename(x, dat2raw.CycleTime[1]), dat2raw)
 overnightfix(dat2full)
+dat2full.pch_cm[dat2full.pch_cm .== 0u"mTorr"] .*= NaN
 dat2 = filter(x->x.phase==4, dat2full)
 
 # t_end2 = identify_pd_end(dat2.t, dat2.pch_pir, Val(:2der), window_width=91,  tmin=1u"hr",  tmax=50u"hr")
