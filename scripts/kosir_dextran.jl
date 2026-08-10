@@ -121,7 +121,10 @@ objnf_pd = OptimizationFunction((x,y)->LyoPronto.objn_pd(x,y,tweight=1e-1), Auto
 #     @time opt_KRp = solve(OP(objf_pd, fill(0.0, 4), (trans_KRp, po, case.pdfit)), optalg)
 # end
 # Fit Kv to all at once
-@time opt_Kv = solve(OP(objnf_pd, fill(0.0, 13), (shared_trans, cases_pdfit.po, cases_pdfit.pdfit)), optalg)
+p0 = fill(0.1, 13); p0[1] = 2.8
+p0[3] = log(1.5)
+p0[9] = p0[12] = log(0.5)
+@time opt_Kv = solve(OP(objnf_pd, p0, (shared_trans, cases_pdfit.po, cases_pdfit.pdfit)), optalg)
 
 fitKv = transform(shared_trans, opt_Kv.u)
 
@@ -179,7 +182,8 @@ trans_cr = as((C=CTV, Rs=RsTV))
 
 # @time opt1234myega = solve(OP(objnf_mc, zeros(14), (trans_ns, cases_Rp.pomc, cases_Rp.pdfit)), optalg)
 
-p0_cr = zeros(TransformVariables.dimension(trans_cr))
+p0_cr = zeros(TransformVariables.dimension(trans_cr)) 
+p0_cr = [0.5, 1.0]
 blankplot_hrC()
 modconvtplot!(LyoPronto.gen_nsol_pd(p0_cr, trans_cr, cases_Rp.pomc, cases_Rp.pdfit)..., c=[1 2 3 4])
 
@@ -188,7 +192,7 @@ modconvtplot!(LyoPronto.gen_nsol_pd(p0_cr, trans_cr, cases_Rp.pomc, cases_Rp.pdf
 # @time opt1234myegasems = solve(OP(objnf_pd, [0.0, -3.0, 0.0, -5, 0.0, 0.0], (trans_ns_sem, cases_Rp.pomc, cases_Rp.pdfit)), optalg, show_trace=true)
 
 fit_cr = transform(trans_cr, opt_12.u)
-fit_cr = transform(trans_cr, opt_1234.u)
+# fit_cr = transform(trans_cr, opt_1234.u)
 
 # fit_mc_sem = transform(trans_ns_sem, opt1234myegasem.u)
 # fit_mc_sem_s = transform(trans_ns_sem_s, opt1234myegasems.u)
@@ -235,7 +239,7 @@ plot()
 for (i, c) in enumerate(cases_both.color)
     vspan!([i-1,i], c=c, alpha=0.3, label="")
 end
-e1 = groupedbar!(errs.name, [errs.PP_T errs.PBM_T], color=modcs[[2 1]], label="", ylabel=L"$T_\mathrm{f}$ error [$\degree$C]",unitformat=(x,y)->x, lw=1)
+e1 = groupedbar!(errs.name, [errs.PP_T errs.PBM_T], color=modcs[[2 1]], label=["Pikal fit" "PBM fit"], ylabel=L"$T_\mathrm{f}$ error [$\degree$C]",unitformat=(x,y)->x, lw=1)
 
 lRp = blankplot_lRp()
 for (i, case) in enumerate(cases_both)
