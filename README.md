@@ -1,3 +1,6 @@
+[![](https://zenodo.org/badge/DOI/10.5281/zenodo.22101518.svg)](https://doi.org/10.5281/zenodo.22101518)
+
+
 # FulbrightPores
 
 This code base is using the [Julia Language](https://julialang.org/) and
