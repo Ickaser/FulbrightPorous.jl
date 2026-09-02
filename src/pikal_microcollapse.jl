@@ -11,13 +11,14 @@ _getval(x) = hasproperty(x, :value) ? x.value : x
 
 """
     $(SIGNATURES)
+    Calculate the mass transfer, heat transfer, and other quantities for the microcollapse-augmented Pikal model.
 """
-function lyo_mc_dae!(du, u, params, t, rp_ret = Val(false))
+@inline function calc_md_Q_mc(u, params, t)
 
     (; hf0, csolid, ρsolution,
     Kshf, Av, Ap,
     pch, Tsh, 
-    k_f, C, N, S, Rs, ) = params
+    k_f, C, Rs, ) = params
     
     td = t*u"hr" # Dimensional time
     hf = u[1]*u"cm"
@@ -25,29 +26,17 @@ function lyo_mc_dae!(du, u, params, t, rp_ret = Val(false))
     μ0 = u[3]
     μ2 = u[4]*u"mm^6"
 
-
     hd = hf0 - hf
     ϕ = (ρsolution - csolid)/ρsolution
     μ1 = hd*ϕ*Ap
-    Qshf = Av*Kshf(pch(td))*(Tsh(td) - Tf)
-    Tsub = Tf - Qshf/k_ice/Ap*hf
+    Q_shf = Av*Kshf(pch(td))*(Tsh(td) - Tf)
+    Tsub = Tf - Q_shf/k_ice/Ap*hf
     k = k_f(Tsub)
 
-    # exit hatch for bad parameter guesses or solver iterations
-    if Tf < 0u"K"# || Tsub < 0u"K"
-        du .= NaN
-        if rp_ret isa Val{true}
-            return NaN*u"m/s"
-        else
-            return
-        end
-    end
-
-
-    # Compute Rp, checking for negative pore structure first
     porefac = μ1^2*μ0/μ2^3 # Knudsen
     # porefac = μ1/μ2 # Viscous but double check this
 
+    # Compute Rp, checking for negative pore structure first
     # # Direct comparison with 0 interacts weirdly with ForwardDiff: cares about derivatives, not only value
     # # if _getval(μ1) <= 0u"cm^3" || _getval(μ0) <= 0.0 || _getval(μ2) <= 0u"mm^6" 
     # if isnan(porefac) || (hasproperty(porefac, :value) ? porefac.value : porefac) <= 0.0u"mm^-12" # Manually check for ForwardDiff
@@ -65,21 +54,36 @@ function lyo_mc_dae!(du, u, params, t, rp_ret = Val(false))
     end
 
     Rsp = Rs + Rp
-    dmdt = - Ap*(LyoPronto.calc_psub(Tsub)-pch(td))/Rsp
-    Qsub = uconvert(u"W", dmdt*ΔHsub)
+    md = - Ap*(LyoPronto.calc_psub(Tsub)-pch(td))/Rsp
+    return (; md, Q_shf, k, Tsub, Rp, Rsp, μ1)
+end
 
-    dhf_dt = min(0.0u"cm/hr", dmdt/(ρsolution-csolid)/Ap |>u"cm/hr" ) # Cap dhf_dt at 0: no desublimation
+"""
+    $(SIGNATURES)
+"""
+function lyo_mc_dae!(du, u, params, t)
+    hf = u[1]*u"cm"
+    Tf = u[2]*u"K"
+    μ0 = u[3]
+    if Tf < 0u"K"# || Tsub < 0u"K"
+        du .= NaN
+    end
+    (; md, Q_shf, k, μ1) = calc_md_Q_mc(u, params, t)
+    (; csolid, ρsolution, Ap, hf0, N, S) = params
+
+    hd = hf0 - hf
+    
+    Q_sub = uconvert(u"W", md*ΔHsub)
+
+    dhf_dt = min(0.0u"cm/hr", md/(ρsolution-csolid)/Ap |>u"cm/hr" ) # Cap dhf_dt at 0: no desublimation
     dμ0_dt = -k/2*μ0^2 - N(hd)*Ap*dhf_dt
     dμ2_dt = k*μ1^2 - S(hd)*Ap*dhf_dt # dhf_dt < 0 for drying proceeding
 
     du[1] = ustrip(u"cm/hr", dhf_dt)
-    du[2] = ustrip(u"W", Qsub + Qshf)
+    du[2] = ustrip(u"W", Q_sub + Q_shf)
     du[3] = ustrip(u"hr^-1", dμ0_dt)
     du[4] = ustrip(u"mm^6/hr", dμ2_dt)
 
-    if rp_ret isa Val{true}
-        return Rsp
-    end
     return 
 end
 
@@ -97,19 +101,19 @@ The implementation is in [`lyo_mc_dae!`](@ref)
 The initial conditions `u0 = [h_f, Tf, μ0, μ2]` should be unitless, but are internally assigned to be in `[cm, K, NoUnits, mm^6]`.
 The unitless time is taken to be in hours, so derivatives are given in unitless `[cm/hr, K/hr, 1/hr, mm^6/hr]`.
 
-`params` has the form:
+`params` is a ParamObjMC:
 ```
-params = (
+params = ParamObjMC((
     (hf0, csolid, ρsolution),
     (Kshf, Av, Ap),
     (pch, Tsh) ,
-    (k_f, C, N, S, Rx)  
-)
+    (k_f, C, N, S, Rs)  
+))
 ```
 where those listed following are callables returning `Quantity`s, and the rest are `Quantity`s.
 See [`RpFormFit`](@ref LyoPronto.RpFormFit) and [`RampedVariable`](@ref LyoPronto.RampedVariable) for convenience types that can help with the callables.
-- `N(hd)` with `hd` a length returns source term for number of pores per height (as a Unitful quantity)
-- `S(hd)` with `hd` a length returns source term for pore size second moment per height (as a Unitful quantity)
+- `N(hd)` with `hd` a length returns source term for number of pores per volume (as a Unitful quantity)
+- `S(hd)` with `hd` a length returns source term for pore size second moment per volume (as a Unitful quantity)
 - `Kshf(p)` with `p` a pressure returns heat transfer coefficient (as a Unitful quantity).
 - `Tsh(t)`, `pch(t)` return shelf temperature and chamber pressure respectively at time `t`.
 - `k_f(T)` returns the rate constant for pore coalescence at temperature `T`.
@@ -136,21 +140,21 @@ function ParamObjMC(tuptup)
     return ParamObjMC(tuptup[1]..., tuptup[2]...,
         tuptup[3]..., tuptup[4]...)
 end
-Base.size(::ParamObjMC) = (4,)
+# Base.size(::ParamObjMC) = (4,)
 Base.length(::ParamObjMC) = 14
-function Base.getindex(po::ParamObjMC, i)
-    if i == 1
-        return (po.hf0, po.csolid, po.ρsolution)
-    elseif i == 2
-        return (po.Kshf, po.Av, po.Ap)
-    elseif i == 3
-        return (po.pch, po.Tsh)
-    elseif i == 4
-        return (po.k_f, po.C, po.N, po.S, po.Rs)
-    else
-        error(BoundsError, "Attempt to access LyoPronto.ParamsObjRF at index $i. Only indices 1 to 4 allowed")
-    end
-end
+# function Base.getindex(po::ParamObjMC, i)
+#     if i == 1
+#         return (po.hf0, po.csolid, po.ρsolution)
+#     elseif i == 2
+#         return (po.Kshf, po.Av, po.Ap)
+#     elseif i == 3
+#         return (po.pch, po.Tsh)
+#     elseif i == 4
+#         return (po.k_f, po.C, po.N, po.S, po.Rs)
+#     else
+#         error(BoundsError, "Attempt to access LyoPronto.ParamsObjRF at index $i. Only indices 1 to 4 allowed")
+#     end
+# end
 function Base.show(io::IO, po::ParamObjMC) 
     compact = get(io, :compact, false)::Bool
     if compact
@@ -186,5 +190,6 @@ function ODEProblem(po::ParamObjMC; u0=calc_u0(po), tspan=(0.0, 200.0))
     t0 = LyoPronto.get_t0(po)
     tspan = @reset tspan[1] = t0
     return ODEProblem{true}(lyo_mc_dae_f, u0, tspan, po; 
-        tstops=tstops, callback=end_drying_callback, initializealg=BrownFullBasicInit())
+        tstops=tstops, dt=0.1,
+        callback=end_drying_callback, initializealg=BrownFullBasicInit())
 end

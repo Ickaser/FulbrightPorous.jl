@@ -34,7 +34,7 @@ public calc_moms_NS
     meandiam = @. cbrt(mean*3/4/π) |> u"μm"
     vardiam = @. (cbrt(6/π)/3*mean^(-2/3))^2 * var
     Rp = map(sol.t, sol.u) do t,u
-        lyo_mc_dae!(fill(0.0, 4), u, sol.prob.p, t, Val(true)) |> u"cm^2*Torr*hr/g"
+        calc_md_Q_mc(u, sol.prob.p, t).Rsp |> u"cm^2*Torr*hr/g"
     end
     seriestype --> :samplemarkers
     layout --> @layout [[a ; b; c;] d]
@@ -92,7 +92,7 @@ end
     hf = sol[1,:]*u"cm"
     hd = (po.hf0 .- hf) .|> u"cm"
     Rp = map(sol.t, sol.u) do ti,ui
-        lyo_mc_dae!(fill(0.0, 4), ui, sol.prob.p, ti, Val(true)) |> u"m/s"
+        calc_md_Q_mc(ui, sol.prob.p, ti).Rsp |> u"m/s"
     end
     @series begin
         ylabel --> "Rp"
@@ -109,7 +109,7 @@ function calc_l(dat, hf0)
 end
 function calc_lRp(sol)
     l = (sol[1,1] .- sol[1,:])*u"cm"
-    Rp_mc = [FulbrightPores.lyo_mc_dae!(fill(0.0, 4), u, sol.prob.p, t, Val(true)) for (u,t) in zip(sol.u, sol.t)]
+    Rp_mc = [calc_md_Q_mc(u, sol.prob.p, t).Rsp for (u,t) in zip(sol.u, sol.t)]
     return l, Rp_mc
 end
 
@@ -131,10 +131,7 @@ function calc_Kn(sol)
         mean, var = calc_moms(u, po)
         radii = cbrt.([mean, mean+2sqrt(var)] .*(0.75/π)) .|> u"μm"
         td = t*u"hr" # Dimensional time
-        hf = u[1]*u"cm"
-        Tf = u[2]*u"K"
-        Qshf = po.Av*po.Kshf(po.pch(td))*(po.Tsh(td) - Tf)
-        Tsub = Tf - Qshf/LyoPronto.k_ice/po.Ap*hf
+        (;Tsub ) = calc_md_Q_mc(u, po, t)
         mfp_sub_visc = calc_mfp_visc(Tsub)
         mfp_pch_visc = calc_mfp_visc(po.pch(td), Tsub)
         mfp_sub_dref = calc_mfp_dref(LyoPronto.calc_psub(Tsub), Tsub)

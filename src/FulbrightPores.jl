@@ -31,7 +31,7 @@ using LineSearches
 optalg = BFGS(linesearch=LineSearches.BackTracking())
 
 export odealg_chunk4
-const odealg_chunk4 = Rodas4(autodiff=AutoForwardDiff(chunksize=4))
+const odealg_chunk4 = LyoPronto.get_odealg(4)
 
 
 include("pikal_microcollapse.jl")
