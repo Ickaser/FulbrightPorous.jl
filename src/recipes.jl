@@ -6,12 +6,15 @@ function fp_plot_defaults()
     default(:linewidth, 3)
     default(:markersize, 5)
     default(:fontfamily, "Computer Modern")
+    resetfontsizes(); scalefontsizes(1.5)
+    default(:titlefontsize, 16)
+    default(:unitformat, :square)
 end
 
 # ------------------------
 # Visualize the pore size evolution
-public calc_moms
-public calc_moms_NS
+export calc_moms
+export calc_moms_NS
 
 @userplot PoreEvolPlot
 @recipe function f(pep::PoreEvolPlot; kind=:moms)
@@ -37,17 +40,18 @@ public calc_moms_NS
         calc_md_Q_mc(u, sol.prob.p, t).Rsp |> u"cm^2*Torr*hr/g"
     end
     seriestype --> :samplemarkers
+    unitformat --> :square
     layout --> @layout [[a ; b; c;] d]
     @series begin
         subplot --> 1
         xlabel --> ""
         legend --> :none
         xformatter -->  _->""
-        if kind == :stats
-            ylabel --> "number\nof pores" #*", number of pores"
-        elseif kind == :moms
-            ylabel --> "μ0"
-        end
+        # if kind == :stats
+        #     ylabel --> "number\nof pores" #*", number of pores"
+        # elseif kind == :moms
+        ylabel --> L"$μ_0$ [count]"
+        # end
         return t, μ0
     end
     @series begin
@@ -56,7 +60,7 @@ public calc_moms_NS
         legend --> :none
         xformatter -->  _->""
         if kind == :stats
-            ylabel --> "typical \npore diameter\n" #*", total pore volume"
+            ylabel --> L"\bar{d}" #*", total pore volume"
             return t, meandiam
         elseif kind == :moms
             ylabel --> "μ1" 
@@ -68,7 +72,7 @@ public calc_moms_NS
         xlabel --> "Time"
         legend --> :none
         if kind == :stats
-            ylabel --> "pore diameter \nstdev\n" #*", pore size second moment"
+            ylabel --> L"\sigma_d" #*", pore size second moment"
             return t, sqrt.(vardiam) .|> u"μm"
         elseif kind == :moms
             ylabel --> "μ2"
@@ -162,7 +166,7 @@ end
         # lw --> 1
         # step --> length(Rpd) ÷ 30
         seriestype := :scatter
-        marker --> :o
+        marker --> :circle
         label --> "TDLAS"
         return ld, Rpd
     end

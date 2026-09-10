@@ -429,14 +429,14 @@ begin
 modcs = [2, 3]
 permute = [1, 5, 2, 3, 4]
 # labs = ["PBM fit to $(join(mcfit_cases[fitnum].cases, ", ", " & "))" ]
-labs = ["Pikal fit" "PBM fit to hi-lo"]
-caselabs = ["p=$(ustrip(p))\nT=$(Int(ustrip(T)))" for (p, T) in zip(errs.pch, errs.Tsh)]
+labs = ["Pikal fit" "PBM fit, hi-lo \$T\$"]
+caselabs = ["p$(ustrip(p))\nT$(Int(ustrip(T)))" for (p, T) in zip(errs.pch, errs.Tsh)]
 # Terr = groupedbar(errs.name, 
 plot()
 vspan!([0  1; 1  2], color=:gray, alpha=0.3, label="")
 Terr = groupedbar!(caselabs[permute],
     [errs.PPi_T[permute] errs.PBM_T[permute] ], c=modcs[[2 1]], 
-    label=labs, lw=1)
+    label=labs, lw=1, ylim=(0, 1.5), yticks=(0:0.5:1.5))
 plot!(xlabel="Case", ylabel=L"$T_\mathrm{f}$ error", yunitformat=:square, legend=:topleft)
 plot!(xgrid=false, xminorticks=2, xtickdir=:none, xminortickdir=:none, xminorgrid=true, minorgridalpha=0.1, ygridalpha=0.2)
 # plot!(xticks=(1:5, ""))
@@ -447,7 +447,7 @@ terr = groupedbar!(caselabs[permute],
     # [errs.PBM_t errs.PPi_t errs.PP_t ], c=[2 3 4], 
     [errs.PPi_t[permute] errs.PBM_t[permute] ], c=modcs[[2 1]], 
     label=labs, lw=1)
-plot!(xlabel="Case", ylabel=L"$t$ relative error", yunitformat=:square, legend=:topleft)
+plot!(xlabel="Case", ylabel=L"$t$ rel. error", yunitformat=:square, legend=:topleft)
 plot!(xgrid=false, xminorticks=2, xtickdir=:none, xminortickdir=:none, xminorgrid=true, minorgridalpha=0.1, ygridalpha=0.2)
 plot!(yticks=(0:0.1:0.2))
 
@@ -456,12 +456,9 @@ err_plot = plot(Terr, terr, layout=(2,1), size=(600,600))
 pls = map(cases_Rps[permute], ) do case
     i = parse(Int, case.name)
     pl = blankplot_hrC(legend=:bottomright)
-    # plot!(title=case.name)
     lab_pch = case.pop.pch(0)
     lab_Tsh = ustrip(u"degC",case.pop.Tsh(Inf*u"hr")) |> Int
     title =L"p_\mathrm{ch}=%$(latexify(lab_pch, env=:raw))"*"\n"*L"$T_\mathrm{sh}=%$(lab_Tsh) ^\circ C$"
-    # lab_Tsh = round(typeof(1u"degC"), case.pop.Tsh(Inf*u"hr")) 
-    # title = L"$p_\mathrm{ch}="*latexify(lab_pch, env=:raw)*L"$"*"\n"*L"$T_\mathrm{sh}="*latexify(lab_Tsh, env=:raw)*L"$"
     
     plot!(;top_margin=20Plots.px, title)
     # nmarks = Int(ustrip(u"hr", case.fitdat.t_end[1]) ÷ 8)
@@ -490,24 +487,23 @@ pls = map(cases_Rps[permute], ) do case
     end
     return pl
 end
-# plot!(err_plot, legend=:none, bottom_margin=20Plots.px, left_margin=20Plots.px)
-# plot!(err_plot[1], xlabel="")
-# plot!(err_plot[2], bottom_margin=20Plots.px)
-# plot(pls..., err_plot, layout=(2,3), size=(1000, 500))
 plot(pls..., Terr, terr, 
-    layout=@layout([grid(1,5){0.6h} ; _ b{0.3w} a{0.3w} _ ]), 
-    size=(1000, 440))
+    layout=@layout([grid(1,5){0.6h} ; _ b{0.35w} a{0.35w} _ ]), 
+    size=(1000, 480))
 # plot!(subplot=5, ymirror=true)
-plot!(subplot=1, legend=(0, -0.4), legendfontsize=12,)
+plot!(subplot=1, legend=(-0.3, -0.45), legendfontsize=12,)
+# plot!(subplot=1, legend=:bottom, legendfontsize=12,)
+plot!(subplot=1, bottom_margin=25Plots.px)
 plot!(subplot=6, legend=:none)
 plot!(subplot=7, legend=(1.1, 0.6), legendfontsize=12,)
 end
 savefig(plotsdir("simtra_suc_fitval.svg"))
 # no PDF because takes a little manual tweaking for a good legend
+
 function condlabel(pop)
-lab_pch = pop.pch(Inf*u"s") |> u"mTorr"
-lab_Tsh = ustrip(u"degC",pop.Tsh(Inf*u"s")) |> Int
-return L"p_\mathrm{ch}=%$(latexify(lab_pch, env=:raw))"*"\n"*L"$T_\mathrm{sh}=%$(lab_Tsh) ^\circ C$"
+    lab_pch = pop.pch(Inf*u"s") |> u"mTorr"
+    lab_Tsh = ustrip(u"degC",pop.Tsh(Inf*u"s")) |> Int
+    return L"p_\mathrm{ch}=%$(latexify(lab_pch, env=:raw))"*"\n"*L"$T_\mathrm{sh}=%$(lab_Tsh) ^\circ C$"
 end
 
 begin
@@ -584,7 +580,7 @@ markers = [:pentagon, :diamond, :utriangle, :rect, :circle]
 plot!(palette=:default)
 rpattr = (seriestype=:samplemarkers, linestyle=:dash)
 labs = ["PBM fit to $(join(mcfit_cases[fitnum].cases, ", ", " & "))" "3PP individual fits " ]
-plot(layout=@layout([grid(3,1) a{0.4w}]), unitformat=:square, size=(700,400))
+plot(layout=@layout([grid(3,1) a{0.4w}]), unitformat=:square, size=(800,500))
 for (i, casenum) in enumerate(reverse([1, 4, 2, 5, 6]))
     # poreevolplot!(get_sol_mc(casenum, fitnum), label="Case $casenum", c=porecolors[i], kind=:stats, marker=markers[i])
     sol = get_sol_mc(casenum, fitnum)
@@ -593,10 +589,12 @@ end
 # poreevolplot!(get_sol_mc(1, fitnum), label="PBM $(join(mcfit_cases[fitnum].cases, ", ", " & ")), Cycle 1", c=2, kind=:stats, marker=:circle)
 # poreevolplot!(get_sol_mc(2, fitnum), label="PBM $(join(mcfit_cases[fitnum].cases, ", ", " & ")), Cycle 2", c=2, kind=:stats, marker=:square)
 # poreevolplot!(get_sol_mc(6, fitnum), label="PBM $(join(mcfit_cases[fitnum].cases, ", ", " & ")), Cycle 6", c=2, kind=:stats, marker=:utriangle)
-plot!(subplot=2, ylim=(0, Inf))
-plot!(subplot=3, ylim=(0, Inf))
+plot!(subplot=1, ylim=(0, 2e8), yticks=0:1e8:2e8, yformatter=x->(string(Int(x/1e8))*" "*L"\times 10^8"), left_margin=20Plots.px)
+plot!(subplot=2, ylim=(0, 60), yticks=0:20:60)
+plot!(subplot=3, ylim=(0, 600), yticks=0:200:600)
 plot!(subplot=4, ylabel="R_p", yunitformat=latexify)
-plot!(subplot=4, legend=(1.25, 0.7), right_margin=130Plots.px)
+plot!(subplot=4, legend=(1.25, 0.7), right_margin=170Plots.px, xticks=0:0.3:1.2)
+plot!(subplot=3, bottom_margin=15Plots.px); plot!(subplot=4, bottom_margin=15Plots.px)
 # plot!(l, cases_Rps[1].Rp.(l), subplot=4, label="3PP 1"; c=3, marker=:circle, rpattr...)
 # plot!(l, cases_Rps[2].Rp.(l), subplot=4, label="3PP 2"; c=3, marker=:square, rpattr...)
 # plot!(l, cases_Rps[5].Rp.(l), subplot=4, label="3PP 6"; c=3, marker=:utriangle, rpattr...)
@@ -627,27 +625,29 @@ savefig(plotsdir("simtra_suc_kinetics.svg"))
 # Inspect fit results in Rp space rather than temperature space
 
 begin
-locs = [(0.1, 6), (0.2, 2), (0.2, 2), (0.2, 2), (0.2, 2)]
+locs = [(0.2, 1.5), (0.2, 2), (0.2, 2), (0.2, 2), (0.2, 2)]
 Tps = [-29.5, -33.3, -32.5, -33.2, -33.6]u"°C"
 permute = [1, 3, 2, 4, 5]
 pls = map(cases_Rps[permute], locs, Tps[permute]) do case, loc, Tp
     i = parse(Int, case.name)
-    pl = blankplot_lRp(ylims=(0, 11), xlims=(0, 1.3), legend=:topleft)
+    pl = blankplot_lRp(ylims=(0, 11), xlims=(0, 1.3))
     plot!([Inf], [Inf], label=L"$T_\mathrm{f}(t)$", c=3)
     pbmtdlas!(get_sol_mc(i, fitnum), case.dat, nothing; label=["TDLAS" L"PBM fit to $T_\mathrm{f}(t)$"])
     for j in 1:length(case.fitdat.Tfs)
         scatter!(calc_hRp_T(case.pop, case.fitdat; i=j)..., label="",c=3, markeralpha=0.02, ms=2, msw=0)
     end
     plot!(title=condlabel(case.pop), top_margin=25Plots.px)
+    plot!(xticks=0.0:0.4:1.2)
     # Tfmax = maximum([maximum(Tfi) for Tfi in case.fitdat.Tfs])
     # annotate!(loc..., text("\$T_\\mathrm{f,max}=$(float(Tfmax|>u"°C"))\$", :left, 12))
     annotate!(loc..., text("\$T_\\mathrm{f}=$(float(Tp|>u"°C"))\$", :left, 12))
     # i ∈ [1, 2] && plot!(xlabel="")#, xformatter=:none)
-    i ∈ [1] && plot!(left_margin=20Plots.px, yticks=(0:2:12))
+    i ∈ [1] && plot!(left_margin=25Plots.px, yticks=(0:2:12), legend=(0.2, 0.83))
     i ∈ [2, 4, 5, 6] && plot!(ylabel="", left_margin=-10Plots.px, yticks=(0:2:12, []), legend=:none)
+    plot!()
     pl
 end
-plot(pls..., layout=(1,5), size=(1000,300), bottom_margin=20Plots.px)
+plot(pls..., layout=(1,5), size=(1000,300), bottom_margin=25Plots.px)
 end
 savefig(plotsdir("simtra_suc_Rp_val.svg"))
 savefig(plotsdir("simtra_suc_Rp_val.pdf"))
@@ -703,35 +703,6 @@ end...))
 # objf_sigm = OptimizationFunction(obj_kin_sigm, AutoForwardDiff())
 # obj_kin_sigm(p0_sigm,nothing)
 # opt_sigm = solve(NLSP(err_kin_sigm, p0_sigm), LevenbergMarquardt(), show_trace=Val(true))
-
-# # -------------------- 
-# # Assume a beta distribution and see results
-# gr()
-# betaplot(sol1_sigm128, legend=:topright, legend_columns=1)
-# # betaplot(sol8_sigm128, ylim=(1e-10, 1e35), xscale=:log10, yscale=:log10, legend=:bottomleft, legend_columns=1)
-# plot!(xlabel="Pore volume [mm³]", ylabel="Probability Density")
-# savefig(plotsdir("changingdist_linear.png"))
-
-# -----------------------
-
-# function namefitparam_arb(sol, label)
-#     po = sol.prob.p
-#     nt = (label = label,
-#         N = po.N,
-#         S = po.S,
-#         C = po.C,
-#         Rs = po.Rs,
-#         k_f = po.k_f,
-#     )
-# end
-# fits_sol = [sol1_MC1, sol8_MC8, sol1_MC18, sol1_MC128, sol1_myega128, sol1_sigm128]
-# fits_lab = ["1", "8", "1&8", "1&2&8", "MYEGA 1&2&8", "Tanh 1&2&8"]
-# # fits_sigm = Optim.minimizer.([opt12sigm, opt18sigm, opt128sigm]) 
-# rep = Table(map(namefitparam_arb, fits_sol, fits_lab))
-
-# # safesave(datadir("exp_pro", "fit12.html"), pretty_table(HTML, report, header = ["Fit", "N", "S", "k0", "E", "C", "Rs"]))
-# safesave(datadir("exp_pro", "fit_arb.html"), pretty_table(HTML, rep, header = ["Fit", "N", "S", "C", "Rs", "kf"]))
-# # pretty_table(report, header = ["Fit", "N", "S", "k0", "E", "C", "Rs"])
 
 # # ---------------------
 # # MCMC sampling

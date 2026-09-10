@@ -3,9 +3,9 @@ Latexify.set_default(labelformat=:square)
 
 ful_suc_fits = load(datadir("exp_pro", "fulbright_sucrose_fitresults.jld2"), "fits")
 
-k_ful_sigm = ful_suc_fits[6].kf
 k_ful_sigm_5 = ful_suc_fits[1].kf
-k_ful_sigm_10 = ful_suc_fits[3].kf
+k_ful_sigm_10 = ful_suc_fits[2].kf
+k_ful_sigm = ful_suc_fits[3].kf
 
 sim_suc_cases = load(datadir("exp_pro", "simtra_sucrose_fitresults.jld2"), "mcfit_cases")
 sim_suc_fit = load(datadir("exp_pro", "simtra_sucrose_fitresults.jld2"), "mcfits")
