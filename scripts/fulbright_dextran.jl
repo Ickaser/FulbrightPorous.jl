@@ -146,7 +146,7 @@ fitdat4 = @df dat4 PrimaryDryFit(:t[0u"hr".< :t] ,
     );
     t_end=t_end4
 )
-# plot(fitdat4, nmarks=10, sampmarks=true)
+# plot(fitdat4, nmarks=10, showline=true)
 
 
 end
@@ -259,16 +259,13 @@ vspan!(e2, [0, 1], c=:lightgray, label="")
 pls = map(cases_Rps) do case 
     plT = blankplot_hrC()
     @df case.dat exptfplot!(:t, :T1, :T2, :T3, :T4, label="", seriestype=:line, marker=:none)
-    plot!(case.fitdat, title=case.name, nmarks=10, sampmarks=true, markeralpha=0.6)
-    # tendplot!(case.fitdat.t[case.fitdat.Tf_iend[1]], label="end useful")
-    # tendplot!(case.fitdat.t_end)
+    plot!(case.fitdat, title=case.name, nmarks=10, showline=true, markeralpha=0.6)
     modconvtplot!(case.sol_p, label="Pikal fit to case", alpha=0.7)
     modconvtplot!(gen_sol_pd(rp_all.u, trans_Rp, case.pop), c=:purple, label="Pikal fit to all", alpha=0.7)
     plot!(ylim=(-45, 10))
-    # plot!(legend = :top, legend_columns=2)
     plot!(legend=:none)
     if case.name == "1"
-        plot!(legend=(0.0, -0.6), legendfontsize=11, left_margin=20Plots.px)
+        plot!(legend=(-0.2, -0.6), legendfontsize=14, left_margin=20Plots.px)
     else
         plot!(ylabel="", left_margin=-15Plots.px)
     end
@@ -276,9 +273,6 @@ pls = map(cases_Rps) do case
     return plT
 end
 plot(pls..., e1, e2, layout=@layout([grid(1,4); _ grid(1,2){0.8w}]), size=(800, 400))
-# mathjax = KW(:include_mathjax=>"cdn")
-# plot!(extra_plot_kwargs=mathjax, legend=:right, ticks=:native) # For Plotly
-# plot!(subplot=4, right_margin=150Plots.px)
 end
 savefig(plotsdir("fulbright_dextran_T.svg"))
 # Manually adjust legend before converting to PDF
@@ -293,7 +287,7 @@ pls = map(cases_Rps) do case
         plot!(hdT, RpT, c=:gray, marker=marks[i], seriestype=:samplemarkers, step=40, offset=mod1(i, 4)*10, alpha=0.8, label="Rp from T, $i")
     end
     plot!(l, case.Rp.(l), c=1, label="3PP fit directly to T")
-    plot!(l, RpFormFit(transform(trans_Rp, rp_all.u).Rp...).(l), c=2, label="3PP fit to all T")
+    plot!(l, transform(trans_Rp, rp_all.u).Rp.(l), c=2, label="3PP fit to all T")
     plot!(legend = :topleft)
     return plr
 end
@@ -301,7 +295,7 @@ plot(pls..., layout=(2,2), size=(800, 600))
 end
 
 begin
-marks = [:o, :utriangle, :square, :diamond]
+marks = [:circle, :utriangle, :square, :diamond]
 csamp = [90, 80, 70, 50]
 cs = stack([colormap("blues")[csamp],
             colormap("oranges")[csamp],
@@ -314,14 +308,15 @@ pls = map((dat1nm, dat2nm, dat3nm, dat4nm), 1:4) do dat, i
     labs = ["Exp. $i, \$T_\\mathrm{f$j}\$" for j in 1:4] |> permutedims
     nucdat = filter(x->x.phase==1, dat)
     if i ∈ 3:4
-        @df nucdat exptfplot!(:t, :T1, :T2, :T3, :T4, labels=labs, sampmarks=true, nmarks=20, c=cs[:,i]', markershape=permutedims(marks))
+        @df nucdat exptfplot!(:t, :T1, :T2, :T3, :T4, labels=labs, showline=true, nmarks=20, c=cs[:,i]', markershape=permutedims(marks))
     else
-        @df nucdat exptfplot!(:t, :T1, :T2, :T3, labels=labs, sampmarks=true, nmarks=20, c=cs[:,i]', markershape=permutedims(marks))
+        @df nucdat exptfplot!(:t, :T1, :T2, :T3, labels=labs, showline=true, nmarks=20, c=cs[:,i]', markershape=permutedims(marks))
     end
     i ∈ 1:3 && plot!(xlabel="", bottom_margin=-15Plots.px)
-    plot!(xlim=(1,2.8), ylim=(-15, 0))
+    i ∈ 1:3 ? plot!(xticks=(1.0:0.5:2.0, [])) : plot!(xticks=(1.0:0.5:2.5))
+    plot!(xlim=(1,2.06), ylim=(-17, 1), legend=(1.2, 0.8))
 end
-pln = plot(pls..., layout=(4,1), size=(400,800))
+pln = plot(pls..., layout=(4,1), size=(500,800))
 
 plr = blankplot_lRp()
 for case in cases_Rps[1:4]
@@ -338,7 +333,7 @@ for case in cases_Rps[1:4]
 end
 plot!(xlim=(0, 0.3), ylim=(0, 5))
 
-plot!(pln, plr, size=(600, 400))
+plot!(pln, plr, layout=@layout([a _ b]), size=(600, 500))
 end
 savefig(plotsdir("fulbright_dextran_rawRp.svg"))
 savefig(plotsdir("fulbright_dextran_rawRp.pdf"))
@@ -421,7 +416,7 @@ t_res = map((dat1nm, dat2nm, dat3nm, dat4nm), 1:4) do dat, i
     end
 
     nucdat = filter(x->x.t < 3u"hr", dat)
-    @df nucdat exptfplot!(:t, :T1, :T2, :T3, :T4, labels=labs, sampmarks=true, nmarks=20, c=cs[:,i]', markershape=permutedims(marks), subplot=i)
+    @df nucdat exptfplot!(:t, :T1, :T2, :T3, :T4, labels=labs, showline=true, nmarks=20, c=cs[:,i]', markershape=permutedims(marks), subplot=i)
     for (j, (i_nuc, i_res)) in enumerate(zip(i_nucs, i_ress))
         # plot!([dat.t[i_nuc], dat.t[i_res]], Ts[j][[i_nuc,i_res]], c=:black, arrow=true, label="", subplot=i)
         plot!(dat.t[i_nuc:i_nuc], Ts[j][i_nuc:i_nuc], marker=:star, c=:red, label="", subplot=i)
@@ -438,15 +433,17 @@ pl_a1t = plot(u"hr", u"hr*cm*Torr/g", size=(400, 300))
 for (tt, line, i) in zip(t_res, lines, 1:4)
     scatter!(tt[1:length(line)], line.A1, c=cs[:,i], marker=marks, label="")
 end
-plot!(xlabel="Time after nucleation above -10°C", ylabel="Initial slope", unitformat=:square)
+plot!(xlabel="Time after nucleation \n above -10°C", ylabel="Initial slope", unitformat=:square)
+plot!(xticks=0.2:0.1:0.6, xlim=(0.2, 0.54))
 end
 
 begin
-plot(pln, plr, pl_a1t, layout=(1,3), size=(1000, 400))
+plot(pln, plr, pl_a1t, layout=@layout([a b c]), size=(1000, 400))
 plot!(left_margin=20Plots.px, subplot=1)
-for i in 4:6; plot!(subplot=i, bottom_margin=20Plots.px); end
-for i in 1:3; plot!(subplot=i, xticks=(1.0:0.5:2.5, [])); end
+for i in 4:6; plot!(subplot=i, bottom_margin=30Plots.px); end
+for i in 1:3; plot!(subplot=i, xticks=(1.0:0.5:2.0, []), right_margin=150Plots.px); end
+plot!(subplot=5, right_margin=20Plots.px, xticks=0:0.1:0.3)
 plot!()
 end
 savefig(plotsdir("fulbright_dextran_A1_vs_crysttime.svg"))
-savefig(plotsdir("fulbright_dextran_A1_vs_crysttime.pdf"))
+# Fix the legend before exporting to PDF
