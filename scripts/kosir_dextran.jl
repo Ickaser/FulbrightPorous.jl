@@ -128,9 +128,6 @@ p0[9] = p0[12] = log(0.5)
 
 fitKv = transform(shared_trans, opt_Kv.u)
 
-# cases_Rp = Table(cases_pdfit)
-# cases_Rp.po .= [setproperties(po, merge(Rp, fitKv.shared)) for (po, Rp) in zip(cases_pdfit.po, fitKv.separate)]
-# cases_Rp.pomc .= [@set pomc.Kshf = fitKv.shared.Kshf for pomc in cases_pdfit.pomc]
 cases_Rp = Table(map(cases_pdfit, fitKv.separate) do case, fit
     po = setproperties(case.po, merge(fit, fitKv.shared))
     pomc = setproperties(case.pomc, fitKv.shared)
@@ -150,22 +147,8 @@ end
 plot(KRp_plots...)
 end
 
-# function make_mcpass(casenums)
-#     subdat = filter(x->parse(Int, x.name)∈casenums, cases)
-#     (subdat.pomc, subdat.pdfit)
-# end
-
-# pass123 = make_mcpass([1, 2, 3])
-# pass45 = make_mcpass([4, 5])
-
 # Ignore microcollapse kinetics in fit: treat as known at 0
 porous_nt = FulbrightPores.porous_transform_bounded(Vfill)
-# myega_nt = as((;k_f=as(MYEGA_k, as((k0 = TVScale(1e42u"s^-1") ∘ TVExp(),
-#             K1 = TVScale(2.0e4u"K") ∘ TVExp(),
-#             K2 = TVScale(1e2u"K") ∘ TVExp() ,)))))
-# sigma_nt = FulbrightPores.sigmoid_transform_bounded(1e-8u"s^-1", 1.0u"K")
-# trans_myega = merge(porous_nt, myega_nt)
-# trans_sigma = merge(porous_nt, sigma_nt)
 
 NTV, STV, CTV, RsTV = map(key->getproperty(porous_nt, key), (:N, :S, :C, :Rs))
 trans_cr = as((C=CTV, Rs=RsTV))
@@ -177,11 +160,6 @@ trans_cr = as((C=CTV, Rs=RsTV))
 # trans_ns = as((separate=as(Vector, as((N=NTV, S=STV)), 4),
 #                 shared=as((C=CTV, Rs=RsTV, k_f=sigma_nt.k_f)),))
 
-
-# objnf_mc = OptimizationFunction((x,y)->objn_pd(x,y,tweight=1e-1, badprms=FulbrightPores.badNS), AutoForwardDiff())
-
-# @time opt1234myega = solve(OP(objnf_mc, zeros(14), (trans_ns, cases_Rp.pomc, cases_Rp.pdfit)), optalg)
-
 p0_cr = zeros(TransformVariables.dimension(trans_cr)) 
 p0_cr = [0.5, 1.0]
 blankplot_hrC()
@@ -189,7 +167,6 @@ modconvtplot!(LyoPronto.gen_nsol_pd(p0_cr, trans_cr, cases_Rp.pomc, cases_Rp.pdf
 
 @time opt_1234 = solve(OP(objnf_pd, p0_cr, (trans_cr, cases_Rp.pomc, cases_Rp.pdfit)), optalg)
 @time opt_12 = solve(OP(objnf_pd, p0_cr, (trans_cr, cases_Rp.pomc[1:2], cases_Rp.pdfit[1:2])), optalg)
-# @time opt1234myegasems = solve(OP(objnf_pd, [0.0, -3.0, 0.0, -5, 0.0, 0.0], (trans_ns_sem, cases_Rp.pomc, cases_Rp.pdfit)), optalg, show_trace=true)
 
 fit_cr = transform(trans_cr, opt_12.u)
 # fit_cr = transform(trans_cr, opt_1234.u)
@@ -240,6 +217,7 @@ for (i, c) in enumerate(cases_both.color)
     vspan!([i-1,i], c=c, alpha=0.3, label="")
 end
 e1 = groupedbar!(errs.name, [errs.PP_T errs.PBM_T], color=modcs[[2 1]], label=["Pikal fit" "PBM fit"], ylabel=L"$T_\mathrm{f}$ error [$\degree$C]",unitformat=(x,y)->x, lw=1)
+plot!(e1, legend=:bottom)
 
 lRp = blankplot_lRp()
 for (i, case) in enumerate(cases_both)
@@ -249,7 +227,7 @@ for (i, case) in enumerate(cases_both)
 end
 plot!([Inf], [Inf], c=:gray, lw=3, label="PBM")
 scatter!([Inf], [Inf], c=:gray, label=L"T_\mathrm{f}(t)")
-plot!(xlim=(0, 0.4), ylim=(0, 15), legend=:topleft)
+plot!(xlim=(0, 0.4), ylim=(0, 15), legend=:bottomright)
 plot!(xlabel=L"dry layer thickness, $h_\mathrm{d}$ [cm]", ylabel=L"$R_p$ [cm Torr hr g$^{-1}$]", guidefontfamily="Computer Modern", unitformat=(x,y)->x)
 
 plot(myega_plots..., e1, lRp, layout=@layout([grid(1,4); grid(1,2)]), size=(800,500))
@@ -291,9 +269,6 @@ e1 = groupedbar!(errs.name, [errs.PP_T errs.PBM_T], color=modcs[[2 1]], label=""
 plot(myega_plots..., e1, layout=@layout([grid(1,4) e{0.2w}]), size=(800,200))
 plot!(subplot=1, left_margin=15Plots.px)
 plot!(bottom_margin=15Plots.px)
-# plot!(subplot=2, left_margin=-10Plots.px, )
-# plot!(subplot=3, bottom_margin=15Plots.px)
-# plot!(subplot=4, left_margin=-10Plots.px, right_margin=15Plots.px)
 end
 # plot!(subplot=2, ylabel="hh")
 savefig(plotsdir("dextran_T_semC_poster.svg"))
