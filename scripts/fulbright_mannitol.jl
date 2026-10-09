@@ -27,18 +27,12 @@ pl1 = blankplot_hrC()
 @df dat1 exptfplot!(:t, :T1, :T2, :T3, :T4)
 tendplot!(t_end1)
 
-fitdat1 = @df dat1 PrimaryDryFit(:t[0u"hr".< :t] , 
-    # (:T1[0u"hr" .< :t .< 3.7u"hr"],
-    #  :T2[0u"hr" .< :t .< 3.7u"hr"],
-    #  :T3[0u"hr" .< :t .< 3.7u"hr"],
-    #  :T4[0u"hr" .< :t .< 3.7u"hr"],
-    # ),
-    (:T1[0u"hr" .< :t .< 7u"hr"],
-     :T2[0u"hr" .< :t .< 7u"hr"],
-     :T3[0u"hr" .< :t .< 7u"hr"],
-     :T4[0u"hr" .< :t .< 7u"hr"],
-    );
-    t_end=t_end1
+fitdat1 = @df dat1 ExpFitData(:t[0u"hr".< :t] , 
+    TfData(:T1[0u"hr" .< :t .< 7u"hr"]),
+    TfData(:T2[0u"hr" .< :t .< 7u"hr"]),
+    TfData(:T3[0u"hr" .< :t .< 7u"hr"]),
+    TfData(:T4[0u"hr" .< :t .< 7u"hr"]),
+    EndTimeData(t_end1)
 )
 plot(fitdat1)
 
@@ -66,17 +60,12 @@ pl1 = blankplot_hrC()
 # @df dat2 exptfplot!(:t, :T1, :T2, :T3, :T4)
 # tendplot!(t_end2)
 
-fitdat2 = @df dat2 PrimaryDryFit(:t[0u"hr".< :t] , 
-    # (:T1[0u"hr" .< :t .< 6u"hr"],
-    #  :T2[0u"hr" .< :t .< 6.5u"hr"],
-    #  :T3[0u"hr" .< :t .< 2u"hr"],
-    #  :T4[0u"hr" .< :t .< 6.5u"hr"],
-    (:T1[0u"hr" .< :t .< 4u"hr"],
-     :T2[0u"hr" .< :t .< 4u"hr"],
-     :T3[0u"hr" .< :t .< 4u"hr"],
-     :T4[0u"hr" .< :t .< 4u"hr"],
-    );
-    t_end=t_end2
+fitdat2 = @df dat2 ExpFitData(:t[0u"hr".< :t] , 
+    TfData(:T1[0u"hr" .< :t .< 4u"hr"]),
+    TfData(:T2[0u"hr" .< :t .< 4u"hr"]),
+    TfData(:T3[0u"hr" .< :t .< 4u"hr"]),
+    TfData(:T4[0u"hr" .< :t .< 4u"hr"]),
+    EndTimeData(t_end2)
 )
 plot(fitdat2)
 

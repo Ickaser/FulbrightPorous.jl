@@ -31,7 +31,7 @@ baseprob = ODEProblem(basefit1, tspan=(0.0, 1000.0))
 @model function myega_likelihood(params, fitdats)
 
     magfac = 4 # Make the squared error more important than priors
-    if fitdats isa PrimaryDryFit # single parameter set
+    if fitdats isa ExpFitData # single parameter set
         magfac = 4
     else
         magfac = 4/length(fitdats)
@@ -54,7 +54,7 @@ baseprob = ODEProblem(basefit1, tspan=(0.0, 1000.0))
 
     # k_args = exp10.([kfac, Kfac, θfac]) .* fit_guess[5:7]
 
-    if fitdats isa PrimaryDryFit
+    if fitdats isa ExpFitData
         newpo = @set param.N = ConstPhysProp(fitprm[1]*porous_scale[1])
         @reset newpo.S = ConstPhysProp(fitprm[2]*porous_scale[2])
         @reset newpo.C = fitprm[3]*porous_scale[3]

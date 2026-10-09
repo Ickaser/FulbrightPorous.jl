@@ -72,7 +72,7 @@ cases = Table(data, (;t_end, csolid))
 pdends = [13u"hr", 10.5u"hr", 14u"hr", 13.8u"hr"]
 cases_pdfit = Table(map(cases, pdends) do case, pdend
     (; tT, t_end) = case
-    pdfit = @df filter(x->x.t<pdend, tT) PrimaryDryFit(:t .- :t[1], :T; t_end=t_end .- :t[1])
+    pdfit = @df filter(x->x.t<pdend, tT) ExpFitData(:t .- :t[1], TfData(:T), EndTimeData(t_end .- :t[1]))
     po = @set po_base.csolid = case.csolid
     V = π/6*case.Df.D.^3
     μ1 = sum(case.Df.f .* V)/sum(case.Df.f) |> u"mL"

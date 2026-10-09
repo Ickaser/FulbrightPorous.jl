@@ -22,13 +22,15 @@ kineticplot!(k_sim_intp, label="BSA+Sucrose, interpolation", c=4, marker=:square
 kineticplot!(k_ful_sigm, label="Sucrose (5% & 10%), sigmoid", c=5, )
 kineticplot!(k_ful_sigm_5, label="Sucrose (5%), sigmoid", c=5, linestyle=:dash)
 kineticplot!(k_ful_sigm_10, label="Sucrose (10%), sigmoid", c=5, linestyle=:dot)
-plot!(pl1, legend=:topleft, size=(600,300))
+plot!(pl1, legend=(0.66, 0.5), size=(650,300), right_margin=100Plots.px)
+plot!(pl1, bottom_margin=20Plots.px, left_margin=12Plots.px)
 # pl2 = deepcopy(pl1)
 # plot!(pl2, xlim=(-38, -32), ylim=(1e-13, 1e-10), legend=:none, ylabel="")
 # plot(pl1, pl2, layout=@layout([a b{0.3w}]))
 end
 savefig(plotsdir("rate_constants.svg"))
 savefig(plotsdir("rate_constants.pdf"))
+# Fix the legend before exporting to PDF
 
 k_arrhenius = T->1e-7u"s^-1" * exp(-2000u"K"/T) # Near-maximum slope for Arrhenius
 k_arrhenius(-25u"°C"|> u"K")/ k_arrhenius(-45u"°C" |> u"K")  

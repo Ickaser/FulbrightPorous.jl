@@ -81,7 +81,7 @@ man_pdfit = map(man_dats, man_times) do dat, times
     dat_pd = filter(row -> row.phase == 4, dat)
     dat_pd.t .-= dat_pd.t[1]
     t_end = identify_pd_end(dat_pd.t, dat_pd.pch_pir, Val(:onoff); tmin=2u"hr")
-    @df dat_pd PrimaryDryFit(:t, (:T1[:t.<times[1]], :T2[:t.<times[2]], :T3[:t.<times[3]]); t_end)
+    @df dat_pd ExpFitData(:t, TfData(:T1[:t.<times[1]]), TfData(:T2[:t.<times[2]]), TfData(:T3[:t.<times[3]]), EndTimeData(t_end))
 end;
 plot(map(x->plot(x, nmarks=15, legend=:bottomright), man_pdfit)..., )
 

@@ -25,12 +25,11 @@ Tsh4 = RampedVariable(uconvert.(u"K", [-40, -40, -25]u"°C"), [1u"K/minute", 0.5
 # @df dat4 plot(:t, :Tsh, xlim=(0, 2))
 # plot!(Tsh4)
 
-fitdat4 = PrimaryDryFit(dat4.t, (
-    filter(x->(!isnan(x) && x<-32.5u"°C"), dat4.T1),
-    filter(!isnan, dat4.T2[dat4.t .< 60u"hr"]),
-    # collect(filter(!isnan, dat4.T3)),
-    ),
-    t_end=t_end4
+fitdat4 = ExpFitData(dat4.t, 
+    TfData(filter(x->(!isnan(x) && x<-32.5u"°C"), dat4.T1)),
+    TfData(filter(!isnan, dat4.T2[dat4.t .< 60u"hr"])),
+    # TfData(collect(filter(!isnan, dat4.T3))),
+    EndTimeData(t_end4)
 )
 # plot(fitdat4)
 
@@ -51,11 +50,11 @@ pch6 = RampedVariable(100u"mTorr")
 # plot!(pch6)
 # tendplot!(t_end6)
 
-fitdat6 = @df dat6 PrimaryDryFit(:t, (
-    # collect(filter(!isnan, :T1)),
-    filter(!isnan, :T2[:t .< 85u"hr"]),
-    filter(!isnan, :T3),),
-    t_end=t_end6)
+fitdat6 = @df dat6 ExpFitData(:t,
+    # TfData(collect(filter(!isnan, :T1))),
+    TfData(filter(!isnan, :T2[:t .< 85u"hr"])),
+    TfData(filter(!isnan, :T3)),
+    EndTimeData(t_end6))
 # plot(fitdat6)
 
 Tsh6 = RampedVariable(uconvert.(u"K", [-45, -45, -30]u"°C"), [1u"K/minute", 0.5u"K/minute"], [23u"minute"])
@@ -77,7 +76,11 @@ t_end5 = identify_pd_end(dat5.t, dat5.pch_pir, Val(:onoff), window_width=391,  t
 Tsh5 = RampedVariable(uconvert.(u"K", [-40, -25]u"°C"), 0.5u"K/minute")
 # @df dat5 plot(:t, :Tsh, xlim=(0, 2))
 # plot!(Tsh5)
-fitdat5 = @df dat5 PrimaryDryFit(:t, (filter(!isnan, :T1), filter(!isnan, :T2), :T3[:t.<45u"hr"]), t_end=t_end5)
+fitdat5 = @df dat5 ExpFitData(:t,
+    TfData(filter(!isnan, :T1)),
+    TfData(filter(!isnan, :T2)),
+    TfData(:T3[:t.<45u"hr"]),
+    EndTimeData(t_end5))
 # plot(fitdat5)
 
 # -----------------
@@ -96,7 +99,11 @@ Tsh2 = RampedVariable(uconvert.(u"K", [-40, -40, -20]u"°C"), [1u"K/minute", 0.5
 # @df dat2 plot(:t, :Tsh_i, xlim=(0, 2))
 # plot!(Tsh2)
 
-fitdat2 = @df dat2 PrimaryDryFit(:t, (filter(!isnan, :T1), filter(!isnan, :T3), :T2[:t.<40u"hr"]), t_end=t_end2)
+fitdat2 = @df dat2 ExpFitData(:t, 
+    TfData(filter(!isnan, :T1)),
+    TfData(filter(!isnan, :T3)),
+    TfData(:T2[:t.<40u"hr"]),
+    EndTimeData(t_end2))
 # plot(fitdat2)
 
 # -----------------
@@ -117,11 +124,11 @@ Tsh1 = RampedVariable(uconvert.(u"K", [-40, -40, -10]u"°C"), [1u"K/minute", 0.5
 # @df dat1 plot(:t, :Tsh_i, xlim=(0, 2))
 # plot!(Tsh1)
 
-fitdat1 = @df dat1 PrimaryDryFit(:t, (
-    filter(!isnan, :T1),
-    filter(!isnan, :T2[:t .< 17u"hr"]),
-    filter(!isnan, :T3[:t .< 17u"hr"]),),
-    t_end=t_end1);
+fitdat1 = @df dat1 ExpFitData(:t,
+    TfData(filter(!isnan, :T1)),
+    TfData(filter(!isnan, :T2[:t .< 17u"hr"])),
+    TfData(filter(!isnan, :T3[:t .< 17u"hr"])),
+    EndTimeData(t_end1))
 # plot(fitdat1)
 end
 
@@ -737,7 +744,7 @@ end...))
 #     )
     
 
-#     # if pf[2] isa PrimaryDryFit
+#     # if pf[2] isa ExpFitData
 #     #     p = setproperties(pf[1], newps)
 #     #     sol = solve(ODEProblem(p), odealg_chunk4)
 #     #     sqerr = obj_expT(sol, pf[2], tweight=1e-2)

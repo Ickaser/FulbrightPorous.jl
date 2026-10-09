@@ -31,12 +31,11 @@ plot!(Tsh1)
 
 @df dat1[10:end] exptfplot(:t, :T1, :T2, :T3)
 
-fitdat1 = @df dat1[12:end] PrimaryDryFit(:t, (
-    filter(!isnan, :T1),
-    :T2[:t .< 22u"hr"],
-    :T3[:t .< 20u"hr"],
-    );
-    t_end=t_end1
+fitdat1 = @df dat1[12:end] ExpFitData(:t,
+    TfData(filter(!isnan, :T1)),
+    TfData(:T2[:t .< 22u"hr"]),
+    TfData(:T3[:t .< 20u"hr"]),
+    EndTimeData(t_end1)
 )
 plot(fitdat1)
 
@@ -61,12 +60,11 @@ plot!(Tsh2)
 
 @df dat2 exptfplot(:t, :T1, :T2, :T3)
 
-fitdat2 = @df dat2[10:end] PrimaryDryFit(:t, (
-    filter(!isnan, :T1),
-    filter(!isnan, :T2),
-    :T3[:t .< 7.5u"hr"],
-    );
-    t_end=t_end2
+fitdat2 = @df dat2[10:end] ExpFitData(:t,
+    TfData(filter(!isnan, :T1)),
+    TfData(filter(!isnan, :T2)),
+    TfData(:T3[:t .< 7.5u"hr"]),
+    EndTimeData(t_end2)
 )
 plot(fitdat2)
 
@@ -94,12 +92,11 @@ plot!(Tsh3)
 
 @df dat3 exptfplot(:t, :T1, :T2, :T3)
 
-fitdat3 = @df dat3[10:end] PrimaryDryFit(:t, (
-    filter(!isnan, :T1),
-    :T2[:t .< 13u"hr"],
-    filter(!isnan, :T3),
-    );
-    t_end=t_end3
+fitdat3 = @df dat3[10:end] ExpFitData(:t,
+    TfData(filter(!isnan, :T1)),
+    TfData(:T2[:t .< 13u"hr"]),
+    TfData(filter(!isnan, :T3)),
+    EndTimeData(t_end3)
 )
 plot(fitdat3)
 
@@ -124,12 +121,11 @@ plot!(Tsh6)
 
 @df dat6 exptfplot(:t, :T1, :T2, :T3)
 
-fitdat6 = @df dat6[20:end] PrimaryDryFit(:t, (
-    filter(!isnan, :T1),
-    :T2[:t .< 7u"hr"],
-    filter(!isnan, :T3),
-    );
-    t_end=t_end6
+fitdat6 = @df dat6[20:end] ExpFitData(:t,
+    TfData(filter(!isnan, :T1)),
+    TfData(:T2[:t .< 7u"hr"]),
+    TfData(filter(!isnan, :T3)),
+    EndTimeData(t_end6)
 )
 plot(fitdat6)
 
@@ -154,12 +150,11 @@ plot!(Tsh7)
 
 @df dat7 exptfplot(:t, :T1, :T2, :T3)
 
-fitdat7 = @df dat7[15:end] PrimaryDryFit(:t, (
-    filter(!isnan, :T1),
-    filter(!isnan, :T2),
-    :T3[:t .< 9u"hr"],
-    );
-    t_end=t_end7
+fitdat7 = @df dat7[15:end] ExpFitData(:t,
+    TfData(filter(!isnan, :T1)),
+    TfData(filter(!isnan, :T2)),
+    TfData(:T3[:t .< 9u"hr"]),
+    EndTimeData(t_end7)
 )
 plot(fitdat7)
 end

@@ -7,6 +7,7 @@ const OP = OptimizationProblem
 LSOLM = LeastSquaresOptimJL(:lm; autodiff=:forward)
 # pythonplot()
 
+
 begin
 # ------------------
 # Load Kv function
@@ -14,124 +15,128 @@ begin
 Kshf = load(datadir("exp_pro", "simtra_kv.jld2"))["K_shf"]
 
 # --------------------------
-# Cycle 1
-# Labeled as case 4 in Table 8
-dat1raw = CSV.read(datadir("exp_raw", "Simtra_Rp", "Suc_Cycle1.csv"), Table)
-dat1 = map(simtra_rename, dat1raw)
+# Cycle 1 with original filenames, but labeled as case 4 in Table 8: use that numbering
+dat4raw = CSV.read(datadir("exp_raw", "Simtra_Rp", "Suc_Cycle4.csv"), Table)
+dat4 = map(simtra_rename, dat4raw)
 
-t_end1 = identify_pd_end(dat1.t, dat1.pch_pir, Val(:onoff), window_width=391,  tmin=10u"hr",  tmax=85u"hr")
+t_end4 = identify_pd_end(dat4.t, dat4.pch_pir, Val(:onoff), window_width=391,  tmin=10u"hr",  tmax=85u"hr")
 
-pch1 = RampedVariable(100u"mTorr")
-# @df dat1 plot(:t, :pch_cm, ylim=(0, 200))
-# @df dat1 plot(:t, :pch_pir, ylim=(0, 200))
-# plot!(pch1)
-# tendplot!(t_end1)
+pch4 = RampedVariable(100u"mTorr")
+# @df dat4 plot(:t, :pch_cm, ylim=(0, 200))
+# @df dat4 plot(:t, :pch_pir, ylim=(0, 200))
+# plot!(pch4)
+# tendplot!(t_end4)
 
 # There's a slight delay before shelf temperature ramps
-Tsh1 = RampedVariable(uconvert.(u"K", [-40, -40, -25]u"°C"), [1u"K/minute", 0.5u"K/minute"], [23u"minute"])
-# @df dat1 plot(:t, :Tsh, xlim=(0, 2))
-# plot!(Tsh1)
+Tsh4 = RampedVariable(uconvert.(u"K", [-40, -40, -25]u"°C"), [1u"K/minute", 0.5u"K/minute"], [23u"minute"])
+# @df dat4 plot(:t, :Tsh, xlim=(0, 2))
+# plot!(Tsh4)
 
-fitdat1 = PrimaryDryFit(dat1.t, (
-    filter(x->(!isnan(x) && x<-32.5u"°C"), dat1.T1),
-    filter(!isnan, dat1.T2[dat1.t .< 60u"hr"]),
-    # collect(filter(!isnan, dat1.T3)),
-    ),
-    t_end=t_end1
+fitdat4 = ExpFitData(dat4.t, 
+    TfData(filter(x->(!isnan(x) && x<-32.5u"°C"), dat4.T1)),
+    TfData(filter(!isnan, dat4.T2[dat4.t .< 60u"hr"])),
+    # TfData(collect(filter(!isnan, dat4.T3))),
+    EndTimeData(t_end4)
 )
-# plot(fitdat1)
+# plot(fitdat4)
 
 # ------------------------------
-# Cycle 2
+# Cycle 6 according to publication naming
 
-dat2raw = CSV.read(datadir("exp_raw", "Simtra_Rp", "Suc_Cycle2.csv"), Table)
-dat2 = map(simtra_rename, dat2raw)
-filter!(x->x.t .> 0u"hr", dat2)
+dat6raw = CSV.read(datadir("exp_raw", "Simtra_Rp", "Suc_Cycle6.csv"), Table)
+dat6 = map(simtra_rename, dat6raw)
+filter!(x->x.t .> 0u"hr", dat6)
 
-# @df dat1 exptfplot(:t, :T1, :T2, :T3)
-# @df dat2 exptfplot!(:t, :T1, :T2, :T3, c=:red)
+# @df dat6 exptfplot!(:t, :T1, :T2, :T3, c=:red)
 # plot!(ylim=(-40, -30))
 
-t_end2 = identify_pd_end(dat2.t, dat2.pch_pir, Val(:onoff), window_width=391,  tmin=10u"hr",  tmax=120u"hr")
-pch2 = RampedVariable(100u"mTorr")
-# @df dat2 plot(:t, :pch_cm, ylim=(0, 200))
-# @df dat2 plot(:t, :pch_pir, ylim=(0, 200))
-# plot!(pch2)
-# tendplot!(t_end2)
+t_end6 = identify_pd_end(dat6.t, dat6.pch_pir, Val(:onoff), window_width=391,  tmin=10u"hr",  tmax=120u"hr")
+pch6 = RampedVariable(100u"mTorr")
+# @df dat6 plot(:t, :pch_cm, ylim=(0, 200))
+# @df dat6 plot(:t, :pch_pir, ylim=(0, 200))
+# plot!(pch6)
+# tendplot!(t_end6)
 
-fitdat2 = @df dat2 PrimaryDryFit(:t, (
-    # collect(filter(!isnan, :T1)),
-    filter(!isnan, :T2[:t .< 85u"hr"]),
-    filter(!isnan, :T3),),
-    t_end=t_end2)
-# plot(fitdat2)
+fitdat6 = @df dat6 ExpFitData(:t,
+    # TfData(collect(filter(!isnan, :T1))),
+    TfData(filter(!isnan, :T2[:t .< 85u"hr"])),
+    TfData(filter(!isnan, :T3)),
+    EndTimeData(t_end6))
+# plot(fitdat6)
 
-Tsh2 = RampedVariable(uconvert.(u"K", [-45, -45, -30]u"°C"), [1u"K/minute", 0.5u"K/minute"], [23u"minute"])
-# @df dat2 plot(:t, :Tsh, xlim=(0, 2))
-# plot!(Tsh2)
+Tsh6 = RampedVariable(uconvert.(u"K", [-45, -45, -30]u"°C"), [1u"K/minute", 0.5u"K/minute"], [23u"minute"])
+# @df dat6 plot(:t, :Tsh, xlim=(0, 2))
+# plot!(Tsh6)
 
 # -------------------------------  
-# Cycle 3
-dat3raw = CSV.read(datadir("exp_raw", "Simtra_Rp", "Suc_Cycle3.csv"), Table)
-dat3 = map(simtra_rename, dat3raw)
-@df dat3 exptfplot(:t, :T1, :T2, :T3)
-
-pch3 = RampedVariable(60u"mTorr")
-t_end3 = identify_pd_end(dat3.t, dat3.pch_pir, Val(:onoff), window_width=391,  tmin=10u"hr",  tmax=68u"hr")
-# @df dat3 plot(:t, :pch_cm, ylim=(0, 200))
-# @df dat3 plot!(:t, :pch_pir, ylim=(0, 200))
-# plot!(pch3)
-# tendplot!(t_end3)
-
-Tsh3 = RampedVariable(uconvert.(u"K", [-40, -25]u"°C"), 0.5u"K/minute")
-# @df dat3 plot(:t, :Tsh, xlim=(0, 2))
-# plot!(Tsh3)
-fitdat3 = @df dat3 PrimaryDryFit(:t, (filter(!isnan, :T1), filter(!isnan, :T2), :T3[:t.<45u"hr"]), t_end=t_end3)
-# plot(fitdat3)
-
-# -----------------
 # Cycle 5
 dat5raw = CSV.read(datadir("exp_raw", "Simtra_Rp", "Suc_Cycle5.csv"), Table)
 dat5 = map(simtra_rename, dat5raw)
 
-pch5 = RampedVariable(50u"mTorr")
-t_end5 = identify_pd_end(dat5.t, dat5.pch_pir, Val(:onoff), window_width=391,  tmin=10u"hr",  tmax=50u"hr")
+pch5 = RampedVariable(60u"mTorr")
+t_end5 = identify_pd_end(dat5.t, dat5.pch_pir, Val(:onoff), window_width=391,  tmin=10u"hr",  tmax=68u"hr")
 # @df dat5 plot(:t, :pch_cm, ylim=(0, 200))
 # @df dat5 plot!(:t, :pch_pir, ylim=(0, 200))
 # plot!(pch5)
 # tendplot!(t_end5)
 
-Tsh5 = RampedVariable(uconvert.(u"K", [-40, -40, -20]u"°C"), [1u"K/minute", 0.5u"K/minute"], [12u"minute"])
-# @df dat5 plot(:t, :Tsh_i, xlim=(0, 2))
+Tsh5 = RampedVariable(uconvert.(u"K", [-40, -25]u"°C"), 0.5u"K/minute")
+# @df dat5 plot(:t, :Tsh, xlim=(0, 2))
 # plot!(Tsh5)
-
-fitdat5 = @df dat5 PrimaryDryFit(:t, (filter(!isnan, :T1), filter(!isnan, :T3), :T2[:t.<40u"hr"]), t_end=t_end5)
+fitdat5 = @df dat5 ExpFitData(:t,
+    TfData(filter(!isnan, :T1)),
+    TfData(filter(!isnan, :T2)),
+    TfData(:T3[:t.<45u"hr"]),
+    EndTimeData(t_end5))
 # plot(fitdat5)
 
 # -----------------
-# Cycle 8, high temperature
-dat8raw = CSV.read(datadir("exp_raw", "Simtra_Rp", "Suc_Cycle8.csv"), Table)
-dat8 = map(simtra_rename, dat8raw)
-# @df dat8 exptfplot(:t, :T1, :T2, :T3)
-# @df dat8 plot!(:t, :Tsh_i, xlim=(0, 20), ylim=(-40, -20))
+# Cycle 5
+dat2raw = CSV.read(datadir("exp_raw", "Simtra_Rp", "Suc_Cycle2.csv"), Table)
+dat2 = map(simtra_rename, dat2raw)
 
-pch8 = RampedVariable(100u"mTorr")
-t_end8 = identify_pd_end(dat8.t, dat8.pch_pir, Val(:onoff), window_width=391,  tmin=10u"hr",  tmax=41u"hr")
-# @df dat8 plot(:t, :pch_cm, ylim=(0, 200))
-# @df dat8 plot(:t, :pch_pir, ylim=(0, 200))
-# plot!(pch8)
-# tendplot!(t_end8)
+pch2 = RampedVariable(50u"mTorr")
+t_end2 = identify_pd_end(dat2.t, dat2.pch_pir, Val(:onoff), window_width=391,  tmin=10u"hr",  tmax=50u"hr")
+# @df dat2 plot(:t, :pch_cm, ylim=(0, 200))
+# @df dat2 plot!(:t, :pch_pir, ylim=(0, 200))
+# plot!(pch2)
+# tendplot!(t_end2)
 
-Tsh8 = RampedVariable(uconvert.(u"K", [-40, -40, -10]u"°C"), [1u"K/minute", 0.5u"K/minute"], [4u"minute"])
-# @df dat8 plot(:t, :Tsh_i, xlim=(0, 2))
-# plot!(Tsh8)
+Tsh2 = RampedVariable(uconvert.(u"K", [-40, -40, -20]u"°C"), [1u"K/minute", 0.5u"K/minute"], [12u"minute"])
+# @df dat2 plot(:t, :Tsh_i, xlim=(0, 2))
+# plot!(Tsh2)
 
-fitdat8 = @df dat8 PrimaryDryFit(:t, (
-    filter(!isnan, :T1),
-    filter(!isnan, :T2[:t .< 17u"hr"]),
-    filter(!isnan, :T3[:t .< 17u"hr"]),),
-    t_end=t_end8);
-# plot(fitdat8)
+fitdat2 = @df dat2 ExpFitData(:t, 
+    TfData(filter(!isnan, :T1)),
+    TfData(filter(!isnan, :T3)),
+    TfData(:T2[:t.<40u"hr"]),
+    EndTimeData(t_end2))
+# plot(fitdat2)
+
+# -----------------
+# Cycle 1, high temperature
+dat1raw = CSV.read(datadir("exp_raw", "Simtra_Rp", "Suc_Cycle1.csv"), Table)
+dat1 = map(simtra_rename, dat1raw)
+# @df dat1 exptfplot(:t, :T1, :T2, :T3)
+# @df dat1 plot!(:t, :Tsh_i, xlim=(0, 20), ylim=(-40, -20))
+
+pch1 = RampedVariable(100u"mTorr")
+t_end1 = identify_pd_end(dat1.t, dat1.pch_pir, Val(:onoff), window_width=391,  tmin=10u"hr",  tmax=41u"hr")
+# @df dat1 plot(:t, :pch_cm, ylim=(0, 200))
+# @df dat1 plot(:t, :pch_pir, ylim=(0, 200))
+# plot!(pch1)
+# tendplot!(t_end1)
+
+Tsh1 = RampedVariable(uconvert.(u"K", [-40, -40, -10]u"°C"), [1u"K/minute", 0.5u"K/minute"], [4u"minute"])
+# @df dat1 plot(:t, :Tsh_i, xlim=(0, 2))
+# plot!(Tsh1)
+
+fitdat1 = @df dat1 ExpFitData(:t,
+    TfData(filter(!isnan, :T1)),
+    TfData(filter(!isnan, :T2[:t .< 17u"hr"])),
+    TfData(filter(!isnan, :T3[:t .< 17u"hr"])),
+    EndTimeData(t_end1))
+# plot(fitdat1)
 end
 
 # tcond = (termination_condition=NonlinearSolve.AbsTerminationMode(),)

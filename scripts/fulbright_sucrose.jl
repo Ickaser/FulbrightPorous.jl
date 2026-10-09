@@ -38,13 +38,12 @@ Tsh1 = RampedVariable(uconvert.(u"K", [-47.0, -20]u"°C"), 0.5u"K/minute")
 
 @df dat1 exptfplot(:t, :T1, :T2, :T3, :T4)
 
-fitdat1 = @df dat1 PrimaryDryFit(:t, 
-    (:T1[:t .< 4.8u"hr"],
-    :T2[:t .< 5u"hr"],
-    :T3[:t .< 5u"hr"],
-    :T4[:t .< 5.7u"hr"],
-    );
-    t_end=t_end1
+fitdat1 = @df dat1 ExpFitData(:t, 
+    TfData(:T1[:t .< 4.8u"hr"]),
+    TfData(:T2[:t .< 5u"hr"]),
+    TfData(:T3[:t .< 5u"hr"]),
+    TfData(:T4[:t .< 5.7u"hr"]),
+    EndTimeData(t_end1)
 )
 plot(fitdat1)
 
@@ -75,13 +74,12 @@ Tsh2 = RampedVariable(uconvert.(u"K", [-47.0, -10]u"°C"), 0.5u"K/minute")
 
 # @df dat2 exptfplot(:t, :T1, :T2, :T3, :T4)
 
-fitdat2 = @df dat2 PrimaryDryFit(:t, (
-    :T1[:t .< 7u"hr"],
-    :T2[:t .< 7u"hr"],
-    :T3[:t .< 4u"hr"],
-    :T4[:t .< 3u"hr"],
-    );
-    t_end=t_end2
+fitdat2 = @df dat2 ExpFitData(:t,
+    TfData(:T1[:t .< 7u"hr"]),
+    TfData(:T2[:t .< 7u"hr"]),
+    TfData(:T3[:t .< 4u"hr"]),
+    TfData(:T4[:t .< 3u"hr"]),
+    EndTimeData(t_end2)
 )
 # plot(fitdat2)
 
@@ -105,13 +103,12 @@ Tsh3 = RampedVariable(uconvert.(u"K", [-47.0, 0.0]u"°C"), 0.5u"K/minute")
 
 # @df dat3 exptfplot(:t, :T1, :T2, :T3, :T4)
 
-fitdat3 = @df dat3 PrimaryDryFit(:t, (
-    :T1[:t .< 3u"hr"],
-    :T2[:t .< 4u"hr"],
-    :T3[:t .< 3.5u"hr"],
-    :T4[:t .< 3.5u"hr"],
-    );
-    t_end=t_end3
+fitdat3 = @df dat3 ExpFitData(:t,
+    TfData(:T1[:t .< 3u"hr"]),
+    TfData(:T2[:t .< 4u"hr"]),
+    TfData(:T3[:t .< 3.5u"hr"]),
+    TfData(:T4[:t .< 3.5u"hr"]),
+    EndTimeData(t_end3)
 )
 # plot(fitdat3)
 
@@ -138,13 +135,12 @@ Tsh4 = RampedVariable(uconvert.(u"K", [-47.0, -20.0]u"°C"), 0.5u"K/minute")
 
 # @df dat4 exptfplot(:t, :T1, :T2, :T3, :T4)
 
-fitdat4 = @df dat4 PrimaryDryFit(:t, (
-    :T1[:t .< 6.4u"hr"],
-    :T2[:t .< 6.5u"hr"],
-    :T3[:t .< 7u"hr"],
-    :T4[:t .< 8.5u"hr"],
-    );
-    t_end=t_end4
+fitdat4 = @df dat4 ExpFitData(:t,
+    TfData(:T1[:t .< 6.4u"hr"]),
+    TfData(:T2[:t .< 6.5u"hr"]),
+    TfData(:T3[:t .< 7u"hr"]),
+    TfData(:T4[:t .< 8.5u"hr"]),
+    EndTimeData(t_end4)
 )
 plot(fitdat4)
 
@@ -168,13 +164,12 @@ Tsh5 = RampedVariable(uconvert.(u"K", [-47.0, -30.0]u"°C"), 0.5u"K/minute")
 
 # @df dat5 exptfplot(:t, :T1, :T2, :T3, :T4)
 
-fitdat5 = @df dat5 PrimaryDryFit(:t, (
-    :T1[:t .< 11u"hr"] .-2u"K",
-    :T2[:t .< 14u"hr"] .-2u"K",
-    :T3[:t .< 13u"hr"] .-2u"K",
-    :T4[:t .< 10u"hr"] .-2u"K",
-    );
-    t_end=t_end5
+fitdat5 = @df dat5 ExpFitData(:t,
+    TfData(:T1[:t .< 11u"hr"] .-2u"K"),
+    TfData(:T2[:t .< 14u"hr"] .-2u"K"),
+    TfData(:T3[:t .< 13u"hr"] .-2u"K"),
+    TfData(:T4[:t .< 10u"hr"] .-2u"K"),
+    EndTimeData(t_end5)
 )
 # plot(fitdat5)
 
@@ -198,13 +193,12 @@ Tsh6 = RampedVariable(uconvert.(u"K", [-45.0, -0]u"°C"), 0.5u"K/minute")
 
 @df dat6 exptfplot(:t, :T1, :T2, :T3, :T4)
 
-fitdat6 = @df dat6 PrimaryDryFit(:t, (
-    :T1[:t .< 3u"hr"],
-    :T2[:t .< 3u"hr"],
-    :T3[:t .< 2.5u"hr"],
-    :T4[:t .< 3u"hr"],
-    );
-    t_end=t_end6
+fitdat6 = @df dat6 ExpFitData(:t,
+    TfData(:T1[:t .< 3u"hr"]),
+    TfData(:T2[:t .< 3u"hr"]),
+    TfData(:T3[:t .< 2.5u"hr"]),
+    TfData(:T4[:t .< 3u"hr"]),
+    EndTimeData(t_end6)
 )
 # plot(fitdat6)
 
@@ -230,13 +224,12 @@ Tsh7 = RampedVariable(uconvert.(u"K", [-46.0, -20]u"°C"), 0.5u"K/minute")
 @df dat7raw plot([:TP1, :TP2, :TP3, :TP4], xlim=(0, 120), ylim=(-5, 0))
 # # @df dat7raw plot(:TP1 .- :TP2)
 
-fitdat7 = @df dat7 PrimaryDryFit(:t, (
-    :T1[:t .< 6.5u"hr"],
-    :T2[:t .< 7.5u"hr"],
-    :T3[:t .< 9u"hr"],
-    :T4[:t .< 8u"hr"],
-    );
-    t_end=t_end7
+fitdat7 = @df dat7 ExpFitData(:t,
+    TfData(:T1[:t .< 6.5u"hr"]),
+    TfData(:T2[:t .< 7.5u"hr"]),
+    TfData(:T3[:t .< 9u"hr"]),
+    TfData(:T4[:t .< 8u"hr"]),
+    EndTimeData(t_end7)
 )
 # plot(fitdat7)
 
