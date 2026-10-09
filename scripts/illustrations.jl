@@ -291,14 +291,14 @@ plot!(ylabel="p_\\mathrm{sub}", xlabel="T\\quad  ", unitformat=latexify)
 plot!(legend=:none)
 # vspan!([-7, 0], c=:orange, alpha=0.4)
 hspan!([-200, 50]u"mTorr", c=:black, alpha=0.4)
-FulbrightPores.calc_mfp_dref(50u"mTorr", -45u"°C")
+FulbrightPorous.calc_mfp_dref(50u"mTorr", -45u"°C")
 plot!(arrowTs, arrowps, arrow=true, c=:black)
 plot!(size=(400,300))
 
 for point in [(-40u"°C", 50u"mTorr", -1), (-10u"°C", 50u"mTorr", -1), (-30u"°C", 280u"mTorr", 1),
     (-20u"°C", 750u"mTorr", 1), (-10u"°C", 1900u"mTorr", -1)]
     scatter!([point[1]], [point[2]], marker=:star5, ms=8, c=:blue)
-    plot!([point[1]], [point[2]].+point[3]*150u"mTorr", text=Plots.text("$(round(typeof(1u"μm"), FulbrightPores.calc_mfp_dref(point[2], point[1])))", 12) )
+    plot!([point[1]], [point[2]].+point[3]*150u"mTorr", text=Plots.text("$(round(typeof(1u"μm"), FulbrightPorous.calc_mfp_dref(point[2], point[1])))", 12) )
 end
 plot!()
 end
@@ -328,10 +328,10 @@ plot(xlabel=L"T\; /\;;  ^\circ C")
 latexify(u"°C")
 latexify("T", u"°C")
 
-FulbrightPores.calc_mfp_dref(50u"mTorr", -45u"°C")
-FulbrightPores.calc_mfp_dref(50u"mTorr", -15u"°C")
-FulbrightPores.calc_mfp_dref(100u"mTorr", -15u"°C")
-FulbrightPores.calc_mfp_dref(2000u"mTorr", -10u"°C")
+FulbrightPorous.calc_mfp_dref(50u"mTorr", -45u"°C")
+FulbrightPorous.calc_mfp_dref(50u"mTorr", -15u"°C")
+FulbrightPorous.calc_mfp_dref(100u"mTorr", -15u"°C")
+FulbrightPorous.calc_mfp_dref(2000u"mTorr", -10u"°C")
 
 
 # Bundle of capillaries: illustrate second moments

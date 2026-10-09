@@ -1,5 +1,5 @@
 using DrWatson
-@quickactivate :FulbrightPores
+@quickactivate :FulbrightPorous
 import LeastSquaresOptim
 
 const NLSP = NonlinearLeastSquaresProblem
@@ -219,11 +219,11 @@ pomc2 = new_Tp(pomc1, Tsh2, pch2)
 pomc3 = new_Tp(pomc1, Tsh3, pch3)
 pomc5 = new_Tp(pomc1, Tsh5, pch5)
 pomc8 = new_Tp(pomc1, Tsh8, pch8)
-dat1 = Table(dat1, (ld=FulbrightPores.calc_l(dat1, pop1.hf0)))
-dat2 = Table(dat2, (ld=FulbrightPores.calc_l(dat2, pop2.hf0)))
-dat3 = Table(dat3, (ld=FulbrightPores.calc_l(dat3, pop3.hf0)))
-dat5 = Table(dat5, (ld=FulbrightPores.calc_l(dat5, pop5.hf0)))
-dat8 = Table(dat8, (ld=FulbrightPores.calc_l(dat8, pop8.hf0)))
+dat1 = Table(dat1, (ld=FulbrightPorous.calc_l(dat1, pop1.hf0)))
+dat2 = Table(dat2, (ld=FulbrightPorous.calc_l(dat2, pop2.hf0)))
+dat3 = Table(dat3, (ld=FulbrightPorous.calc_l(dat3, pop3.hf0)))
+dat5 = Table(dat5, (ld=FulbrightPorous.calc_l(dat5, pop5.hf0)))
+dat8 = Table(dat8, (ld=FulbrightPorous.calc_l(dat8, pop8.hf0)))
 end
 
 cases = Table([ (name="1", pop=pop1, pomc=pomc1, fitdat=fitdat1, dat=dat1),

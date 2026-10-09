@@ -1,5 +1,5 @@
 using DrWatson
-@quickactivate :FulbrightPores
+@quickactivate :FulbrightPorous
 
 using Turing
 
@@ -16,7 +16,7 @@ pos128 = mcfits[(MYEGA_k, 1, (1,2,8))], mcfits[(MYEGA_k, 2, (1,2,8))], mcfits[(M
 fits128 = fitdats[1], fitdats[2], fitdats[8]
 
 # porous_scale = (2e6u"cm^-3", 5e-7u"cm^3", 2e-1u"m^0.5", 0.1u"cm^2*Torr*hr/g")
-porous_scale = FulbrightPores.fit_scl_porous
+porous_scale = FulbrightPorous.fit_scl_porous
 # porous_scale = (basefit1.N(0), basefit1.S(0), basefit1.C, basefit1.Rs)
 basek = basefit1.k_f
 myega_scale = (basek.k0, basek.K, basek.C)

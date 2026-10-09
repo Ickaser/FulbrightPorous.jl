@@ -1,4 +1,4 @@
-module FulbrightPores
+module FulbrightPorous
 using Reexport
 
 @reexport using LyoPronto

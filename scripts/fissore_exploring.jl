@@ -1,4 +1,4 @@
-@quickactivate :FulbrightPores
+@quickactivate :FulbrightPorous
 pythonplot()
 const NLSP = NonlinearLeastSquaresProblem
 const LM = LevenbergMarquardt

@@ -1,5 +1,5 @@
 using DrWatson, Test
-@quickactivate "FulbrightPores"
+@quickactivate "FulbrightPorous"
 
 # Here you include files using `srcdir`
 # include(srcdir("file.jl"))
@@ -8,7 +8,7 @@ using DrWatson, Test
 println("Starting tests")
 ti = time()
 
-@testset "FulbrightPores tests" begin
+@testset "FulbrightPorous tests" begin
 	include("test_pikal_microcollapse.jl")
 end
 

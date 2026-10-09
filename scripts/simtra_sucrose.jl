@@ -186,11 +186,11 @@ pomc2 = new_Tp(pomc1, Tsh2, pch2)
 pomc4 = new_Tp(pomc1, Tsh4, pch4)
 pomc5 = new_Tp(pomc1, Tsh5, pch5)
 pomc6 = new_Tp(pomc1, Tsh6, pch6)
-dat1 = Table(dat1, (ld=FulbrightPores.calc_l(dat1, pop1.hf0)))
-dat2 = Table(dat2, (ld=FulbrightPores.calc_l(dat2, pop2.hf0)))
-dat4 = Table(dat4, (ld=FulbrightPores.calc_l(dat4, pop4.hf0)))
-dat5 = Table(dat5, (ld=FulbrightPores.calc_l(dat5, pop5.hf0)))
-dat6 = Table(dat6, (ld=FulbrightPores.calc_l(dat6, pop6.hf0)))
+dat1 = Table(dat1, (ld=FulbrightPorous.calc_l(dat1, pop1.hf0)))
+dat2 = Table(dat2, (ld=FulbrightPorous.calc_l(dat2, pop2.hf0)))
+dat4 = Table(dat4, (ld=FulbrightPorous.calc_l(dat4, pop4.hf0)))
+dat5 = Table(dat5, (ld=FulbrightPorous.calc_l(dat5, pop5.hf0)))
+dat6 = Table(dat6, (ld=FulbrightPorous.calc_l(dat6, pop6.hf0)))
 end
 
 cases = Table([ (name="1", pop=pop1, pomc=pomc1, fitdat=fitdat1, dat=dat1),
@@ -320,7 +320,7 @@ k_logs_trans = as((;klog=as((kl1 = TV.Identity(),
             kl4 = TVScale(10.0) ∘ TVLogistic(),
             ))))
 interp_nt = as((;k_f = as(InterpK, merge(k_logs_trans, T_interps_trans))))
-porous_nt = FulbrightPores.porous_transform_bounded(fillvol)
+porous_nt = FulbrightPorous.porous_transform_bounded(fillvol)
 myega_nt = as((;k_f=as(MYEGA_k, as((k0 = TVScale(1e11u"s^-1") ∘ TVExp(),
             K1 = TVScale(5e4u"K") ∘ TVShift(0.001) ∘ TVLogistic() ∘ TVShift(TV.logit(0.05)),
             K2 = TVScale(6e2u"K") ∘ TVShift(0.01) ∘ TVLogistic() ,)))))
@@ -330,12 +330,12 @@ myega_nt = as((;k_f=as(MYEGA_k, as((k0 = TVScale(1e11u"s^-1") ∘ TVExp(),
 #             K1 = TVScale(0.8u"K") ∘ TVExp(),
 #             K2 = TVScale(1.0u"K") ∘ TVShift(216.0) ∘ TVScale(45.0) ∘ TVLogistic() ∘TVScale(0.1) ,)
 # )))
-sigma_nt = FulbrightPores.sigmoid_transform_bounded(1e-8u"s^-1", 0.8u"K")
+sigma_nt = FulbrightPorous.sigmoid_transform_bounded(1e-8u"s^-1", 0.8u"K")
 trans_interp = merge(porous_nt, interp_nt)
 trans_myega = merge(porous_nt, myega_nt)
 trans_sigma = merge(porous_nt, sigma_nt)
 
-obj_nmc = OptimizationFunction((x,y)->objn_pd(x,y; badprms=FulbrightPores.badNS, tweight=1e-2), AutoForwardDiff(chunksize=4))
+obj_nmc = OptimizationFunction((x,y)->objn_pd(x,y; badprms=FulbrightPorous.badNS, tweight=1e-2), AutoForwardDiff(chunksize=4))
 
 
 interp_guess = [-1.0, 1, 0, 0, -1, 0, 1, -2]
@@ -672,11 +672,11 @@ savefig(plotsdir("simtra_suc_Rp_PBM_overlay.svg"))
 
 # ------------------------
 # Knudsen numbers
-FulbrightPores.calc_Kn(get_sol_mc(6, fitnum))
-FulbrightPores.calc_Kn(get_sol_mc(1, fitnum))
+FulbrightPorous.calc_Kn(get_sol_mc(6, fitnum))
+FulbrightPorous.calc_Kn(get_sol_mc(1, fitnum))
 Table(vcat(map([1,2,4,5,6]) do i
     sol = get_sol_mc(i, fitnum)
-    Kn_tab = FulbrightPores.calc_Kn(sol)[[begin+1, end]]
+    Kn_tab = FulbrightPorous.calc_Kn(sol)[[begin+1, end]]
 end...))
 
 

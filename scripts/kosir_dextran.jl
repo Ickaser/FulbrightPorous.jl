@@ -148,7 +148,7 @@ plot(KRp_plots...)
 end
 
 # Ignore microcollapse kinetics in fit: treat as known at 0
-porous_nt = FulbrightPores.porous_transform_bounded(Vfill)
+porous_nt = FulbrightPorous.porous_transform_bounded(Vfill)
 
 NTV, STV, CTV, RsTV = map(key->getproperty(porous_nt, key), (:N, :S, :C, :Rs))
 trans_cr = as((C=CTV, Rs=RsTV))

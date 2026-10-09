@@ -1,4 +1,4 @@
-@quickactivate :FulbrightPores
+@quickactivate :FulbrightPorous
 
 const OP = OptimizationProblem
 using LineSearches
@@ -267,7 +267,7 @@ for (case, st) in zip(sort(cases_Rps, by=x->maximum(x.fitdat.Tfs[2])), sts)
     # pl_Rp = plot(u"cm", u"cm^2*hr*Torr/g", ylabel="Rp", xlabel="l")
     Tsh = case.pop.Tsh(Inf*u"s") |> u"°C"
     plot!(lr, case.Rp.(lr), c=st.c, label="$(case.name) fit; Tsh=$(Tsh)")
-    ld = FulbrightPores.calc_l(case.dat, case.pop.hf0)
+    ld = FulbrightPorous.calc_l(case.dat, case.pop.hf0)
     plot!(ld, case.dat.Rp, c=st.c, marker=st.marker, markersize=7, la=0.5, lw=1, seriestype=:samplemarkers, step=100, label="$(case.name) TDLAS")
     plot!(ylim=(0, 15), legend=:topleft)
 end

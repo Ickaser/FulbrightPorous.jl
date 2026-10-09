@@ -389,14 +389,14 @@ pass123 = make_mcpass([1, 2, 3])
 pass45 = make_mcpass([4, 5])
 pass7 = make_mcpass([7])
 
-porous_nt = FulbrightPores.porous_transform_bounded(fillvol)
-# myega_nt = FulbrightPores.myega_transform_basic(1e42u"s^-1", 2.0e4u"K", 1e2u"K")
-sigma_nt = FulbrightPores.sigmoid_transform_bounded(1e-10u"s^-1", 1.0u"K")
+porous_nt = FulbrightPorous.porous_transform_bounded(fillvol)
+# myega_nt = FulbrightPorous.myega_transform_basic(1e42u"s^-1", 2.0e4u"K", 1e2u"K")
+sigma_nt = FulbrightPorous.sigmoid_transform_bounded(1e-10u"s^-1", 1.0u"K")
 # trans_myega = merge(porous_nt, myega_nt)
 trans_sigma = merge(porous_nt, sigma_nt)
 
 # objn_myega(fitprm, pf) = objn_mc(fitprm, (trans_myega, pf...), tweight=1e-2)
-obj_mc(fitprm, tpf) = objn_pd(fitprm, tpf; badprms=FulbrightPores.badNS, tweight=1e-2)
+obj_mc(fitprm, tpf) = objn_pd(fitprm, tpf; badprms=FulbrightPorous.badNS, tweight=1e-2)
 objf_mc = OptimizationFunction(obj_mc, AutoForwardDiff(chunksize=4))
 objf_mc(rand(7), (trans_myega, pass123...))
 
