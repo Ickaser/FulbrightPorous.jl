@@ -160,17 +160,17 @@ C = 2e-1u"m^0.5"
 Rs = 0.5u"cm^2*Torr*hr/g"
 k0 = 1e-14u"1/s"
 
-pop1 = ParamObjPikal([
+pop1 = ParamObjPikal((
     (Rp_g, hf0, csolid, ρsolution),
     (Kshf, Av, Ap),
     (pch1, Tsh1),
-])
-pomc1 = ParamObjMC([
+))
+pomc1 = ParamObjMC((
     (hf0, csolid, ρsolution),
     (Kshf, Av, Ap),
     (pch1, Tsh1),
     (ConstPhysProp(k0), C, N, S, Rs)
-])
+))
 
 function new_Tp(po, Tsh, pch)
     po_n = deepcopy(po)
@@ -193,15 +193,16 @@ dat5 = Table(dat5, (ld=FulbrightPorous.calc_l(dat5, pop5.hf0)))
 dat6 = Table(dat6, (ld=FulbrightPorous.calc_l(dat6, pop6.hf0)))
 end
 
-cases = Table([ (name="1", pop=pop1, pomc=pomc1, fitdat=fitdat1, dat=dat1),
-                (name="2", pop=pop2, pomc=pomc2, fitdat=fitdat2, dat=dat2),
-                (name="4", pop=pop4, pomc=pomc4, fitdat=fitdat4, dat=dat4),
-                (name="5", pop=pop5, pomc=pomc5, fitdat=fitdat5, dat=dat5),
-                (name="6", pop=pop6, pomc=pomc6, fitdat=fitdat6, dat=dat6),
+cases = Table([ (name="1", pop=pop1, pomc=pomc1, fitdat=fitdat1, t_end=t_end1, dat=dat1),
+                (name="2", pop=pop2, pomc=pomc2, fitdat=fitdat2, t_end=t_end2, dat=dat2),
+                (name="4", pop=pop4, pomc=pomc4, fitdat=fitdat4, t_end=t_end4, dat=dat4),
+                (name="5", pop=pop5, pomc=pomc5, fitdat=fitdat5, t_end=t_end5, dat=dat5),
+                (name="6", pop=pop6, pomc=pomc6, fitdat=fitdat6, t_end=t_end6, dat=dat6),
                 ])
 
 trans_Rp = Rp_transform_basic(0.8u"cm^2*Torr*hr/g", 14.0u"cm*Torr*hr/g", 1e0u"1/cm")
-obj_Rpf = OptimizationFunction((x,y)->obj_pd(x,y,tweight=1e-2), AutoForwardDiff(chunksize=3))
+obj_Rpf = OptimizationFunction((x,y)->obj_pd(x,y, weights=loss_weighting(t=1e-2u"hr^-2")),
+    AutoForwardDiff(chunksize=3))
 # obj_Rpf = OptimizationFunction(obj_pd, AutoForwardDiff(chunksize=3))
 @time obj_Rpf([0.0, 1.0, 0.0], (trans_Rp, pop1, fitdat1))
 
@@ -215,18 +216,18 @@ single_Rps = map(cases) do case
     Rp = transform(trans_Rp, opt.u).Rp
     sol = gen_sol_pd(opt.u, trans_Rp, pop, fitdat)
     @info "analyis" name opt Rp
-    hRps = map(x->calc_hRp_T(case.pop, case.fitdat, i=x), 1:length(case.fitdat.Tfs))
+    hRps = map(x->calc_hRp_T(case.pop, case.fitdat, i=x), 1:length(filter(x->x isa TfData, case.fitdat.data)))
     return (opt=opt.u, sol_p=sol, Rp, hRps)
 end;
 
-cases_Rps = Table(cases, single_Rps)
+cases_Rps = Table(cases, single_Rps);
 
 pls = map(cases_Rps) do case 
     plT = blankplot_hrC()
     plot!(case.fitdat, nmarks=15, title=case.name)
     modconvtplot!(case.sol_p)
     plot!(legend = :bottomright)
-    # plot!(case.pop.Tsh, tmax=case.fitdat.t_end, c=:black, label=L"T_\mathrm{sh}")
+    # plot!(case.pop.Tsh, tmax=case.t_end, c=:black, label=L"T_\mathrm{sh}")
     return plT
 end
 plot(pls..., layout=(3,2), size=(800, 1000))
@@ -236,7 +237,7 @@ begin
 pls = map(cases_Rps) do case
     plr = blankplot_lRp()
     plot!(case.dat.ld, case.dat.Rp, label="TDLAS")
-    for i in 1:length(case.fitdat.Tfs)
+    for i in 1:length(case.hRps)
         hdT, RpT = case.hRps[i]
         plot!(hdT, RpT, c=i+1, label="Rp from TP$i")
     end
@@ -293,7 +294,7 @@ savefig(plotsdir("simtra_suc_Rp_overlay.svg"))
 # end
 function make_mc_pass(casenums)
     subdat = filter(x->parse(Int, x.name)∈casenums, cases)
-    (subdat.pomc, subdat.fitdat)
+    (Tuple(subdat.pomc), Tuple(subdat.fitdat))
 end
 
 # rpfit_cases = Table(cases = [(1,), (2,), (4,), (5,), (6,), (1,6)],
@@ -335,7 +336,7 @@ trans_interp = merge(porous_nt, interp_nt)
 trans_myega = merge(porous_nt, myega_nt)
 trans_sigma = merge(porous_nt, sigma_nt)
 
-obj_nmc = OptimizationFunction((x,y)->objn_pd(x,y; badprms=FulbrightPorous.badNS, tweight=1e-2), AutoForwardDiff(chunksize=4))
+obj_nmc = OptimizationFunction((x,y)->objn_pd(x,y; badprms=FulbrightPorous.badNS, weights=loss_weighting(t=1e-2u"hr^-2")), AutoForwardDiff(chunksize=4))
 
 
 interp_guess = [-1.0, 1, 0, 0, -1, 0, 1, -2]
@@ -359,11 +360,10 @@ mcfit_cases = Table(cases = repeat([(1,), (6,), (1, 6), (1, 4, 6)], 3),
 #     solve(prob, odealg_chunk4)
 # end
 
-# using ThreadTools
 mcfits = map(mcfit_cases) do case
     sol = @time solve(OP(obj_nmc, case.p0, (case.trans, make_mc_pass(case.cases)...)), optalg;)
     if !SciMLBase.successful_retcode(sol.retcode)
-        @warn "Optimization did not converge for cases $(case.cases), transfrom $(case.trans)"
+        @warn "Optimization did not converge for cases $(case.cases). " case.trans
     end
     # @time solve(OP(obj_nmc, case.p0, (case.trans, make_mc_pass(case.cases)...)), optalg; show_trace=true)
     sol.u
@@ -412,7 +412,7 @@ errs = Table(map(cases_Rps[[1, 2, 3, 4, 5]]) do case
     PBM_T = sqrt(errf(PBM, 0))*u"K"
     # PP_T = sqrt(errf(PP, 0))*u"K"
     PPi_T = sqrt(errf(PPi, 0))*u"K"
-    t_end_est = ustrip(u"hr", sum(case.fitdat.t_end)/2)
+    t_end_est = ustrip(u"hr", sum(case.t_end)/2)
     PBM_t = sqrt(errf(PBM, 1) - errf(PBM, 0))/t_end_est
     @info "check" PBM_t PBM.t[end] t_end_est
     # PP_t = sqrt(errf(PP, 1) - errf(PP, 0))/t_end_est
@@ -468,7 +468,7 @@ pls = map(cases_Rps[permute], ) do case
     title =L"p_\mathrm{ch}=%$(latexify(lab_pch, env=:raw))"*"\n"*L"$T_\mathrm{sh}=%$(lab_Tsh) ^\circ C$"
     
     plot!(;top_margin=20Plots.px, title)
-    # nmarks = Int(ustrip(u"hr", case.fitdat.t_end[1]) ÷ 8)
+    # nmarks = Int(ustrip(u"hr", case.t_end[1]) ÷ 8)
     # nmarks = round(Int, case.fitdat.t[case.fitdat.Tf_iend][1] / case.fitdat.t_end[2]*10)
     nmarks = 8
     # scatter!([55], [-39], label="", ms=10, msw=0, mc = casec)
@@ -515,26 +515,27 @@ end
 
 begin
 modcs = [:teal :crimson]
-permute = [1, 5, 2, 3, 4]
-labs = ["PBM fit to $(join(mcfit_cases[fitnum].cases, ", ", " & "))" ]
-caselabs = ["p=$(ustrip(p))\nT=$(Int(ustrip(T)))" for (p, T) in zip(errs.pch, errs.Tsh)]
+permute = [5, 4, 3, 2, 1]
+# labs = ["PBM fit to $(join(mcfit_cases[fitnum].cases, ", ", " & "))" ]
+labs = ["Pikal fit, \ncase-by-case" "PBM fit,\nhi-lo \$T\$"]
+caselabs = ["p$(ustrip(p))\nT$(Int(ustrip(T)))" for (p, T) in zip(errs.pch, errs.Tsh)]
 # Terr = groupedbar(errs.name, 
 plot()
-vspan!([0  1; 1  2], color=:gray, alpha=0.3, label="")
-Terr = groupedbar!(caselabs,
+vspan!([0  4; 1  5], color=:gray, alpha=0.3, label="")
+Terr = groupedbar!(caselabs[permute],
     [errs.PPi_T[permute] errs.PBM_T[permute] ], c=modcs[[2 1]], 
-    label=labs, lw=1)
+    label=labs, lw=1, ylim=(0, 1.5), yticks=(0:0.5:1.5))
 plot!(xlabel="Case", ylabel=L"$T_\mathrm{f}$ error", yunitformat=:square, legend=:topleft)
 plot!(xgrid=false, xminorticks=2, xtickdir=:none, xminortickdir=:none, xminorgrid=true, minorgridalpha=0.1, ygridalpha=0.2)
 # plot!(xticks=(1:5, ""))
 # terr = groupedbar(errs.name, 
 plot()
-vspan!([0  1; 1  2], color=:gray, alpha=0.3, label="")
-terr = groupedbar!(caselabs,
+vspan!([0  4; 1  5], color=:gray, alpha=0.3, label="")
+terr = groupedbar!(caselabs[permute],
     # [errs.PBM_t errs.PPi_t errs.PP_t ], c=[2 3 4], 
     [errs.PPi_t[permute] errs.PBM_t[permute] ], c=modcs[[2 1]], 
     label=labs, lw=1)
-plot!(xlabel="Case", ylabel=L"$t$ relative error", yunitformat=:square, legend=:topleft)
+plot!(xlabel="Case", ylabel=L"$t$ rel. error", yunitformat=:square, legend=:topleft)
 plot!(xgrid=false, xminorticks=2, xtickdir=:none, xminortickdir=:none, xminorgrid=true, minorgridalpha=0.1, ygridalpha=0.2)
 plot!(yticks=(0:0.1:0.2))
 
@@ -543,42 +544,39 @@ err_plot = plot(Terr, terr, layout=(2,1), size=(600,600))
 pls = map(cases_Rps[permute], colors[permute]) do case, casec
     i = parse(Int, case.name)
     pl = blankplot_hrC(legend=:bottomright)
-    # plot!(title=case.name)
-    title = condlabel(case.pop)
-    # lab_Tsh = round(typeof(1u"degC"), case.pop.Tsh(Inf*u"hr")) 
-    # title = L"$p_\mathrm{ch}="*latexify(lab_pch, env=:raw)*L"$"*"\n"*L"$T_\mathrm{sh}="*latexify(lab_Tsh, env=:raw)*L"$"
+    lab_pch = case.pop.pch(0)
+    lab_Tsh = ustrip(u"degC",case.pop.Tsh(Inf*u"hr")) |> Int
+    title =L"p_\mathrm{ch}=%$(latexify(lab_pch, env=:raw))"*"\n"*L"$T_\mathrm{sh}=%$(lab_Tsh) ^\circ C$"
     
     plot!(;top_margin=20Plots.px, title)
-    nmarks = Int(ustrip(u"hr", case.fitdat.t_end[1]) ÷ 10)
-    # scatter!([55], [-39], label="", ms=10, msw=0, mc = casec)
+    nmarks = 8
     plot!(case.fitdat, nmarks=nmarks, c=casec)
-    # modconvtplot!(get_sol_mc(i, fitnum), label="PBM, fit to $(mcfit_cases[fitnum].cases)")
-    # modconvtplot!(case.sol_p, c=:green, alpha=0.6, label="3PP, fit to $(case.name)")
-    # modconvtplot!(get_sol_Rp(i, 6), c=:purple, label="3PP, fit to $(rpfit_cases[6].cases)")
-    # modconvtplot!(get_sol_Rp(i, 6), label="Pikal individual fit", c=modcs[2])
     modconvtplot!(case.sol_p, label="Pikal fit", c=modcs[2])
     modconvtplot!(get_sol_mc(i, fitnum), label="PBM fit to hi-lo", c=modcs[1])
-    plot!(xlim=(-1, 120), ylim=(-45, -28), yticks=[-45, -40, -35, -32, -29]) 
-    i ∈ [2, 4, 6] && plot!(ylabel="")
-    # i ∈ [1, 2, 3] && plot!(xlabel="")
-    i ∈ [1, 6] && plot!(bg_legend = :gray95)
-    if i ∈ [1] 
+    plot!(ylim=(-40, -28), yticks=[-40, -35, -32, -29]) 
+    plot!(legend=:none)
+    plot!(ygridalpha=0.3,)
+    if i ∈ [6] 
         plot!(left_margin=20Plots.px)
+    # elseif i ∈ [5]
+    #     plot!(ylabel="", left_margin=0Plots.px, yticks=[-40, -36, -32, -29])
     else
-        plot!(ylabel="", left_margin=-5Plots.px)
+        plot!(ylabel="", left_margin=-20Plots.px, yticks=([-40, -35, -32, -29], ""))
     end
-    i ∈ [5, 6] && plot!(bottom_margin=20Plots.px)
     return pl
 end
-plot!(err_plot, legend=:none, bottom_margin=20Plots.px, left_margin=20Plots.px)
-# plot!(err_plot[1], xlabel="")
-# plot!(err_plot[2], bottom_margin=20Plots.px)
-# plot(pls..., err_plot, layout=(2,3), size=(1000, 500))
-plot(pls..., plot(err_plot[1]), plot(err_plot[2], left_margin=10Plots.px), 
-    layout=@layout([grid(1,5){0.6h} ; b{0.3w} a{0.3w} _{0.4w} _{0.1w}]), 
-    size=(1000, 440))
+plot(pls..., Terr, terr, 
+    layout=@layout([grid(1,5){0.6h} ; _ b{0.35w} a{0.35w} _ ]), 
+    size=(1000, 480))
+# plot!(subplot=5, ymirror=true)
+plot!(subplot=4, legend=(-3.6, -0.6), legendfontsize=12,)
+# plot!(subplot=1, legend=:bottom, legendfontsize=12,)
+plot!(subplot=1, bottom_margin=25Plots.px)
+plot!(subplot=6, legend=:none)
+plot!(subplot=7, legend=(1.12, 0.5), legendfontsize=12,)
+
 end
-savefig(plotsdir("simtra_suc_fitval_poster.svg"))
+savefig(plotsdir("simtra_suc_fitval_poster2.svg"))
 
 
 begin

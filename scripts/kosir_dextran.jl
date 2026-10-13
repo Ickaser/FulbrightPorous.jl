@@ -98,7 +98,7 @@ end
 plot(pls...)
 end
 
-sol = solve(ODEProblem(po_base), Rodas3())
+sol = solve(ODEProblem(po_base), LyoPronto.odealg_chunk2)
 blankplot_hrC()
 modconvtplot!(sol)
 plot!(cases_pdfit.pdfit[1], )
@@ -110,8 +110,8 @@ shared_trans = as((separate = as(Vector, trans_Rp, 4),
       shared = K_transform_basic(Kshf_g.val),
       ))
 
-objf_pd = OptimizationFunction((x,y)->obj_pd(x,y,tweight=1e-2), AutoForwardDiff())
-objnf_pd = OptimizationFunction((x,y)->LyoPronto.objn_pd(x,y,tweight=1e-1), AutoForwardDiff())
+objf_pd = OptimizationFunction((x,y)->obj_pd(x,y,weights=loss_weighting(t=1e-2u"hr^-2")), AutoForwardDiff())
+objnf_pd = OptimizationFunction((x,y)->LyoPronto.objn_pd(x,y,weights=loss_weighting(t=1e-1u"hr^-2")), AutoForwardDiff())
 @time objf_pd(fill(0.0, 4), (trans_KRp, po_base, cases_pdfit.pdfit[1]))
 @time objnf_pd(fill(0.0, 13), (shared_trans, cases_pdfit.po, cases_pdfit.pdfit))
 
@@ -134,7 +134,7 @@ cases_Rp = Table(map(cases_pdfit, fitKv.separate) do case, fit
     hRp = calc_hRp_T(po, case.pdfit)
     return merge(case, (;po, pomc, hRp))
 end)
-psols = [solve(ODEProblem(po), Rodas3()) for po in cases_Rp.po]
+psols = [solve(ODEProblem(po), LyoPronto.odealg_chunk2) for po in cases_Rp.po]
 # psols = LyoPronto.gen_nsol_pd(opt_Kv.u, shared_trans, cases_pdfit.po, cases_pdfit.pdfit);
 
 begin
@@ -177,18 +177,19 @@ fit_cr = transform(trans_cr, opt_12.u)
 # all_pomc = [setproperties(pomc, merge(sep, fit_mc_sem.shared)) for (pomc, sep) in zip(cases_Rp.pomc, fit_mc_sem.separate)];
 all_pomc = [setproperties(pomc, fit_cr) for pomc in cases_Rp.pomc];
 
-sols_m = [solve(ODEProblem(pomc), Rodas3()) for pomc in all_pomc];
+sols_m = [solve(ODEProblem(pomc), LyoPronto.odealg_chunk2) for pomc in all_pomc];
 cases_both = Table(cases_Rp, (pomc=all_pomc,sol_mc=sols_m))
+t_only = loss_weighting(t=1.0u"hr^-2", Tf=0.0u"K^-2")
+T_only = loss_weighting(t=0.0u"hr^-2", Tf=1.0u"K^-2")
 
 errs = Table(map(cases_both) do case
     PBM = case.sol_mc
-    PP = solve(ODEProblem(case.po), Rodas3())
-    errf = (model, tweight)->obj_expT(model, case.pdfit; tweight)
-    PBM_T = sqrt(errf(PBM, 0))*u"K"
-    PP_T = sqrt(errf(PP, 0))*u"K"
-    t_end_est = ustrip(u"hr", sum(case.pdfit.t_end)/2)
-    PBM_t = sqrt(errf(PBM, 1) - errf(PBM, 0))/t_end_est
-    PP_t = sqrt(errf(PP, 1) - errf(PP, 0))/t_end_est
+    PP = solve(ODEProblem(case.po), LyoPronto.odealg_chunk2)
+    PBM_T = sqrt(obj_exp(PBM, case.pdfit; weights=T_only))*u"K"
+    PP_T = sqrt(obj_exp(PP, case.pdfit; weights=T_only))*u"K"
+    t_end_est = ustrip(u"hr", sum(case.t_end)/2)
+    PBM_t = sqrt(obj_exp(PBM, case.pdfit; weights=t_only)) / t_end_est
+    PP_t = sqrt(obj_exp(PP, case.pdfit; weights=t_only)) / t_end_est
     return (;name=case.name, PBM_T, PP_T, PBM_t, PP_t)
 end)
 
@@ -241,7 +242,7 @@ savefig(plotsdir("dextran_T_semC.pdf"))
 begin
 modcs = [:teal :crimson]
 myega_plots = map(cases_both, psols) do case, solp
-    @info "check" obj_expT(case.sol_mc, case.pdfit, tweight=0) obj_expT(case.sol_mc, case.pdfit, tweight=1)
+    @info "check" obj_exp(case.sol_mc, case.pdfit, weights=T_only) obj_exp(case.sol_mc, case.pdfit, weights=t_only)
     blankplot_hrC(legend=:bottomright, )
     plot!(title=case.name)
     # plot!(Tsh, label=L"T_\mathrm{sh}", c=:black)
@@ -253,11 +254,15 @@ myega_plots = map(cases_both, psols) do case, solp
     # if case.name ∈ ["A3", "A5"]
     #     plot!(xlabel="")
     # end
+    plot!(yticks=(-45:10:-15))
+    plot!(xticks=(0:10:20), xlabel=L"t")
     if case.name ∈ ["A5", "A6", "B"]
         plot!(ylabel="")
-        plot!(yticks=(-45:5:-15, ""), left_margin=-5Plots.px)
+        plot!(yticks=(-45:10:-15, ""), left_margin=-10Plots.px)
+    else
+        plot!(yticks=(-45:10:-15))
     end
-    plot!(xlim=(-0.5, 20.1), ylim=(-45, -14))
+    plot!(xlim=(-0.5, 20.1), ylim=(-45, -14), legend=nothing)
 end
 
 plot()
@@ -265,10 +270,18 @@ for (i, c) in enumerate(cases_both.color)
     vspan!([i-1,i], c=c, alpha=0.3, label="")
 end
 e1 = groupedbar!(errs.name, [errs.PP_T errs.PBM_T], color=modcs[[2 1]], label="", ylabel=L"$T_\mathrm{f}$ error [$\degree$C]",unitformat=(x,y)->x, lw=1)
+
+dummylegend = plot(axis=false, grid=false)
+scatter!([Inf], [Inf], c=:gray, marker=:circle, label=" "*L"T_\mathrm{f}"*", exp.")
+plot!([Inf], [Inf], c=modcs[2], label=" Pikal fit")
+plot!([Inf], [Inf], c=modcs[1], label=" PBM fit")
 # e2 = groupedbar(errs.name, [errs.PBM_t errs.PP_t], ylabel=L"$t$ rel. error", c=[2 3], lw=1)
-plot(myega_plots..., e1, layout=@layout([grid(1,4) e{0.2w}]), size=(800,200))
-plot!(subplot=1, left_margin=15Plots.px)
-plot!(bottom_margin=15Plots.px)
+plot(myega_plots..., dummylegend, e1, layout=@layout([grid(1,4){0.7w} f e{0.2w}]), size=(800,200))
+plot!(subplot=1, left_margin=25Plots.px, ylabel=L"T")
+# plot!(subplot=4, legend=(1.2, 0.5))
+plot!(subplot=4, right_margin=-25Plots.px)
+plot!(subplot=6, left_margin=25Plots.px)
+plot!(bottom_margin=25Plots.px)
 end
 # plot!(subplot=2, ylabel="hh")
 savefig(plotsdir("dextran_T_semC_poster.svg"))
