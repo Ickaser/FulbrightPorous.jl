@@ -10,11 +10,11 @@ function sigmoid_transform_basic(k0, kf, K1, K2)
         )),
     )))
 end
-function sigmoid_transform_bounded(kf, K1; extrafac=1)
-    Nmin = 1e0u"μm^-3"
-    Vmin=0.5u"cm^3"
-    tmin=1.0u"hr"
-    k0_max = 1/Nmin/Vmin/tmin *extrafac|> u"s^-1" 
+function sigmoid_transform_bounded(k0_max, kf, K1; extrafac=1)
+    # Nmax = 1e0u"μm^-3"
+    # dVdt_max = 10.0u"mL" / 10u"hr"
+    # μ0_min = 1e5
+    # k0_max = dVdt_max*Nmax/μ0_min *extrafac|> u"s^-1" 
     tr = as((;
         k_f = as(Sigmoid_k, as((
             k0 = TVScale(k0_max) ∘ TVLogistic(),

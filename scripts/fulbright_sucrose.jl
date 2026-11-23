@@ -391,7 +391,7 @@ pass7 = make_mcpass([7])
 
 porous_nt = FulbrightPorous.porous_transform_bounded(fillvol)
 # myega_nt = FulbrightPorous.myega_transform_basic(1e42u"s^-1", 2.0e4u"K", 1e2u"K")
-sigma_nt = FulbrightPorous.sigmoid_transform_bounded(1e-10u"s^-1", 1.0u"K")
+sigma_nt = FulbrightPorous.sigmoid_transform_bounded(1e-10u"s^-1", 1e-10u"s^-1", 1.0u"K")
 # trans_myega = merge(porous_nt, myega_nt)
 trans_sigma = merge(porous_nt, sigma_nt)
 

@@ -331,7 +331,7 @@ myega_nt = as((;k_f=as(MYEGA_k, as((k0 = TVScale(1e11u"s^-1") ∘ TVExp(),
 #             K1 = TVScale(0.8u"K") ∘ TVExp(),
 #             K2 = TVScale(1.0u"K") ∘ TVShift(216.0) ∘ TVScale(45.0) ∘ TVLogistic() ∘TVScale(0.1) ,)
 # )))
-sigma_nt = FulbrightPorous.sigmoid_transform_bounded(1e-8u"s^-1", 0.8u"K")
+sigma_nt = FulbrightPorous.sigmoid_transform_bounded(1e-10u"s^-1", 1e-8u"s^-1", 0.8u"K", extrafac=1e4)
 trans_interp = merge(porous_nt, interp_nt)
 trans_myega = merge(porous_nt, myega_nt)
 trans_sigma = merge(porous_nt, sigma_nt)
