@@ -86,8 +86,38 @@ function lyo_mc_dae!(du, u, params, t)
 
     return 
 end
+"""
+    $(SIGNATURES)
+"""
+function lyo_mc_dae(u, params, t)
+    hf = u[1]*u"cm"
+    Tf = u[2]*u"K"
+    μ0 = u[3]
+    if Tf < 0u"K"# || Tsub < 0u"K"
+        return SA[NaN, NaN, NaN, NaN]
+    end
+    (; md, Q_shf, k, μ1) = calc_md_Q_mc(u, params, t)
+    (; csolid, ρsolution, Ap, hf0, N, S) = params
 
-const lyo_mc_mm = Diagonal([1.0, 0, 1, 1])
+    hd = hf0 - hf
+    
+    Q_sub = uconvert(u"W", md*ΔHsub)
+
+    dhf_dt = min(0.0u"cm/hr", md/(ρsolution-csolid)/Ap |>u"cm/hr" ) # Cap dhf_dt at 0: no desublimation
+    dμ0_dt = -k/2*μ0^2 - N(hd)*Ap*dhf_dt
+    dμ2_dt = k*μ1^2 - S(hd)*Ap*dhf_dt # dhf_dt < 0 for drying proceeding
+
+    du = SA[
+        ustrip(u"cm/hr", dhf_dt),
+        ustrip(u"W", Q_sub + Q_shf),
+        ustrip(u"hr^-1", dμ0_dt),
+        ustrip(u"mm^6/hr", dμ2_dt),
+    ]
+
+    return du
+end
+
+const lyo_mc_mm = Diagonal(SA[1.0, 0, 1, 1])
 
 @doc raw"""
     lyo_mc_dae_f = ODEFunction(lyo_mc_dae!, mass_matrix=lyo_mc_mm)

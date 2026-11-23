@@ -24,6 +24,7 @@ using DocStringExtensions
 using ConcreteStructs
 using LinearAlgebra: Diagonal
 using NaNMath
+using StaticArrays: SA, SArray
 
 export OP, optalg
 const OP = OptimizationProblem
