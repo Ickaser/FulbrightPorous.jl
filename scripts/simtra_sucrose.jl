@@ -710,20 +710,61 @@ end...))
 # opt_sigm = solve(NLSP(err_kin_sigm, p0_sigm), LevenbergMarquardt(), show_trace=Val(true))
 
 # # ---------------------
-# # MCMC sampling
-# using Turing
+# # MCMC samping with DynamicHMC
+# # Main issue with this approach: we need a log-Jacobian, but the transforms we define have dimensional 
+# # scaling that we cannot take the logarithm of
+# using LogDensityProblems, LogDensityProblemsAD, DynamicHMC, TransformedLogDensities
+# using ConcreteStructs, ConstructionBase
+# # Log likelihood function which takes a NamedTuple, after transformation:
+# @concrete terse struct MicrocollapseSampling
+#     pos
+#     fitdats
+#     saveats
+#     badprms
+# end
+# function MicrocollapseSampling(pos, fitdats, badprms)
+#     saveats = [ustrip.(u"hr", f.t) for f in fitdats]
+#     return MicrocollapseSampling(pos, fitdats, saveats, badprms)
+# end
+# function (s::MicrocollapseSampling)(new_params)
+#     !isnothing(s.badprms) && s.badprms(new_params) && return -Inf
+#     errs = map(s.fitdats, s.pos, s.saveats) do fitdat, po, saveat
+#         # This doesn't handle all possible cases covered by objn_pd: 
+#         # currently just assumes all cases are sharing parameters
+#         new_po = setproperties(po, new_params) 
+#         prob = ODEProblem(new_po; tspan=(0.0, 1000.0))
+#         sol = solve(prob, LyoPronto.odealg_chunk2; saveat)
+#         sqerr = obj_exp(sol, fitdat; weights=loss_weighting(t=1e-2u"hr^-2"))
+#     end
+#     return -sum(errs)
+# end
+
+# samp_prob = MicrocollapseSampling(make_mc_pass((1,6))..., FulbrightPorous.badNS)
+
+# likelihood = TransformedLogDensity(trans_sigma, samp_prob)
+
+# # Check that output works
+# samp0 = zeros(TransformVariables.dimension(trans_sigma))
+# @time samp_prob(transform(trans_sigma, samp0))
+# @time LogDensityProblems.logdensity(samp_prob, samp0) # This fails
 
 
-# @model function sigma_likelihood(pf)
+# ---------------------
+# MCMC sampling with Turing
+using Turing
 
-#     Nv ~ LogUniform(1e-6, 1e0) # μm^-3
-#     Sv ~ LogUniform(1e-16, 1e0) # cm^3
-#     Cv ~ LogUniform(1e-5, 1e0) # m^(1//2)
-#     Rv ~ LogUniform(1e-10, 1e0) # cm^2*Torr*hr/g
-#     k0v ~ LogUniform(1e-20, 1e-10) # s^-1
-#     kfv ~ LogUniform(1e-20, 1e-5) # s^-1
-#     K1v ~ Uniform(0.1, 10.0) # K
-#     K2v ~ Uniform(216, 270) # K
+
+
+@model function sigma_likelihood(pomcs, fitdats, saveats)
+
+    Nv ~ LogUniform(1e-6, 1e0) # μm^-3
+    Sv ~ LogUniform(1e-16, 1e0) # cm^3
+    Cv ~ LogUniform(1e-2, 1e2) # m^(1//2)
+    Rv ~ LogUniform(1e-2, 1e0) # cm^2*Torr*hr/g
+    k0v ~ LogUniform(1e-14, 1e-10) # s^-1
+    kfv ~ LogUniform(1e-14, 1e-5) # s^-1
+    K1v ~ LogUniform(0.1, 10.0) # K
+    K2v ~ Uniform(216, 270) # K
 
 
 #     # k_args = exp10.([kfac, Kfac, θfac]) .* fit_guess[5:7]
