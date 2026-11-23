@@ -1,3 +1,4 @@
+using FulbrightPorous
 fp_plot_defaults()
 Latexify.set_default(labelformat=:square)
 
@@ -393,9 +394,9 @@ end
 # end
 
 # Choose a favored fit for plotting, etc.
-# fitnum = 3 # 2&8, interp
-# fitnum = 7 # 2&8, MYEGA
-fitnum = 11 # 2&8, sigmoid
+# fitnum = 3 # 1&6, interp
+# fitnum = 7 # 1&6, MYEGA
+fitnum = 11 # 1&6, sigmoid
 
 bestfit = transform(mcfit_cases[fitnum].trans, mcfits[fitnum])
 @info "Chosen fit" bestfit
@@ -443,7 +444,9 @@ plot()
 vspan!([0  1; 1  2], color=:gray, alpha=0.3, label="")
 Terr = groupedbar!(caselabs[permute],
     [errs.PPi_T[permute] errs.PBM_T[permute] ], c=modcs[[2 1]], 
-    label=labs, lw=1, ylim=(0, 1.5), yticks=(0:0.5:1.5))
+    label=labs, lw=1, 
+    # ylim=(0, 1.5), 
+    yticks=(0:0.5:1.5))
 plot!(xlabel="Case", ylabel=L"$T_\mathrm{f}$ error", yunitformat=:square, legend=:topleft)
 plot!(xgrid=false, xminorticks=2, xtickdir=:none, xminortickdir=:none, xminorgrid=true, minorgridalpha=0.1, ygridalpha=0.2)
 # plot!(xticks=(1:5, ""))
@@ -498,7 +501,7 @@ plot(pls..., Terr, terr,
     layout=@layout([grid(1,5){0.6h} ; _ b{0.35w} a{0.35w} _ ]), 
     size=(1000, 480))
 # plot!(subplot=5, ymirror=true)
-plot!(subplot=1, legend=(-0.3, -0.45), legendfontsize=12,)
+plot!(subplot=1, legend=(-0.3, -0.75), legendfontsize=12,)
 # plot!(subplot=1, legend=:bottom, legendfontsize=12,)
 plot!(subplot=1, bottom_margin=25Plots.px)
 plot!(subplot=6, legend=:none)
@@ -594,8 +597,8 @@ end
 # poreevolplot!(get_sol_mc(1, fitnum), label="PBM $(join(mcfit_cases[fitnum].cases, ", ", " & ")), Cycle 1", c=2, kind=:stats, marker=:circle)
 # poreevolplot!(get_sol_mc(2, fitnum), label="PBM $(join(mcfit_cases[fitnum].cases, ", ", " & ")), Cycle 2", c=2, kind=:stats, marker=:square)
 # poreevolplot!(get_sol_mc(6, fitnum), label="PBM $(join(mcfit_cases[fitnum].cases, ", ", " & ")), Cycle 6", c=2, kind=:stats, marker=:utriangle)
-plot!(subplot=1, ylim=(0, 2e8), yticks=0:1e8:2e8, yformatter=x->(string(Int(x/1e8))*" "*L"\times 10^8"), left_margin=20Plots.px)
-plot!(subplot=2, ylim=(0, 60), yticks=0:20:60)
+plot!(subplot=1, ylim=(0, 1e8), yticks=0:5e7:2e8, xlabel="", yformatter=x->(string(Int(x/1e7))*" "*L"\times 10^8"), left_margin=20Plots.px)
+plot!(subplot=2, ylim=(0, 60), yticks=0:20:60, xlabel="")
 plot!(subplot=3, ylim=(0, 600), yticks=0:200:600)
 plot!(subplot=4, ylabel="R_p", yunitformat=latexify)
 plot!(subplot=4, legend=(1.25, 0.7), right_margin=170Plots.px, xticks=0:0.3:1.2)
@@ -619,10 +622,10 @@ lab = "Fit 2 to cycles"
 kineticplot!(k, markeralpha=0, label=lab)
 Tran = -45u"°C":2u"K":-23u"°C"
 k_arrhenius = T->1e-7u"s^-1" * exp(-2000u"K"/T) # Near-maximum slope for Arrhenius
-plot!(Tran, k_arrhenius.(Tran), label="Arrhenius with max slope", c=:gray, marker=:none, ls=:dash)
+plot!(Tran, k_arrhenius.(Tran), label="Arrhenius", c=:gray, marker=:none, ls=:dash)
 # kineticplot!(transform(trans_interp, interp_guess),  label="Interp guess")
 # plot!(ylim=(1e-20, 2e-0))
-plot!(legend=:topleft, size=(500,250), bottom_margin=20Plots.px)
+plot!(legend=:bottomright, size=(500,250), bottom_margin=10Plots.px)
 end
 savefig(plotsdir("simtra_suc_kinetics.svg"))
 
@@ -630,7 +633,7 @@ savefig(plotsdir("simtra_suc_kinetics.svg"))
 # Inspect fit results in Rp space rather than temperature space
 
 begin
-locs = [(0.2, 1.5), (0.2, 2), (0.2, 2), (0.2, 2), (0.2, 2)]
+locs = [(0.2, 1.5), (0.2, 2), (0.2, 2), (0.2, 2), (0.16, 1.8)]
 Tps = [-29.5, -33.3, -32.5, -33.2, -33.6]u"°C"
 permute = [1, 3, 2, 4, 5]
 pls = map(cases_Rps[permute], locs, Tps[permute]) do case, loc, Tp
@@ -638,21 +641,22 @@ pls = map(cases_Rps[permute], locs, Tps[permute]) do case, loc, Tp
     pl = blankplot_lRp(ylims=(0, 11), xlims=(0, 1.3))
     plot!([Inf], [Inf], label=L"$T_\mathrm{f}(t)$", c=3)
     pbmtdlas!(get_sol_mc(i, fitnum), case.dat, nothing; label=["TDLAS" L"PBM fit to $T_\mathrm{f}(t)$"])
-    for j in 1:length(case.fitdat.Tfs)
+    for j in 1:length(filter(x->x isa TfData, case.fitdat.data))
         scatter!(calc_hRp_T(case.pop, case.fitdat; i=j)..., label="",c=3, markeralpha=0.02, ms=2, msw=0)
     end
     plot!(title=condlabel(case.pop), top_margin=25Plots.px)
     plot!(xticks=0.0:0.4:1.2)
+    plot!(ylim=(0,12), top_margin=10Plots.px)
     # Tfmax = maximum([maximum(Tfi) for Tfi in case.fitdat.Tfs])
     # annotate!(loc..., text("\$T_\\mathrm{f,max}=$(float(Tfmax|>u"°C"))\$", :left, 12))
-    annotate!(loc..., text("\$T_\\mathrm{f}=$(float(Tp|>u"°C"))\$", :left, 12))
+    Plots.annotate!(loc..., text("\$\\max(T_\\mathrm{f})=$(float(Tp|>u"°C"))\$", :left, 12))
     # i ∈ [1, 2] && plot!(xlabel="")#, xformatter=:none)
     i ∈ [1] && plot!(left_margin=25Plots.px, yticks=(0:2:12), legend=(0.2, 0.83))
-    i ∈ [2, 4, 5, 6] && plot!(ylabel="", left_margin=-10Plots.px, yticks=(0:2:12, []), legend=:none)
+    i ∈ [2, 4, 5, 6] && plot!(ylabel="", left_margin=-10Plots.px, yticks=(0:2:12, []), legend=nothing)
     plot!()
     pl
 end
-plot(pls..., layout=(1,5), size=(1000,300), bottom_margin=25Plots.px)
+plot(pls..., layout=(1,5), size=(1100,350), bottom_margin=25Plots.px)
 end
 savefig(plotsdir("simtra_suc_Rp_val.svg"))
 savefig(plotsdir("simtra_suc_Rp_val.pdf"))
@@ -677,6 +681,36 @@ Table(vcat(map([1,2,4,5,6]) do i
     Kn_tab = FulbrightPorous.calc_Kn(sol)[[begin+1, end]]
 end...))
 
+# -------------------------
+# Sensitivity: estimate with simple parameter gradients of the loss function
+# obj_nmc = OptimizationFunction((x,y)->objn_pd(x,y; badprms=FulbrightPorous.badNS, weights=loss_weighting(t=1e-2u"hr^-2")), AutoForwardDiff(chunksize=4))
+# Loss function
+using ForwardDiff, FiniteDiff
+using LinearAlgebra: Diagonal, diag
+loss_func = x-> objn_pd(x, (trans_sigma, make_mc_pass((1,6))...); weights=loss_weighting(t=1e-2u"hr^-2"))
+best_u = mcfits[fitnum]
+bestfit = transform(trans_sigma, best_u)
+best_q = [bestfit.N.val, bestfit.S.val, bestfit.C, bestfit.Rs,
+        bestfit.k_f.k0, bestfit.k_f.kf, bestfit.k_f.K1, bestfit.k_f.K2]
+# This is in terms of the untransformed variable space:
+∇l = ForwardDiff.gradient(loss_func, best_u)
+# Hessian
+H = ForwardDiff.hessian(loss_func, best_u)
+# To put it in terms of the dimensional space, need the derivative of each component of the transform.
+TN = transform(trans_sigma[1].inner_transformation[1])
+TS = transform(trans_sigma[2].inner_transformation[1])
+TC = transform(trans_sigma[3])
+TR = transform(trans_sigma[4])
+Tki, Tkf, TK1, TK2 = [transform(trans_sigma[5].inner_transformation[i]) for i in 1:4]
+∇T = [FiniteDiff.finite_difference_derivative(f, x) 
+    for (f, x) in zip([TN, TS, TC, TR, Tki, Tkf, TK1, TK2], best_u)]
+
+Hdim = H ./ ∇T ./ permutedims(∇T) # Divide out derivative of transform, to undo chain rule
+# Hdim = Diagonal(1 ./ ∇T) * H * Diagonal(1 ./ ∇T)
+Hinv = inv(ustrip.(Hdim)) .* unit.(∇T) .* unit.(permutedims(∇T))
+se = sqrt.(diag(Hinv))
+se ./ best_q
+# 
 
 
 
@@ -766,88 +800,209 @@ using Turing
     K1v ~ LogUniform(0.1, 10.0) # K
     K2v ~ Uniform(216, 270) # K
 
+    # k_args = exp10.([kfac, Kfac, θfac]) .* fit_guess[5:7]
+    # allvals = [Nfac, Sfac, Cfac, Rfac, k0fac, kffac, K1fac, K2fac]
+    newps = (;
+        N = ConstPhysProp(Nv * u"μm^-3"),
+        S = ConstPhysProp(Sv * u"cm^3"),
+        C = Cv * sqrt(u"mm"),
+        Rs = Rv * u"cm^2*Torr*hr/g",
+        k_f = Sigmoid_k(
+            k0v * u"s^-1",
+            kfv * u"s^-1",
+            K1v * u"K",
+            K2v * u"K",
+        )
+    )
 
-#     # k_args = exp10.([kfac, Kfac, θfac]) .* fit_guess[5:7]
-#     # allvals = [Nfac, Sfac, Cfac, Rfac, k0fac, kffac, K1fac, K2fac]
-#     newps = (;
-#         N = ConstPhysProp(Nv * u"μm^-3"),
-#         S = ConstPhysProp(Sv * u"cm^3"),
-#         C = Cv * u"m^0.5",
-#         Rs = Rv * u"cm^2*Torr*hr/g",
-#         k_f = Sigmoid_k(
-#             k0v * u"s^-1",
-#             kfv * u"s^-1",
-#             K1v * u"K",
-#             K2v * u"K",
-#         )
-#     )
-    
+    # if pf[2] isa ExpFitData
+    #     p = setproperties(pf[1], newps)
+    #     sol = solve(ODEProblem(p), odealg_chunk4)
+    #     sqerr = obj_expT(sol, pf[2], tweight=1e-2)
+    # else
+        sqerr = mapreduce(+, pomcs, fitdats, saveats) do pomc, fitdat, saveat
+            p = setproperties(pomc, newps)
+            # @info "check1" p.N
+            sol = solve(ODEProblem(p), odealg_chunk4; saveat)
+            # @info "check2" sol[end] sol.retcode
+            obj_exp(sol, fitdat; weights=loss_weighting(t=1e-2u"hr^-2"))
+        end
+    # end
 
-#     # if pf[2] isa ExpFitData
-#     #     p = setproperties(pf[1], newps)
-#     #     sol = solve(ODEProblem(p), odealg_chunk4)
-#     #     sqerr = obj_expT(sol, pf[2], tweight=1e-2)
-#     # else
-#         sqerr = mapreduce(+, pf...) do pomc, fitdat
-#             p = setproperties(pomc, newps)
-#             @info "check1" p.N
-#             sol = solve(ODEProblem(p), odealg_chunk4)
-#             @info "check2" sol[end] sol.retcode
-#             obj_expT(sol, fitdat, tweight=1e-2)
-#         end
-#     # end
-
-#     if !isnan(sqerr)
-#         Turing.@addlogprob! -sqerr
-#     else
-#     #     # @info "check" newpo.N.val newpo.S.val newpo.C.val newpo.Rs.val sol.t[end] sol[1,end]
-#         Turing.@addlogprob! -Inf
-#     end
-#     return newps
-# end
-
-# case1_params = sigma_likelihood(make_mc_pass([1]))
-# case128_params = sigma_likelihood(make_mc_pass([1, 2, 8]))
-
-    
-# smallalg = NUTS(10, 0.65)
-# # guess_params = (Nv = 1e-4, Sv = 1e-8, Cv = 0.1, Rv = 1e-2, k0v = 1e-14, kfv = 1e-10, K1v = 1.0, K2v = 250.0)
-# # init_single = [InitFromParams(guess_params)]
-# # Turing.DynamicPPL.TestUtils.AD.run_ad(case1_params, AutoForwardDiff(); test=false, benchmark=false)
-# smallsamp = @time sample(case1_params, smallalg, MCMCSerial(), 20, 1; initial_params=init_single, adtype=AutoForwardDiff())
-
-# bad_params = (Nv = 0.00025055, Sv = 7.344991e-8, Cv = 0.02147, Rv = 3.96238e-10, k0v = 8.38e-16, kfv = 1.444e-9, K1v = 0.3905, K2v = 239.8)
-# init_single = [InitFromParams(bad_params)]
-# pomc_bad = setproperties(pomc1, (case1_params | bad_params)())
-# sol_bad = solve(ODEProblem(pomc_bad), odealg_chunk4)
+    if isfinite(sqerr)
+        Turing.@addlogprob! -sqerr
+    else
+    #     # @info "check" newpo.N.val newpo.S.val newpo.C.val newpo.Rs.val sol.t[end] sol[1,end]
+        Turing.@addlogprob! -Inf
+    end
+    return newps
+end
 
 
+mc16 = make_mc_pass((1, 6))
+case16_params = sigma_likelihood(mc16..., [ustrip.(u"hr", f.t) for f in mc16[2]])
+
+# Debugging and profiling to check if there are obvious performance gains to be had   
+smallalg = Turing.NUTS(10, 0.65)
+guess_params = (Nv = 1e-4, Sv = 1e-6, Cv = 5.0, Rv = 1e-1, k0v = 1e-13, kfv = 1e-10, K1v = 1.0, K2v = 250.0)
+init_single = [InitFromParams(guess_params)]
+
+# using Turing.DynamicPPL
+# using LogDensityProblems
+# ldf = LogDensityFunction(case16_params, getlogjoint_internal, LinkAll(); adtype=AutoForwardDiff(chunksize=4));
+# x = rand(ldf)
+# @time LogDensityProblems.logdensity_and_gradient(ldf, x)
+# DynamicPPL.DebugUtils.model_warntype(case16_params)
+# @profview for _ in 1:100; LogDensityProblems.logdensity_and_gradient(ldf, x); end
+# Turing.DynamicPPL.TestUtils.AD.run_ad(case16_params, AutoForwardDiff(); test=false, benchmark=true, params=init_single[1])
+
+# Runs in ~140s for 40 samples on my laptop
+smallsamp = @time sample(case16_params, smallalg, MCMCSerial(), 40, 1; initial_params=init_single, adtype=AutoForwardDiff(chunksize=8))
 
 
+# Runs in 400-600s on my laptop
+nthreads = 4
+init_set = [InitFromParams(guess_params) for i in 1:nthreads]
+smallsamp16 = @time sample(case16_params, smallalg, MCMCThreads(), 40, nthreads; initial_params = init_set, adtype=AutoForwardDiff(chunksize=8))
 
-# nthreads = 4
-# init_set = [(rand(8).-0.5) for i in 1:nthreads]
-# smallsamp128 = @time sample(case128_params, smallalg, MCMCSerial(), 20, nthreads, initial_params = init_set)
-# # smallsamp128 = @time sample(case128_params, smallalg, MCMCThreads(), 20, nthreads, initial_params = init_set)
-# # @profview sample(case1_params, smallalg, MCMCSerial(), 20, 1)
-# # plot(smallsamp)
+# Runs in ~1.5hrs on laptop
+alg = NUTS(75, 0.65)
+samp16 = @time sample(case16_params, alg, MCMCThreads(), 500, nthreads; initial_params=init_set, adtype=AutoForwardDiff(chunksize=8))
+safesave(datadir("exp_pro", "case1-6_sampling.jld2"), @strdict smallsamp16 samp16 )
 
-# alg = NUTS(75, 0.65)
-# samp = @time sample(case1_params, alg, MCMCThreads(), 500, 4)
-# safesave(datadir("exp_pro", "case1_myega_sampling.jld2"), Dict("samp" => samp, "smallsamp" => smallsamp))
-# samp128 = @time sample(case128_params, alg, MCMCThreads(), 500, 4)
-# safesave(datadir("exp_pro", "case128_myega_sampling.jld2"), @strdict smallsamp128 samp128 )
 
-# # # safesave(datadir("exp_pro", "case1_myega_sampling.jld2"), Dict("samp" => samp, "smallsamp" => smallsamp))
+samp16 = load(datadir("exp_pro", "case1-6_sampling.jld2"), "samp16")
 
-# # samp = load(datadir("exp_pro", "case1_myega_sampling_#1.jld2"))["samp"]
 
-# using Turing
-# samp = load(datadir("exp_pro", "case1_myega_sampling.jld2"))["samp"]
+table = Table(map(eachindex(samp16[:log_density])) do i
+    (N = samp16[:Nv][i]*u"μm^-3",
+     S = samp16[:Sv][i]*u"cm^3",
+     C = samp16[:Cv][i]*sqrt(u"mm"),
+     Rs= samp16[:Rv][i]*u"cm^2*Torr*hr/g",
+     k0= samp16[:k0v][i]*u"s^-1",
+     kf= samp16[:kfv][i]*u"s^-1",
+     Θ = samp16[:K1v][i]*u"K",
+     Tact= samp16[:K2v][i]*u"K",
+     Nl =  log10(samp16[:Nv][i]),
+     Sl =  log10(samp16[:Sv][i]),
+     Cl =  log10(samp16[:Cv][i]),
+     Rsl=  log10(samp16[:Rv][i]),
+     k0l=  log10(samp16[:k0v][i]),
+     kfl = log10(samp16[:kfv][i]),
+     Θl  = log10(samp16[:K1v][i]),
+     Tactl=log10(samp16[:K2v][i]),
+     logprob = samp16[:log_density][i],
+     prob = exp(samp16[:log_density][i]),
+    )
+end )
+table = sort(table, by=x->x.logprob) # Least likely first
+α95 = table.logprob[length(table)÷20]
+α50 = table.logprob[length(table)÷2]
 
-# plot(samp, xlim=(-6, 6))
-# samp[:Nfac]
-# samp[2]
 
-# # plot(samp)
+vars = [:N, :S, :C, :Rs, :k0, :kf, :Θ, :Tact]
 
+best_u = mcfits[fitnum]
+bestfit = transform(trans_sigma, best_u)
+best_q = [bestfit.N.val, bestfit.S.val, bestfit.C, bestfit.Rs,
+        max(1e-14u"s^-1", bestfit.k_f.k0), bestfit.k_f.kf, bestfit.k_f.K1, bestfit.k_f.K2]
+
+begin
+ticks_dict = Dict(
+    :N => [1e-5, 1e-3, 1e-1],
+    :S => 10.0 .^ (-4:-4:-12),
+    :C => [1e0, 1e1, 1e2],
+    :Rs => [1e-2, 1e-1, 1e0],
+    :k0 => [1e-14, 1e-12, 1e-10],
+    :kf => [1e-12, 1e-9, 1e-6],
+    :Θ => [1e-1, 1e0, 1e1],
+    :Tact => 240:5:265,
+)
+
+plotsd = Dict{Tuple, Any}()
+plotsv = []
+cmap = cgrad(:isoluminant_cgo_70_c39_n256, rev=true, scale=:log)
+marker_z = table.logprob
+# cmap = cgrad(:redsblues, [0.5], categorical=true),
+# marker_z = table.logprob.>α50,
+for i in eachindex(vars)
+    for j in eachindex(vars)
+# for i in eachindex(vars)[begin:end-1]
+#     for j in eachindex(vars)[begin+1:end]
+
+        # if i == j
+        #     pl = histogram(
+        #         # getproperty(table, Symbol(vars[i])), 
+        #         getproperty(table, Symbol(vars[i], :l)), 
+        #         label=""
+        #         # xlabel="$(vars[i])", ylabel="Density",
+        #     )
+        #     # push!(plotsv, pl)
+        #     push!(plotsv, plot(showaxis=false, grid=false))
+        #     continue
+        # end
+        pl = scatter(getproperty(table, vars[j]), getproperty(table, vars[i]);
+            markeralpha=0.15, markerstrokewidth=0, 
+            colorbar_entry=false,
+            c = cmap,
+            marker_z,
+            xscale = (vars[j] ∈ [:Tact] ? :identity : :log10),
+            yscale = (vars[i] ∈ [:Tact] ? :identity : :log10),
+            xticks = ticks_dict[vars[j]],
+            yticks = ticks_dict[vars[i]],
+            # xlabel="$(vars[j])", ylabel="$(vars[i])", label="",
+            xlabel="\$$(replace(string(vars[j]), r"^(.)(.*)" => s"\1_\\mathrm{\2}"))\$\n", 
+            ylabel="\$$(replace(string(vars[i]), r"^(.)(.*)" => s"\1_\\mathrm{\2}"))\$\n", 
+            # yguidefontrotation=-90,
+            label="",
+            right_margin=-5Plots.px,
+            top_margin=-5Plots.px,
+            unitformat=(l,u)->l*"["*latexify(u)*"]",
+            framestyle=:box,
+            )
+        scatter!([best_q[j]], [best_q[i]], label="", marker=:star, ms=10, c=:black)
+        plotsd[(vars[j],vars[i])] = pl
+        if j != 1
+            plot!(ylabel="", yticks=(ticks_dict[vars[i]], []), left_margin=-5Plots.px)
+        # else
+        #     plot!(left_margin=50Plots.px)
+        end
+        if i != 8
+            plot!(xlabel="", xticks=(ticks_dict[vars[j]], []), bottom_margin=-5Plots.px)
+        end
+        if j == 5
+            plot!(left_margin=0Plots.px, right_margin=10Plots.px)
+        end
+        # Top row and rightmost row not generated at all, to keep the rest of the grid in order
+        if i == 1 || j == 8
+            continue
+
+        # On or above the diagonal, create an empty plot
+        elseif i <= j 
+            
+            # # Fill one of the empty squares with a colorbar
+            # # commented out because the colorbar ticks can't be customized in Plots v1
+            # if i == 5 && j == 5
+            #     cb = scatter(
+            #         fill(NaN, length(table)), fill(NaN, length(table)), 
+            #         label="",
+            #         c = cgrad(:isoluminant_cgo_70_c39_n256, rev=true),
+            #         marker_z= table.prob,
+            #         colorbar_ticks = (collect(extrema(table.prob)), ["High probability", "Low probability"]),
+            #         showaxis=false, grid=false,
+            #         margins = -50Plots.px
+            #     )
+            #     push!(plotsv, cb)
+            # else
+            ## This margin has an effect on the others, apparently?...
+                push!(plotsv, plot(showaxis=false, grid=false, margins=-50Plots.px), )
+            # end
+            continue
+        end
+        push!(plotsv, pl)
+    end
+end
+plot(plotsv..., layout=(7,7), size=(1400,1400))
+# plot!(left_margin=20Plots.px)
+end
+savefig(plotsdir("mcmc_cornerplot.png"))
